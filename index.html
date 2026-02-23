@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appointmentix - White-Label App Plattform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;700;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="#" data-open-home>
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span>APPOINTMENTIX</span>
+      </a>
+      <nav class="top-nav">
+        <a href="#features">Produkt</a>
+        <a href="#proof">Referenzen</a>
+        <a href="#configurator">App-Builder</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/admin">Super-Admin</a>
+      </nav>
+      <div class="header-actions">
+        <button type="button" class="btn ghost" data-open-book>App bauen</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="homeView" class="view active">
+    <section class="hero">
+      <div class="hero-headline">
+        <p class="eyebrow">White-Label Plattform für ästhetische Kliniken</p>
+        <h1>Mehr Behandlungen &amp; Pakete verkaufen</h1>
+        <p class="subline">Eine schlanke App-Experience für deine Klinik mit eigenem Branding und klarem Conversion-Fokus.</p>
+        <button type="button" class="btn primary" data-open-book>App bauen</button>
+      </div>
+
+      <div class="feature-tabs" id="features">
+        <span class="active">Automatisierte Angebote</span>
+        <span>Patientenfinanzierung</span>
+        <span>Prämien</span>
+        <span>Mitgliedschaften</span>
+      </div>
+
+      <div class="hero-showcase">
+        <article class="showcase-text card-light">
+          <h2>Mehr verkaufen, auch außerhalb der Öffnungszeiten</h2>
+          <p>
+            Appointmentix aktiviert Angebote datenbasiert und zeigt sie im richtigen Moment in der Patienten-App.
+            Mehr wiederkehrende Buchungen ohne zusätzlichen manuellen Aufwand.
+          </p>
+        </article>
+
+        <div class="phone-wrap" id="previewPhone">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-top">
+              <span class="chip">Angebote</span>
+              <span class="chip">Live</span>
+            </div>
+            <h3>Willkommen zurück, Jana</h3>
+            <p>Hier ist deine nächste empfohlene Behandlung für diese Woche.</p>
+            <button type="button" class="offer-btn">Angebot öffnen</button>
+          </div>
+        </div>
+
+        <article class="showcase-stats card-dark">
+          <div>
+            <h4>+30k</h4>
+            <p>In-App Angebote zu Verkäufen konvertiert</p>
+          </div>
+          <div>
+            <h4>+88%</h4>
+            <p>Höhere Conversion als E-Mail & SMS</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="proof" class="proof-section">
+      <div class="proof-copy">
+        <p class="eyebrow">Fallbeispiel</p>
+        <h2>Kliniken wählen Appointmentix, um Patientenerwartungen zu übertreffen</h2>
+        <ul>
+          <li>x2 Gewinner von Aesthetic Awards</li>
+          <li>+18k ARR aufgebaut</li>
+          <li>Mitgliedschaften + Prämien + Angebote</li>
+        </ul>
+        <button type="button" class="btn primary" data-open-book>App bauen</button>
+      </div>
+      <div class="proof-card">
+        <div class="proof-image"></div>
+        <p>"Appointmentix hat uns in unter einer Woche einen klaren mobilen Verkaufskanal gegeben."</p>
+      </div>
+    </section>
+
+    <section id="configurator" class="configurator">
+      <div class="config-card">
+        <p class="eyebrow">Jetzt starten</p>
+        <h2>App konfigurieren</h2>
+        <p>Wähle Branding-Optionen, dann qualifizieren wir deine Klinik und planen die Build-Session.</p>
+
+        <form id="configForm" class="config-form">
+          <label>
+            Markenfarbe
+            <div class="color-row">
+              <input id="brandColorInput" type="color" value="#8A5A2F">
+              <input id="brandHexInput" type="text" value="#8A5A2F" maxlength="7">
+            </div>
+          </label>
+
+          <label>
+            Schriftart
+            <select id="fontSelect">
+              <option value="Gabarito, DM Sans, sans-serif">Gabarito</option>
+              <option value="'DM Sans', Gabarito, sans-serif">DM Sans</option>
+              <option value="'Trebuchet MS', 'DM Sans', sans-serif">Trebuchet</option>
+            </select>
+          </label>
+
+          <button type="submit" class="btn primary">App bauen</button>
+        </form>
+      </div>
+      <div class="config-preview card-light">
+        <p>Live-Vorschau</p>
+        <h3 id="previewBrandText">Appointmentix Klinik-Branding</h3>
+        <div class="preview-mini-phone">
+          <span class="dot"></span>
+          <div class="line"></div>
+          <div class="line short"></div>
+          <button type="button">Angebots-CTA</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <main id="bookView" class="view hidden">
+    <section class="book-shell">
+      <button type="button" class="back-link" data-open-home>← Zur Startseite</button>
+      <h2>Kostenfreie App-Building-Session buchen</h2>
+      <p>
+        Wir qualifizieren kurz deine Klinik, damit wir im Termin direkt mit dem passenden White-Label Setup starten.
+      </p>
+
+      <div class="benefit-row">
+        <span>Umsatz steigern</span>
+        <span>Bindung erhöhen</span>
+        <span>Finanzierung anbieten</span>
+      </div>
+
+      <form id="leadForm" class="lead-form" novalidate>
+        <label>
+          Vollständiger Name *
+          <input name="fullName" type="text" required>
+        </label>
+
+        <label>
+          E-Mail *
+          <input name="email" type="email" required>
+        </label>
+
+        <label>
+          Telefonnummer *
+          <input name="phone" type="tel" required>
+        </label>
+
+        <label>
+          Klinikname *
+          <input name="companyName" type="text" required>
+        </label>
+
+        <label>
+          Website-URL *
+          <input name="website" type="text" placeholder="deine-klinik.de" required>
+        </label>
+
+        <fieldset>
+          <legend>Habt ihr gerätebasierte Behandlungen? *</legend>
+          <label><input type="radio" name="hasDevices" value="all_following_and_lasers" required> Alle inkl. Laser</label>
+          <label><input type="radio" name="hasDevices" value="micro_needling_hydrafacial"> Microneedling, Hydrafacial etc.</label>
+          <label><input type="radio" name="hasDevices" value="adding_soon"> Geräte kommen bald dazu</label>
+          <label><input type="radio" name="hasDevices" value="injectables_only"> Nein (nur Injektables)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Wie hoch ist euer monatlicher Klinikumsatz? *</legend>
+          <label><input type="radio" name="recurringRevenueBand" value="eur_0_8k" required> 0€ - 8k€ pro Monat</label>
+          <label><input type="radio" name="recurringRevenueBand" value="eur_8k_20k"> 8k€ - 20k€ pro Monat</label>
+          <label><input type="radio" name="recurringRevenueBand" value="eur_20k_40k"> 20k€ - 40k€ pro Monat</label>
+          <label><input type="radio" name="recurringRevenueBand" value="eur_40k_plus"> 40k€+ pro Monat</label>
+        </fieldset>
+
+        <label class="consent">
+          <input type="checkbox" name="consentSms" required>
+          Ich stimme zu, dass Appointmentix mich zur Terminorganisation kontaktieren darf.
+        </label>
+
+        <label class="consent">
+          <input type="checkbox" name="consentMarketing">
+          Ich möchte gelegentliche Produkt-Updates von Appointmentix erhalten.
+        </label>
+
+        <button id="leadSubmitBtn" type="submit" class="btn primary block">Weiter</button>
+        <p id="leadFormMessage" class="form-message" aria-live="polite"></p>
+      </form>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div>
+        <p class="footer-brand">APPOINTMENTIX</p>
+        <p>White-Label Patienten-Apps für moderne Kliniken.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#">Produkt</a>
+        <a href="#">Datenschutz</a>
+        <a href="#">AGB</a>
+      </div>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>

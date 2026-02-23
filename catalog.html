@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appointmentix Katalog Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;700;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="catalog.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="dot"></span>
+      <span>APPOINTMENTIX</span>
+    </a>
+    <div class="topbar-actions">
+      <a class="btn ghost" href="/dashboard">Zurück zum Dashboard</a>
+      <span id="sessionLabel" class="session-label">Lade Session ...</span>
+      <button id="logoutBtn" class="btn ghost hidden" type="button">Abmelden</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section id="blockedSection" class="card hidden">
+      <h1>Zugriff nicht verfügbar</h1>
+      <p id="blockedMessage" class="subline"></p>
+      <div class="inline-actions">
+        <a class="btn primary" href="/dashboard">Zum Login</a>
+      </div>
+    </section>
+
+    <section id="editorSection" class="hidden">
+      <article class="card hero-card">
+        <div>
+          <h1>Visueller Katalog-Editor</h1>
+          <p class="subline">Bearbeite Klinikdaten als Karten statt Tabellen. Änderungen gelten direkt für die mobile App.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="autoGalleryBtn" class="btn ghost" type="button">Auto-Galerie (KI)</button>
+          <button id="saveCatalogBtn" class="btn primary" type="button">Alle Änderungen speichern</button>
+        </div>
+      </article>
+
+      <article class="card editor-block">
+        <div class="section-head">
+          <h2>Medienbibliothek</h2>
+          <div class="topbar-actions">
+            <input id="mediaUploadInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+            <button id="mediaUploadBtn" class="btn ghost" type="button">Bild hochladen</button>
+            <button id="refreshMediaBtn" class="btn ghost" type="button">Aktualisieren</button>
+          </div>
+        </div>
+        <div id="mediaGrid" class="media-grid"></div>
+      </article>
+
+      <div class="editor-grid">
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Kategorien</h2>
+            <button id="addCategoryBtn" class="btn ghost" type="button">+ Kategorie</button>
+          </div>
+          <div id="categoriesList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Treatments</h2>
+            <button id="addTreatmentBtn" class="btn ghost" type="button">+ Treatment</button>
+          </div>
+          <div id="treatmentsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Memberships</h2>
+            <button id="addMembershipBtn" class="btn ghost" type="button">+ Membership</button>
+          </div>
+          <div id="membershipsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Reward Aktionen</h2>
+            <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
+          </div>
+          <div id="rewardActionsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Reward Einlösungen</h2>
+            <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Einlösung</button>
+          </div>
+          <div id="rewardRedeemsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Home Artikel</h2>
+            <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Artikel</button>
+          </div>
+          <div id="homeArticlesList" class="cards"></div>
+        </article>
+      </div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+  </main>
+
+  <script src="catalog.js"></script>
+</body>
+</html>

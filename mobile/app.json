@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Appointmentix",
+    "slug": "appointmentix",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.appointmentix.mobile"
+    },
+    "android": {
+      "package": "com.appointmentix.mobile"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
