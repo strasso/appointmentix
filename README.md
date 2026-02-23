@@ -277,3 +277,4 @@ Was getestet wird:
 - Kampagne erstellen
 - Kampagne ausfuehren
 - Deliveries + Audit-Logs + Mobile Bundle
+# appointmentix
