@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import Constants from 'expo-constants';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import {
@@ -42,9 +43,10 @@ const CLINIC = {
 
 // White-label defaults for patient app (optional):
 // If set, the app loads clinic bundle automatically on first launch.
-const APP_DEFAULT_BACKEND_URL = '';
-const APP_DEFAULT_CLINIC_NAME = '';
+const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
+const APP_DEFAULT_CLINIC_NAME = process.env.EXPO_PUBLIC_DEFAULT_CLINIC_NAME || '';
 const MOBILE_OTP_COOLDOWN_SECONDS_FALLBACK = 30;
+const SHOW_TECHNICAL_SETUP = __DEV__;
 
 const HOME_ARTICLES = [
   {
@@ -95,6 +97,29 @@ const TREATMENT_CATEGORIES = [
   { id: 'injectables', label: 'Injectables' },
   { id: 'premium', label: 'Premium' },
 ];
+
+const CATEGORY_META = {
+  gesicht: {
+    icon: '◔',
+    description: 'Frische, ebenmäßige Haut mit sichtbarem Glow.',
+  },
+  haare: {
+    icon: '〰',
+    description: 'Glatte Haut und starke Kopfhaut mit medizinischer Technologie.',
+  },
+  koerper: {
+    icon: '◍',
+    description: 'Kontur, Straffung und Cellulite-Verbesserung für den Körper.',
+  },
+  injectables: {
+    icon: '✦',
+    description: 'Gezielte Injektionsbehandlungen für natürliche Ergebnisse.',
+  },
+  premium: {
+    icon: '◇',
+    description: 'High-End Gerätebehandlungen mit maximaler Wirkung.',
+  },
+};
 
 const TREATMENTS = [
   {
@@ -288,10 +313,41 @@ function normalizeUrl(value) {
   return `${scheme}://${candidate}`.replace(/\/+$/, '');
 }
 
+function resolveExpoBackendUrl() {
+  const hostUriCandidate =
+    String(
+      Constants?.expoConfig?.hostUri
+      || Constants?.manifest2?.extra?.expoGo?.debuggerHost
+      || Constants?.manifest?.debuggerHost
+      || ''
+    ).trim();
+  if (!hostUriCandidate) return '';
+
+  const hostPart = hostUriCandidate
+    .split(',')[0]
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .split('/')[0]
+    .split(':')[0]
+    .trim();
+
+  if (!hostPart) return '';
+  return normalizeUrl(`${hostPart}:4173`);
+}
+
 function normalizePhone(value) {
   return String(value || '')
     .trim()
     .replace(/[^\d+]/g, '');
+}
+
+function resolveCategoryMeta(categoryId, label = '') {
+  const key = String(categoryId || '').trim().toLowerCase();
+  const fallback = {
+    icon: '◦',
+    description: `Behandlungen für ${String(label || 'deine Auswahl').trim()}.`,
+  };
+  return CATEGORY_META[key] || fallback;
 }
 
 function resolveClinicNameFromQrOrCode(rawValue) {
@@ -508,7 +564,7 @@ async function requestPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 15000, retries: 1, retryDelayMs: 600 });
+  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -527,7 +583,7 @@ async function resendPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 15000, retries: 1, retryDelayMs: 600 });
+  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -545,7 +601,7 @@ async function verifyPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 15000, retries: 1, retryDelayMs: 600 });
+  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -774,6 +830,15 @@ function TabButton({ label, active, onPress }) {
   );
 }
 
+function ShopTabButton({ label, active, onPress }) {
+  return (
+    <Pressable style={styles.shopTabBtn} onPress={onPress}>
+      <Text style={[styles.shopTabText, active && styles.shopTabTextActive]}>{label}</Text>
+      <View style={[styles.shopTabUnderline, active && styles.shopTabUnderlineActive]} />
+    </Pressable>
+  );
+}
+
 function BottomTab({ label, active, onPress }) {
   return (
     <Pressable
@@ -794,11 +859,13 @@ function TreatmentCard({ treatment, onPress }) {
       ) : (
         <View style={styles.treatmentImageMock} />
       )}
-      <Text style={styles.treatmentName}>{treatment.name}</Text>
-      <Text style={styles.treatmentDescription} numberOfLines={2}>
-        {treatment.description}
-      </Text>
-      <Text style={styles.treatmentPrice}>ab {formatPrice(treatment.priceCents)}</Text>
+      <View style={styles.treatmentCardBody}>
+        <Text style={styles.treatmentName} numberOfLines={1}>{treatment.name}</Text>
+        <Text style={styles.treatmentDescription} numberOfLines={2}>
+          {treatment.description}
+        </Text>
+        <Text style={styles.treatmentPrice}>ab {formatPrice(treatment.priceCents)}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -865,6 +932,7 @@ export default function App() {
     () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     []
   );
+  const expoBackendUrl = useMemo(() => resolveExpoBackendUrl(), []);
 
   const currentMembership = useMemo(() => {
     const fallback = {
@@ -882,6 +950,25 @@ export default function App() {
     [categoryId, treatments]
   );
 
+  const selectedCategory = useMemo(() => {
+    return (
+      treatmentCategories.find((item) => String(item.id || '') === String(categoryId || ''))
+      || treatmentCategories[0]
+      || { id: categoryId, label: categoryId }
+    );
+  }, [categoryId, treatmentCategories]);
+
+  const selectedCategoryMeta = useMemo(
+    () => resolveCategoryMeta(selectedCategory?.id, selectedCategory?.label),
+    [selectedCategory]
+  );
+
+  const shopMembershipTabLabel = useMemo(() => {
+    const short = String(clinicProfile?.shortName || '').trim();
+    if (!short) return 'Membership';
+    return `${short} VIP`;
+  }, [clinicProfile?.shortName]);
+
   const totalCartCents = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.totalCents, 0),
     [cartItems]
@@ -898,6 +985,41 @@ export default function App() {
 
   const resolvedOnboardingBaseUrl = normalizeUrl(onboardingBaseUrl || analyticsBaseUrl || APP_DEFAULT_BACKEND_URL);
   const needsBackendProvisioning = !resolvedOnboardingBaseUrl;
+
+  async function runWithBaseUrlFallback(baseUrlHint, runner) {
+    const candidates = [];
+    const preferred = normalizeUrl(baseUrlHint);
+    if (preferred) {
+      candidates.push(preferred);
+    }
+    if (expoBackendUrl && !candidates.includes(expoBackendUrl)) {
+      candidates.push(expoBackendUrl);
+    }
+    if (candidates.length === 0) {
+      throw new Error('Backend URL fehlt');
+    }
+
+    let lastError = null;
+    for (let idx = 0; idx < candidates.length; idx += 1) {
+      const candidate = candidates[idx];
+      try {
+        const value = await runner(candidate);
+        if (candidate !== normalizeUrl(analyticsBaseUrl)) {
+          setAnalyticsBaseUrl(candidate);
+          setOnboardingBaseUrl(candidate);
+          await writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, candidate);
+        }
+        return { value, baseUrl: candidate, usedFallback: idx > 0 };
+      } catch (error) {
+        lastError = error;
+        const canTryNext = idx < candidates.length - 1 && shouldRetryRequest(error);
+        if (!canTryNext) {
+          throw error;
+        }
+      }
+    }
+    throw lastError || new Error('Netzwerkfehler');
+  }
 
   async function sendEvent(eventName, extras = {}) {
     if (!analyticsConnected) return;
@@ -984,7 +1106,7 @@ export default function App() {
     const normalized = normalizeUrl(nextBaseUrl || analyticsBaseUrl);
     if (!normalized) {
       setAnalyticsConnected(false);
-      Alert.alert('Backend URL fehlt', 'Bitte gib deine Backend-URL ein, z. B. http://192.168.x.x:4173');
+      Alert.alert('Service nicht verfügbar', 'Klinikdaten konnten nicht geladen werden.');
       return;
     }
 
@@ -1055,7 +1177,7 @@ export default function App() {
     const silentFailure = options.silentFailure === true;
     if (!normalized) {
       setAnalyticsConnected(false);
-      Alert.alert('Backend nicht provisioniert', 'API-Basis fehlt. Bitte intern in Einstellungen setzen.');
+      Alert.alert('Service nicht verfügbar', 'Klinik-Verbindung ist aktuell nicht verfügbar.');
       return;
     }
     if (!resolvedClinicName) {
@@ -1089,7 +1211,7 @@ export default function App() {
       if (!silentFailure) {
         Alert.alert('Backend-Verbindung fehlgeschlagen', helpMessage);
       } else {
-        setOtpFeedback('Backend-Verbindung fehlgeschlagen. Bitte Technik-Bereich prüfen.', 'error');
+        setOtpFeedback('Backend-Verbindung fehlgeschlagen. Bitte später erneut versuchen.', 'error');
       }
     } finally {
       setConnectLoading(false);
@@ -1098,7 +1220,7 @@ export default function App() {
 
   async function runBackendHealthCheck() {
     const sourceBaseUrl = showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl;
-    const normalized = normalizeUrl(sourceBaseUrl);
+    const normalized = normalizeUrl(sourceBaseUrl) || expoBackendUrl;
     if (!normalized) {
       Alert.alert('Backend URL fehlt', 'Bitte gib zuerst die Backend-URL ein.');
       return;
@@ -1106,9 +1228,11 @@ export default function App() {
 
     setBackendCheckLoading(true);
     try {
-      const payload = await fetchBackendHealth(normalized);
+      const { value: payload, baseUrl } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
+        fetchBackendHealth(baseUrlCandidate)
+      );
       if (payload?.status === 'ok') {
-        const message = `Health-Check erfolgreich: ${normalized}`;
+        const message = `Health-Check erfolgreich: ${baseUrl}`;
         setBackendCheckMessage(message);
         Alert.alert('Backend erreichbar', message);
       } else {
@@ -1124,18 +1248,20 @@ export default function App() {
   }
 
   async function runClinicSearch() {
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
+    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl) || expoBackendUrl;
     if (!normalized) {
-      setShowTechnicalSetup(true);
-      setBackendCheckMessage('Backend-URL fehlt. Öffne den Technik-Bereich und trage die URL ein.');
+      setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
       return;
     }
 
     setClinicSearchLoading(true);
     try {
-      const response = await fetchClinicSearch(normalized, clinicSearchQuery, 12);
+      const { value: response, baseUrl } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
+        fetchClinicSearch(baseUrlCandidate, clinicSearchQuery, 12)
+      );
       const clinics = Array.isArray(response.clinics) ? response.clinics : [];
       setClinicSearchResults(clinics);
+      setBackendCheckMessage(`Klinik-Suche verbunden über: ${baseUrl}`);
       if (clinics.length > 0) {
         const exact = clinics.find(
           (entry) =>
@@ -1151,7 +1277,6 @@ export default function App() {
     } catch (error) {
       const helpMessage = describeConnectionError(normalized, error);
       setBackendCheckMessage(helpMessage);
-      setShowTechnicalSetup(true);
     } finally {
       setClinicSearchLoading(false);
     }
@@ -1269,10 +1394,9 @@ export default function App() {
   }
 
   async function useQrOrReferralCode() {
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
+    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl) || expoBackendUrl;
     if (!normalized) {
-      setShowTechnicalSetup(true);
-      setBackendCheckMessage('Backend nicht provisioniert. Öffne den Technik-Bereich.');
+      setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
       return;
     }
 
@@ -1284,7 +1408,9 @@ export default function App() {
 
     let parsedClinicName = resolveClinicNameFromQrOrCode(rawCode);
     try {
-      const resolved = await resolveClinicByCode(normalized, { code: rawCode });
+      const { value: resolved } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
+        resolveClinicByCode(baseUrlCandidate, { code: rawCode })
+      );
       const resolvedName = String(resolved?.resolvedClinicName || resolved?.clinic?.name || '').trim();
       if (resolvedName) {
         parsedClinicName = resolvedName;
@@ -1329,10 +1455,10 @@ export default function App() {
     }
 
     const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
+    const effectiveBaseUrl = normalized || expoBackendUrl;
     const resolvedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
-    if (!normalized) {
-      setShowTechnicalSetup(true);
-      setOtpFeedback('Backend nicht verbunden. Bitte Technik-Bereich prüfen.', 'warning');
+    if (!effectiveBaseUrl) {
+      setOtpFeedback('Backend nicht verbunden. Bitte später erneut versuchen.', 'warning');
       return;
     }
     if (!resolvedClinicName) {
@@ -1345,10 +1471,13 @@ export default function App() {
       setOtpLoading(true);
       setOtpFeedback('Code wird angefordert ...', 'info');
       try {
-        const response = await requestPhoneOtp(normalized, {
-          clinicName: resolvedClinicName,
-          phone: normalizedPhone,
-        });
+        const { value: response, baseUrl } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
+          requestPhoneOtp(baseUrlCandidate, {
+            clinicName: resolvedClinicName,
+            phone: normalizedPhone,
+          })
+        );
+        setBackendCheckMessage(`OTP-Service verbunden über: ${baseUrl}`);
         setOtpRequestId(String(response.requestId || '').trim());
         setOtpRequestedPhone(normalizedPhone);
         setOtpExpiresAt(String(response.expiresAt || '').trim());
@@ -1371,12 +1500,14 @@ export default function App() {
     setOtpLoading(true);
     setOtpFeedback('Code wird bestätigt ...', 'info');
     try {
-      const response = await verifyPhoneOtp(normalized, {
-        clinicName: resolvedClinicName,
-        phone: normalizedPhone,
-        requestId: otpRequestId,
-        code: safeOtpCode,
-      });
+      const { value: response } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
+        verifyPhoneOtp(baseUrlCandidate, {
+          clinicName: resolvedClinicName,
+          phone: normalizedPhone,
+          requestId: otpRequestId,
+          code: safeOtpCode,
+        })
+      );
       const memberEmail = String(response.memberEmail || '').trim().toLowerCase();
       const memberName = String(response.memberName || settingsName || '').trim();
       if (!memberEmail.includes('@')) {
@@ -1413,11 +1544,11 @@ export default function App() {
     }
 
     const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
+    const effectiveBaseUrl = normalized || expoBackendUrl;
     const resolvedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
     const normalizedPhone = normalizePhone(patientPhone);
-    if (!normalized) {
-      setShowTechnicalSetup(true);
-      setOtpFeedback('Backend nicht verbunden. Bitte Technik-Bereich prüfen.', 'warning');
+    if (!effectiveBaseUrl) {
+      setOtpFeedback('Backend nicht verbunden. Bitte später erneut versuchen.', 'warning');
       return;
     }
     if (!resolvedClinicName || !normalizedPhone) {
@@ -1428,10 +1559,13 @@ export default function App() {
     setOtpResendLoading(true);
     setOtpFeedback('Code wird neu gesendet ...', 'info');
     try {
-      const response = await resendPhoneOtp(normalized, {
-        clinicName: resolvedClinicName,
-        phone: normalizedPhone,
-      });
+      const { value: response, baseUrl } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
+        resendPhoneOtp(baseUrlCandidate, {
+          clinicName: resolvedClinicName,
+          phone: normalizedPhone,
+        })
+      );
+      setBackendCheckMessage(`OTP-Service verbunden über: ${baseUrl}`);
       setOtpRequestId(String(response.requestId || '').trim());
       setOtpRequestedPhone(normalizedPhone);
       setOtpExpiresAt(String(response.expiresAt || '').trim());
@@ -1820,6 +1954,7 @@ export default function App() {
       const storedPatientPhone = normalizePhone(await readSecureValue(STORAGE_KEYS.patientPhone));
       const storedPatientGuestMode = String(await readSecureValue(STORAGE_KEYS.patientGuestMode)).trim() === '1';
       const defaultBaseUrl = normalizeUrl(APP_DEFAULT_BACKEND_URL);
+      const expoDetectedBaseUrl = normalizeUrl(expoBackendUrl);
       const defaultClinicName = String(APP_DEFAULT_CLINIC_NAME || '').trim();
 
       if (!isActive) return;
@@ -1832,7 +1967,7 @@ export default function App() {
       if (storedPatientGuestMode) {
         setPatientGuestMode(true);
       }
-      const initialBaseUrl = storedBaseUrl || defaultBaseUrl;
+      const initialBaseUrl = storedBaseUrl || defaultBaseUrl || expoDetectedBaseUrl;
       const initialClinicName = storedClinicName || defaultClinicName;
       if (initialBaseUrl) {
         setAnalyticsBaseUrl(initialBaseUrl);
@@ -1869,7 +2004,7 @@ export default function App() {
       isActive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [expoBackendUrl]);
 
   useEffect(() => {
     track('App geöffnet', 'app_open');
@@ -1964,16 +2099,18 @@ export default function App() {
                 : 'Melde dich mit Telefonnummer an oder fahre als Gast fort.'}
             </Text>
 
-            <Pressable
-              style={[styles.secondaryCta, styles.techToggleCta]}
-              onPress={() => setShowTechnicalSetup((prev) => !prev)}
-            >
-              <Text style={styles.secondaryCtaText}>
-                {showTechnicalSetup ? 'Technik ausblenden' : 'Technik / Backend (optional)'}
-              </Text>
-            </Pressable>
+            {SHOW_TECHNICAL_SETUP && (
+              <Pressable
+                style={[styles.secondaryCta, styles.techToggleCta]}
+                onPress={() => setShowTechnicalSetup((prev) => !prev)}
+              >
+                <Text style={styles.secondaryCtaText}>
+                  {showTechnicalSetup ? 'Technik ausblenden' : 'Technik / Backend (optional)'}
+                </Text>
+              </Pressable>
+            )}
 
-            {showTechnicalSetup && (
+            {SHOW_TECHNICAL_SETUP && showTechnicalSetup && (
               <View style={styles.inlineInfoBox}>
                 <Text style={styles.inlineInfoTitle}>
                   {needsBackendProvisioning ? 'Technische Einrichtung (intern)' : 'Backend-URL (bei Netzwerkwechsel)'}
@@ -2263,14 +2400,14 @@ export default function App() {
             <View>
               <TopHeader title="Shop" clinicShortName={clinicProfile.shortName} />
 
-              <View style={styles.segmentRow}>
-                <TabButton label="Browse" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
-                <TabButton
-                  label="Membership"
+              <View style={styles.shopTabsRow}>
+                <ShopTabButton label="Browse" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
+                <ShopTabButton
+                  label={shopMembershipTabLabel}
                   active={shopTab === 'membership'}
                   onPress={() => setShopTab('membership')}
                 />
-                <TabButton
+                <ShopTabButton
                   label="Treatments"
                   active={shopTab === 'treatments'}
                   onPress={() => setShopTab('treatments')}
@@ -2279,21 +2416,38 @@ export default function App() {
 
               {shopTab === 'browse' && !selectedTreatment && (
                 <View>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+                  <View style={styles.shopPinkHeroCard}>
+                    <Text style={styles.shopPinkHeroTitle}>Treat today. Pay later. Earn rewards.</Text>
+                    <Text style={styles.shopPinkHeroBody}>Kostenlose Treatments und exklusive Member-Vorteile.</Text>
+                    <Pressable
+                      style={styles.shopPinkHeroCta}
+                      onPress={() => {
+                        setShopTab('membership');
+                      }}
+                    >
+                      <Text style={styles.shopPinkHeroCtaText}>Wie funktioniert es?</Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.categoryGrid}>
                     {treatmentCategories.map((cat) => (
                       <Pressable
                         key={cat.id}
-                        style={[styles.categoryChip, categoryId === cat.id && styles.categoryChipActive]}
+                        style={[styles.categoryTile, categoryId === cat.id && styles.categoryTileActive]}
                         onPress={() => setCategoryId(cat.id)}
                       >
-                        <Text style={[styles.categoryChipText, categoryId === cat.id && styles.categoryChipTextActive]}>
+                        <Text style={[styles.categoryTileIcon, categoryId === cat.id && styles.categoryTileIconActive]}>
+                          {resolveCategoryMeta(cat.id, cat.label).icon}
+                        </Text>
+                        <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
                           {cat.label}
                         </Text>
                       </Pressable>
                     ))}
-                  </ScrollView>
+                  </View>
 
-                  <Text style={styles.sectionTitle}>Alle "{treatmentCategories.find((c) => c.id === categoryId)?.label || categoryId}" Behandlungen</Text>
+                  <Text style={styles.shopListTitle}>Alle "{selectedCategory?.label || categoryId}" treatments</Text>
+                  <Text style={styles.shopListSubtitle}>{selectedCategoryMeta.description}</Text>
                   <View style={styles.treatmentGrid}>
                     {browseItems.map((item) => (
                       <TreatmentCard key={item.id} treatment={item} onPress={openTreatment} />
@@ -2926,30 +3080,125 @@ const styles = StyleSheet.create({
     color: THEME.ink,
     fontWeight: '700',
   },
-  categoryRow: {
-    paddingBottom: 4,
-    gap: 8,
-    paddingRight: 4,
+  shopTabsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E2D9',
+    marginBottom: 12,
   },
-  categoryChip: {
-    borderWidth: 1,
-    borderColor: THEME.border,
-    backgroundColor: THEME.surface,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+  shopTabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 4,
+    paddingBottom: 0,
   },
-  categoryChipActive: {
-    backgroundColor: '#EEDCCA',
-    borderColor: '#D9C1A6',
+  shopTabText: {
+    color: '#716353',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 10,
   },
-  categoryChipText: {
-    color: THEME.muted,
-    fontWeight: '600',
-  },
-  categoryChipTextActive: {
+  shopTabTextActive: {
     color: THEME.ink,
     fontWeight: '700',
+  },
+  shopTabUnderline: {
+    height: 3,
+    width: '100%',
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  shopTabUnderlineActive: {
+    backgroundColor: '#EB6BA4',
+  },
+  shopPinkHeroCard: {
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    backgroundColor: '#EE76AC',
+    borderWidth: 1,
+    borderColor: '#F4A4C8',
+    marginBottom: 14,
+  },
+  shopPinkHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  shopPinkHeroBody: {
+    color: '#FFEAF4',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  shopPinkHeroCta: {
+    alignSelf: 'center',
+    backgroundColor: '#FFF7FB',
+    borderWidth: 1,
+    borderColor: '#F5CFE1',
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+  },
+  shopPinkHeroCtaText: {
+    color: '#D45C94',
+    fontWeight: '700',
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+    marginBottom: 12,
+  },
+  categoryTile: {
+    width: '25%',
+    paddingHorizontal: 4,
+    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 86,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 10,
+  },
+  categoryTileActive: {
+    borderColor: '#EB6BA4',
+    backgroundColor: '#FFF8FC',
+  },
+  categoryTileIcon: {
+    color: '#827564',
+    fontSize: 20,
+    marginBottom: 6,
+  },
+  categoryTileIconActive: {
+    color: '#EB6BA4',
+  },
+  categoryTileText: {
+    color: '#635547',
+    fontWeight: '500',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  categoryTileTextActive: {
+    color: THEME.ink,
+    fontWeight: '700',
+  },
+  shopListTitle: {
+    color: THEME.ink,
+    fontSize: 33,
+    lineHeight: 38,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  shopListSubtitle: {
+    color: THEME.muted,
+    fontSize: 15,
+    lineHeight: 20,
+    marginBottom: 12,
   },
   treatmentGrid: {
     flexDirection: 'row',
@@ -2960,51 +3209,43 @@ const styles = StyleSheet.create({
     width: '50%',
     paddingHorizontal: 4,
     marginBottom: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
   },
   treatmentImageMock: {
-    height: 92,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    height: 116,
     backgroundColor: '#D8C5AE',
   },
   treatmentImageReal: {
-    height: 92,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    height: 116,
     width: '100%',
     backgroundColor: '#D8C5AE',
   },
-  treatmentName: {
-    backgroundColor: THEME.surface,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: THEME.border,
+  treatmentCardBody: {
     paddingHorizontal: 10,
     paddingTop: 9,
+    paddingBottom: 10,
+  },
+  treatmentName: {
+    fontSize: 15,
     fontWeight: '700',
     color: THEME.ink,
+    marginBottom: 4,
   },
   treatmentDescription: {
-    backgroundColor: THEME.surface,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: THEME.border,
-    paddingHorizontal: 10,
-    paddingTop: 3,
     color: THEME.muted,
-    lineHeight: 18,
+    lineHeight: 17,
     minHeight: 40,
+    fontSize: 12,
+    marginBottom: 6,
   },
   treatmentPrice: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
     color: THEME.brand,
     fontWeight: '700',
+    fontSize: 15,
   },
   detailCard: {
     backgroundColor: THEME.surface,
