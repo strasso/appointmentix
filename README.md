@@ -278,3 +278,4 @@ Was getestet wird:
 - Kampagne ausfuehren
 - Deliveries + Audit-Logs + Mobile Bundle
 # appointmentix
+# appointmentix
