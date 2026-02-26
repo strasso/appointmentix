@@ -78,7 +78,7 @@ function applyPreviewStyles() {
     previewPhone.style.filter = `drop-shadow(0 28px 48px ${runtime.brandColor}55)`;
   }
   if (previewBrandText) {
-    previewBrandText.textContent = `Appointmentix Klinik-Branding • ${runtime.brandColor}`;
+    previewBrandText.textContent = `Curabo Klinik-Branding • ${runtime.brandColor}`;
   }
 }
 

@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: curabo-app
+    env: python
+    region: frankfurt
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 2 --threads 4 --timeout 60 --bind 0.0.0.0:$PORT wsgi:app
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES
+        value: card,paypal,klarna
+      - key: CALENDLY_URL
+        sync: false
+      - key: APPOINTMENTIX_PLAN_NAME
+        value: Curabo White-Label Zugang
+      - key: APPOINTMENTIX_MONTHLY_AMOUNT_EUR
+        value: "650"
+      - key: MOBILE_OTP_BRAND_NAME
+        value: Curabo
+      - key: MOBILE_OTP_DEBUG
+        value: "false"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"

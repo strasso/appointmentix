@@ -17,19 +17,20 @@ import {
   Vibration,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const THEME = {
-  background: '#F6F1E8',
-  surface: '#FFF9F0',
-  ink: '#2E2318',
-  muted: '#6E5D4A',
-  brand: '#8A5A2F',
-  brandSoft: '#E8D7C3',
-  accent: '#D1863B',
+  background: '#F5F6FA',
+  surface: '#FFFFFF',
+  ink: '#1F2430',
+  muted: '#7C8393',
+  brand: '#EB6BA4',
+  brandSoft: '#FBE6F1',
+  accent: '#5CA3A8',
   good: '#1F8E52',
-  border: '#E6D7C6',
-  rewardsA: '#6BAAA7',
-  rewardsB: '#3A7F7B',
+  border: '#E9ECF2',
+  rewardsA: '#71BAC0',
+  rewardsB: '#3F8F97',
 };
 
 const CLINIC = {
@@ -804,16 +805,77 @@ function membershipStatusLabel(status) {
   }
 }
 
-function TopHeader({ title, clinicShortName }) {
+function rewardActionIcon(actionId) {
+  switch (String(actionId || '').toLowerCase()) {
+    case 'referral':
+      return 'people-outline';
+    case 'review':
+      return 'logo-google';
+    case 'story':
+      return 'star-outline';
+    default:
+      return 'sparkles-outline';
+  }
+}
+
+function categoryIconName(categoryId) {
+  switch (String(categoryId || '').toLowerCase()) {
+    case 'gesicht':
+      return 'happy-outline';
+    case 'haare':
+      return 'leaf-outline';
+    case 'koerper':
+      return 'body-outline';
+    case 'injectables':
+      return 'medical-outline';
+    case 'premium':
+      return 'diamond-outline';
+    default:
+      return 'ellipse-outline';
+  }
+}
+
+function TopHeader({
+  title,
+  clinicShortName,
+  onSearchPress,
+  onCartPress,
+  cartCount = 0,
+}) {
+  const safeCartCount = Math.max(0, Number(cartCount || 0));
+  const cartBadgeText = safeCartCount > 99 ? '99+' : String(safeCartCount);
+
   return (
     <View style={styles.headerRow}>
-      <View>
-        <Text style={styles.headerClinic}>{clinicShortName || 'APP'}</Text>
-        <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerLeft}>
+        <View style={styles.headerAvatar}>
+          <Text style={styles.headerAvatarText}>{String(clinicShortName || 'A').slice(0, 1)}</Text>
+        </View>
+        <View>
+          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={styles.headerClinic}>{clinicShortName || 'APP'}</Text>
+        </View>
       </View>
       <View style={styles.headerIcons}>
-        <Text style={styles.iconButton}>⌕</Text>
-        <Text style={styles.iconButton}>🛍</Text>
+        <Pressable
+          style={styles.iconButtonWrap}
+          onPress={onSearchPress}
+          hitSlop={8}
+        >
+          <Ionicons name="search-outline" size={22} color="#5E6676" />
+        </Pressable>
+        <Pressable
+          style={styles.iconButtonWrap}
+          onPress={onCartPress}
+          hitSlop={8}
+        >
+          <Ionicons name="bag-handle-outline" size={21} color="#5E6676" />
+          {safeCartCount > 0 && (
+            <View style={styles.headerCartBadge}>
+              <Text style={styles.headerCartBadgeText}>{cartBadgeText}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
     </View>
   );
@@ -840,11 +902,24 @@ function ShopTabButton({ label, active, onPress }) {
 }
 
 function BottomTab({ label, active, onPress }) {
+  const iconByTab = {
+    Home: { active: 'home', inactive: 'home-outline' },
+    Shop: { active: 'bag-handle', inactive: 'bag-handle-outline' },
+    Scan: { active: 'qr-code', inactive: 'qr-code-outline' },
+    Rewards: { active: 'gift', inactive: 'gift-outline' },
+    Profil: { active: 'person', inactive: 'person-outline' },
+  };
+  const iconSpec = iconByTab[label] || { active: 'ellipse', inactive: 'ellipse-outline' };
   return (
     <Pressable
-      style={styles.bottomTabBtn}
+      style={[styles.bottomTabBtn, active && styles.bottomTabBtnActive]}
       onPress={onPress}
     >
+      <Ionicons
+        name={active ? iconSpec.active : iconSpec.inactive}
+        size={18}
+        color={active ? THEME.brand : '#8B93A2'}
+      />
       <Text style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}>{label}</Text>
     </Pressable>
   );
@@ -874,6 +949,7 @@ export default function App() {
   const [mainTab, setMainTab] = useState('home');
   const [shopTab, setShopTab] = useState('browse');
   const [profileTab, setProfileTab] = useState('behandlungen');
+  const [rewardsView, setRewardsView] = useState('active');
   const [categoryId, setCategoryId] = useState('gesicht');
   const [selectedTreatment, setSelectedTreatment] = useState(null);
   const [units, setUnits] = useState(1);
@@ -923,6 +999,9 @@ export default function App() {
   const [otpCooldownUntil, setOtpCooldownUntil] = useState(0);
   const [otpCountdown, setOtpCountdown] = useState(0);
   const [showTechnicalSetup, setShowTechnicalSetup] = useState(false);
+  const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
+  const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const [cartSheetOpen, setCartSheetOpen] = useState(false);
 
   const [cartItems, setCartItems] = useState([]);
   const [cartSyncing, setCartSyncing] = useState(false);
@@ -950,6 +1029,77 @@ export default function App() {
     [categoryId, treatments]
   );
 
+  const globalSearchResults = useMemo(() => {
+    const q = String(headerSearchQuery || '').trim().toLowerCase();
+    if (!q) return [];
+
+    const byCategoryId = treatmentCategories.reduce((acc, cat) => {
+      if (cat?.id) acc[String(cat.id)] = String(cat.label || cat.id);
+      return acc;
+    }, {});
+
+    const treatmentMatches = treatments
+      .filter((item) => {
+        const haystack = [
+          item?.name || '',
+          item?.description || '',
+          byCategoryId[item?.category] || item?.category || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 8)
+      .map((item) => ({
+        type: 'treatment',
+        id: item.id,
+        title: item.name,
+        subtitle: `${byCategoryId[item.category] || item.category || 'Treatment'} • ab ${formatPrice(item.priceCents || 0)}`,
+        payload: item,
+      }));
+
+    const membershipMatches = memberships
+      .filter((plan) => {
+        const haystack = [
+          plan?.name || '',
+          ...(Array.isArray(plan?.perks) ? plan.perks : []),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 4)
+      .map((plan) => ({
+        type: 'membership',
+        id: plan.id,
+        title: plan.name,
+        subtitle: `${formatPrice(plan.priceCents || 0)} / Monat`,
+        payload: plan,
+      }));
+
+    const articleMatches = homeArticles
+      .filter((article) => {
+        const haystack = [
+          article?.title || '',
+          article?.body || '',
+          article?.tag || '',
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 4)
+      .map((article) => ({
+        type: 'article',
+        id: article.id,
+        title: article.title,
+        subtitle: `${article.tag || 'Artikel'} • Wissen`,
+        payload: article,
+      }));
+
+    return [...treatmentMatches, ...membershipMatches, ...articleMatches].slice(0, 12);
+  }, [headerSearchQuery, treatmentCategories, treatments, memberships, homeArticles]);
+
   const selectedCategory = useMemo(() => {
     return (
       treatmentCategories.find((item) => String(item.id || '') === String(categoryId || ''))
@@ -972,6 +1122,11 @@ export default function App() {
   const totalCartCents = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.totalCents, 0),
     [cartItems]
+  );
+
+  const rewardHistoryItems = useMemo(
+    () => history.filter((entry) => entry.type === 'reward' || entry.type === 'redeem'),
+    [history]
   );
 
   const hasActiveMembership = analyticsConnected
@@ -1068,6 +1223,59 @@ export default function App() {
       }),
     ]).start();
     setMainTab(nextTab);
+  }
+
+  function openHeaderSearch() {
+    setHeaderSearchOpen(true);
+    setHeaderSearchQuery('');
+  }
+
+  function closeHeaderSearch() {
+    setHeaderSearchOpen(false);
+  }
+
+  function openHeaderCart() {
+    setCartSheetOpen(true);
+  }
+
+  function closeHeaderCart() {
+    setCartSheetOpen(false);
+  }
+
+  function searchResultIcon(type) {
+    switch (type) {
+      case 'membership':
+        return 'diamond-outline';
+      case 'article':
+        return 'newspaper-outline';
+      default:
+        return 'sparkles-outline';
+    }
+  }
+
+  function onGlobalSearchSelect(result) {
+    if (!result) return;
+
+    if (result.type === 'treatment' && result.payload) {
+      setShopTab('browse');
+      setSelectedTreatment(result.payload);
+      switchMainTab('shop');
+      closeHeaderSearch();
+      return;
+    }
+
+    if (result.type === 'membership') {
+      setShopTab('membership');
+      switchMainTab('shop');
+      closeHeaderSearch();
+      return;
+    }
+
+    if (result.type === 'article') {
+      switchMainTab('home');
+      closeHeaderSearch();
+      return;
+    }
   }
 
   function openTreatment(treatment) {
@@ -2349,7 +2557,13 @@ export default function App() {
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {mainTab === 'home' && (
             <View>
-              <TopHeader title="Start" clinicShortName={clinicProfile.shortName} />
+              <TopHeader
+                title="Start"
+                clinicShortName={clinicProfile.shortName}
+                onSearchPress={openHeaderSearch}
+                onCartPress={openHeaderCart}
+                cartCount={cartItems.length}
+              />
 
               <View style={styles.heroCard}>
                 <Text style={styles.heroEyebrow}>PERSONALISIERT FÜR DICH</Text>
@@ -2386,9 +2600,32 @@ export default function App() {
 
               <Text style={styles.sectionTitle}>Klinik</Text>
               <View style={styles.clinicCard}>
+                <View style={styles.mapMock}>
+                  <Text style={styles.mapMockLabel}>Map</Text>
+                  <View style={styles.mapMockPinWrap}>
+                    <Ionicons name="location" size={14} color="#FF8BBE" />
+                    <Text style={styles.mapMockPinText}>{clinicProfile.city || 'Wien'}</Text>
+                  </View>
+                </View>
                 <Text style={styles.clinicName}>{clinicProfile.name}</Text>
-                <Text style={styles.clinicMeta}>{clinicProfile.address || clinicProfile.city || 'Standortdaten folgen'}</Text>
-                <Text style={styles.clinicMeta}>{clinicProfile.openingHours || 'Mo - Sa, 09:00 - 17:00'}</Text>
+                <View style={styles.clinicMetaRow}>
+                  <Ionicons name="location-outline" size={14} color="#8E95A1" />
+                  <Text style={styles.clinicMeta}>{clinicProfile.address || clinicProfile.city || 'Standortdaten folgen'}</Text>
+                </View>
+                <View style={styles.clinicMetaRow}>
+                  <Ionicons name="time-outline" size={14} color="#8E95A1" />
+                  <Text style={styles.clinicMeta}>{clinicProfile.openingHours || 'Mo - Sa, 09:00 - 17:00'}</Text>
+                </View>
+                <Pressable
+                  style={styles.callNowCta}
+                  onPress={() => {
+                    track(`Call now: ${clinicProfile.phone || '+43...'}`, 'clinic_call_click', {
+                      metadata: { clinicName: clinicProfile.name || '' },
+                    });
+                  }}
+                >
+                  <Text style={styles.callNowCtaText}>Call now</Text>
+                </Pressable>
                 <Pressable style={styles.secondaryCta} onPress={() => switchMainTab('profile')}>
                   <Text style={styles.secondaryCtaText}>Profil & Mitgliedschaft öffnen</Text>
                 </Pressable>
@@ -2398,7 +2635,13 @@ export default function App() {
 
           {mainTab === 'shop' && (
             <View>
-              <TopHeader title="Shop" clinicShortName={clinicProfile.shortName} />
+              <TopHeader
+                title="Shop"
+                clinicShortName={clinicProfile.shortName}
+                onSearchPress={openHeaderSearch}
+                onCartPress={openHeaderCart}
+                cartCount={cartItems.length}
+              />
 
               <View style={styles.shopTabsRow}>
                 <ShopTabButton label="Browse" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
@@ -2436,9 +2679,18 @@ export default function App() {
                         style={[styles.categoryTile, categoryId === cat.id && styles.categoryTileActive]}
                         onPress={() => setCategoryId(cat.id)}
                       >
-                        <Text style={[styles.categoryTileIcon, categoryId === cat.id && styles.categoryTileIconActive]}>
-                          {resolveCategoryMeta(cat.id, cat.label).icon}
-                        </Text>
+                        <View
+                          style={[
+                            styles.categoryTileIconWrap,
+                            categoryId === cat.id && styles.categoryTileIconWrapActive,
+                          ]}
+                        >
+                          <Ionicons
+                            name={categoryIconName(cat.id)}
+                            size={20}
+                            color={categoryId === cat.id ? '#EB6BA4' : '#7E8695'}
+                          />
+                        </View>
                         <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
                           {cat.label}
                         </Text>
@@ -2489,6 +2741,11 @@ export default function App() {
                   <Text style={styles.detailTitle}>{selectedTreatment.name}</Text>
                   <Text style={styles.detailBody}>{selectedTreatment.description}</Text>
                   <Text style={styles.detailMeta}>⏱ {selectedTreatment.durationMinutes} Min / Behandlung</Text>
+                  <View style={styles.detailQuoteCard}>
+                    <Text style={styles.detailQuoteText}>
+                      “{selectedTreatment.name} war schnell, präzise und deutlich angenehmer als erwartet.”
+                    </Text>
+                  </View>
 
                   <Text style={styles.sectionSubTitle}>Behandlungsplan wählen</Text>
                   <View style={styles.unitsRow}>
@@ -2504,6 +2761,18 @@ export default function App() {
                     <Pressable style={styles.unitsBtn} onPress={() => setUnits((prev) => prev + 1)}>
                       <Text style={styles.unitsBtnText}>＋</Text>
                     </Pressable>
+                  </View>
+
+                  <View style={styles.detailPlanSummaryRow}>
+                    <Text style={styles.detailPlanSummaryMain}>
+                      {formatPrice((selectedTreatment.priceCents || 0) * units)}
+                    </Text>
+                    <Text style={styles.detailPlanSummaryDivider}>|</Text>
+                    <Text style={styles.detailPlanSummaryMember}>
+                      {hasActiveMembership
+                        ? `Member: ${formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}`
+                        : `Member: ${formatPrice((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0)}`}
+                    </Text>
                   </View>
 
                   <Text style={styles.priceLine}>Standard: {formatPrice(selectedTreatment.priceCents)}</Text>
@@ -2533,21 +2802,101 @@ export default function App() {
                       membershipStatus?.status === 'active' && membershipStatus?.membershipId === plan.id;
                     const recovering =
                       membershipStatus?.status === 'past_due' && membershipStatus?.membershipId === plan.id;
+                    const highlightedPerks = (Array.isArray(plan.perks) ? plan.perks : []).slice(0, 4);
+                    const includedIds = Array.isArray(plan.includedTreatmentIds) ? plan.includedTreatmentIds : [];
+                    const includedTreatments = treatments
+                      .filter((item) => includedIds.includes(item.id))
+                      .slice(0, 4);
+                    const resultGallery = includedTreatments
+                      .flatMap((item) => (Array.isArray(item.galleryUrls) ? item.galleryUrls.slice(0, 2) : []))
+                      .filter(Boolean)
+                      .slice(0, 6);
                     return (
-                      <View key={plan.id} style={[styles.membershipCard, active && styles.membershipCardActive]}>
-                        <Text style={styles.membershipName}>{plan.name}</Text>
-                        <Text style={styles.membershipPrice}>{formatPrice(plan.priceCents)} / Monat</Text>
-                        {(Array.isArray(plan.perks) ? plan.perks : []).map((perk) => (
-                          <Text key={perk} style={styles.membershipPerk}>• {perk}</Text>
+                      <View
+                        key={plan.id}
+                        style={[styles.shopMembershipBlock, active && styles.shopMembershipBlockActive]}
+                      >
+                        <View style={styles.shopMembershipHero}>
+                          <Text style={styles.shopMembershipHeroEyebrow}>MEMBERSHIP</Text>
+                          <Text style={styles.shopMembershipHeroTitle}>{plan.name}</Text>
+                          <Text style={styles.shopMembershipHeroBody}>
+                            {highlightedPerks[0] || 'Exklusive Member-Vorteile mit monatlichem Mehrwert.'}
+                          </Text>
+                          <View style={styles.shopMembershipPriceRow}>
+                            <Text style={styles.shopMembershipHeroPrice}>{formatPrice(plan.priceCents)} / Monat</Text>
+                            {active && <Text style={styles.shopMembershipHeroBadge}>Aktiv</Text>}
+                          </View>
+                        </View>
+
+                        <View style={styles.shopMembershipBenefitsGrid}>
+                          {highlightedPerks.map((perk, index) => (
+                            <View
+                              key={`${plan.id}-perk-${index}`}
+                              style={[
+                                styles.shopMembershipBenefitCard,
+                                index % 2 === 1 && styles.shopMembershipBenefitCardAlt,
+                              ]}
+                            >
+                              <Text style={styles.shopMembershipBenefitText}>{perk}</Text>
+                            </View>
+                          ))}
+                        </View>
+
+                        <Text style={styles.shopMembershipIncludedTitle}>Inkludierte Treatments</Text>
+                        {includedTreatments.length === 0 && (
+                          <Text style={styles.shopMembershipIncludedEmpty}>
+                            Dieses Paket enthält aktuell keine fixen Inklusiv-Treatments.
+                          </Text>
+                        )}
+                        {includedTreatments.map((item) => (
+                          <Pressable
+                            key={`${plan.id}-${item.id}`}
+                            style={styles.shopMembershipIncludedCard}
+                            onPress={() => {
+                              setShopTab('browse');
+                              openTreatment(item);
+                            }}
+                          >
+                            {preferredTreatmentImage(item) ? (
+                              <Image source={{ uri: preferredTreatmentImage(item) }} style={styles.shopMembershipIncludedImage} />
+                            ) : (
+                              <View style={styles.shopMembershipIncludedImageMock} />
+                            )}
+                            <View style={styles.shopMembershipIncludedBody}>
+                              <Text style={styles.shopMembershipIncludedName}>{item.name}</Text>
+                              <Text style={styles.shopMembershipIncludedMeta}>1 Behandlung</Text>
+                              <Text style={styles.shopMembershipIncludedLink}>Mehr über dieses Treatment</Text>
+                            </View>
+                          </Pressable>
                         ))}
+
+                        {resultGallery.length > 0 && (
+                          <View style={styles.shopMembershipResultsWrap}>
+                            <Text style={styles.shopMembershipResultsTitle}>Member Results</Text>
+                            <ScrollView
+                              horizontal
+                              showsHorizontalScrollIndicator={false}
+                              contentContainerStyle={styles.shopMembershipResultsRow}
+                            >
+                              {resultGallery.map((url, index) => (
+                                <Image
+                                  key={`${plan.id}-result-${index}`}
+                                  source={{ uri: url }}
+                                  style={styles.shopMembershipResultImage}
+                                />
+                              ))}
+                            </ScrollView>
+                          </View>
+                        )}
+
                         <Pressable
-                          style={[styles.secondaryCta, active && styles.secondaryCtaActive]}
+                          style={[styles.primaryCta, active && styles.secondaryCtaActive]}
                           disabled={membershipSyncing}
                           onPress={() => {
                             void activateMembership(plan.id);
                           }}
                         >
-                          <Text style={[styles.secondaryCtaText, active && styles.secondaryCtaTextActive]}>
+                          <Text style={styles.primaryCtaText}>
                             {active
                               ? 'Aktiv'
                               : recovering
@@ -2602,7 +2951,13 @@ export default function App() {
 
           {mainTab === 'scan' && (
             <View>
-              <TopHeader title="Scan" clinicShortName={clinicProfile.shortName} />
+              <TopHeader
+                title="Scan"
+                clinicShortName={clinicProfile.shortName}
+                onSearchPress={openHeaderSearch}
+                onCartPress={openHeaderCart}
+                cartCount={cartItems.length}
+              />
 
               <View style={styles.scanCard}>
                 <Text style={styles.scanTitle}>Check-in QR</Text>
@@ -2628,49 +2983,146 @@ export default function App() {
 
           {mainTab === 'rewards' && (
             <View>
-              <TopHeader title="Rewards" clinicShortName={clinicProfile.shortName} />
+              <TopHeader
+                title="Rewards"
+                clinicShortName={clinicProfile.shortName}
+                onSearchPress={openHeaderSearch}
+                onCartPress={openHeaderCart}
+                cartCount={cartItems.length}
+              />
 
-              <View style={styles.rewardsCard}>
-                <Text style={styles.rewardsPoints}>{points}</Text>
-                <Text style={styles.rewardsLabel}>Loyalty Punkte</Text>
-                <Text style={styles.rewardsWallet}>Wallet: {formatPrice(walletCents)}</Text>
+              <View style={styles.rewardsBalanceCard}>
+                <View style={styles.rewardsBalanceGlow} />
+                <Text style={styles.rewardsBalanceLogo}>O</Text>
+                <Text style={styles.rewardsBalanceLabel}>Loyalty Points</Text>
+                <View style={styles.rewardsCardStatsRow}>
+                  <View style={styles.rewardsCardStatItem}>
+                    <Text style={styles.rewardsCardStatValue}>{points}</Text>
+                    <Text style={styles.rewardsCardStatLabel}>Punkte</Text>
+                  </View>
+                  <View style={styles.rewardsCardStatItem}>
+                    <Text style={styles.rewardsCardStatValue}>{rewardHistoryItems.length}</Text>
+                    <Text style={styles.rewardsCardStatLabel}>Aktivitäten</Text>
+                  </View>
+                </View>
+                <View style={styles.rewardsBalanceFooter}>
+                  <View>
+                    <Text style={styles.rewardsBalanceMember}>{patientGuestMode ? 'Guest' : 'Member'}</Text>
+                    <Text style={styles.rewardsBalanceJoined}>Joined now</Text>
+                  </View>
+                  <View style={styles.rewardsBalanceRight}>
+                    <Text style={styles.rewardsBalanceWallet}>{formatPrice(walletCents)}</Text>
+                    <Text style={styles.rewardsBalanceCash}>{clinicProfile.shortName || 'APP'} Cash</Text>
+                  </View>
+                </View>
               </View>
 
-              <Text style={styles.sectionTitle}>Mehr Punkte sammeln</Text>
-              {rewardActions.map((action) => (
-                <View key={action.id} style={styles.actionRow}>
-                  <Text style={styles.actionLabel}>{action.label}</Text>
-                  <Pressable style={styles.actionBtn} onPress={() => claimActionPoints(action)}>
-                    <Text style={styles.actionBtnText}>+{action.points}</Text>
-                  </Pressable>
-                </View>
-              ))}
+              <View style={styles.rewardsHeaderRow}>
+                <Text style={styles.rewardsHeaderTitle}>Rewards</Text>
+                <Pressable onPress={() => setRewardsView('past')}>
+                  <Text style={styles.rewardsHeaderLink}>Mehr sehen ›</Text>
+                </Pressable>
+              </View>
 
-              <Text style={styles.sectionTitle}>Punkte einlösen</Text>
-              {rewardRedeems.map((item) => (
-                <View key={item.id} style={styles.redeemRow}>
-                  <View>
-                    <Text style={styles.redeemLabel}>{item.label}</Text>
-                    <Text style={styles.redeemHint}>{item.requiredPoints} Punkte</Text>
-                  </View>
-                  <Pressable
+              <View style={styles.rewardsSegmentRow}>
+                <Pressable
+                  style={[styles.rewardsSegmentBtn, rewardsView === 'active' && styles.rewardsSegmentBtnActive]}
+                  onPress={() => setRewardsView('active')}
+                >
+                  <Text
                     style={[
-                      styles.redeemBtn,
-                      points < item.requiredPoints && styles.redeemBtnDisabled,
+                      styles.rewardsSegmentText,
+                      rewardsView === 'active' && styles.rewardsSegmentTextActive,
                     ]}
-                    disabled={points < item.requiredPoints}
-                    onPress={() => redeemReward(item)}
                   >
-                    <Text style={styles.redeemBtnText}>Einlösen</Text>
-                  </Pressable>
+                    Aktiv
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.rewardsSegmentBtn, rewardsView === 'past' && styles.rewardsSegmentBtnActive]}
+                  onPress={() => setRewardsView('past')}
+                >
+                  <Text
+                    style={[
+                      styles.rewardsSegmentText,
+                      rewardsView === 'past' && styles.rewardsSegmentTextActive,
+                    ]}
+                  >
+                    Vergangen
+                  </Text>
+                </Pressable>
+              </View>
+
+              {rewardsView === 'active' && (
+                <View>
+                  <Text style={styles.rewardsSectionTitle}>Mehr Punkte sammeln?</Text>
+                  {rewardActions.map((action) => (
+                    <View key={action.id} style={styles.rewardsActionRow}>
+                      <View style={styles.rewardsActionLeft}>
+                        <View style={styles.rewardsActionIconWrap}>
+                          <Ionicons name={rewardActionIcon(action.id)} size={17} color="#D45C94" />
+                        </View>
+                        <Text style={styles.rewardsActionLabel}>{action.label}</Text>
+                      </View>
+                      <Pressable style={styles.rewardsActionBtn} onPress={() => claimActionPoints(action)}>
+                        <Text style={styles.rewardsActionBtnText}>+{action.points} Punkte</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+
+                  <Text style={styles.rewardsSectionTitle}>Punkte einlösen</Text>
+                  {rewardRedeems.map((item) => (
+                    <View key={item.id} style={styles.rewardsRedeemRow}>
+                      <View>
+                        <Text style={styles.rewardsRedeemLabel}>{item.label}</Text>
+                        <Text style={styles.rewardsRedeemHint}>{item.requiredPoints} Punkte</Text>
+                      </View>
+                      <Pressable
+                        style={[
+                          styles.rewardsRedeemBtn,
+                          points < item.requiredPoints && styles.rewardsRedeemBtnDisabled,
+                        ]}
+                        disabled={points < item.requiredPoints}
+                        onPress={() => redeemReward(item)}
+                      >
+                        <Text style={styles.rewardsRedeemBtnText}>Einlösen</Text>
+                      </Pressable>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
+
+              {rewardsView === 'past' && (
+                <View style={styles.rewardsPastList}>
+                  {rewardHistoryItems.length === 0 && (
+                    <Text style={styles.rewardsPastEmpty}>Keine Rewards in diesem Bereich.</Text>
+                  )}
+                  {rewardHistoryItems.map((entry) => (
+                    <View key={entry.id} style={styles.rewardsPastItem}>
+                      <Text style={styles.rewardsPastTitle}>{entry.title}</Text>
+                      <Text style={styles.rewardsPastMeta}>{formatDate(entry.createdAt)}</Text>
+                      {'points' in entry && (
+                        <Text style={styles.rewardsPastMeta}>+{entry.points} Punkte</Text>
+                      )}
+                      {'amount' in entry && (
+                        <Text style={styles.rewardsPastMeta}>{formatPrice(entry.amount)}</Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
           {mainTab === 'profile' && (
             <View>
-              <TopHeader title="Konto" clinicShortName={clinicProfile.shortName} />
+              <TopHeader
+                title="Konto"
+                clinicShortName={clinicProfile.shortName}
+                onSearchPress={openHeaderSearch}
+                onCartPress={openHeaderCart}
+                cartCount={cartItems.length}
+              />
 
               <View style={styles.segmentRow}>
                 <TabButton
@@ -2693,9 +3145,28 @@ export default function App() {
               {profileTab === 'behandlungen' && (
                 <View>
                   {history.length === 0 && (
-                    <View style={styles.emptyCard}>
-                      <Text style={styles.emptyTitle}>Noch keine Buchungen</Text>
-                      <Text style={styles.emptyBody}>Buche deine erste Behandlung im Shop.</Text>
+                    <View style={styles.profileEmptyCard}>
+                      <View style={styles.profileGhostList}>
+                        {[1, 2, 3].map((row) => (
+                          <View key={`ghost-${row}`} style={styles.profileGhostRow}>
+                            <View style={styles.profileGhostAvatar} />
+                            <View style={styles.profileGhostLineWrap}>
+                              <View style={[styles.profileGhostLine, styles.profileGhostLineWide]} />
+                              <View style={styles.profileGhostLine} />
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                      <Text style={styles.profileEmptyTitle}>Noch keine Behandlung gekauft</Text>
+                      <Pressable
+                        style={styles.profileEmptyCta}
+                        onPress={() => {
+                          setShopTab('browse');
+                          switchMainTab('shop');
+                        }}
+                      >
+                        <Text style={styles.profileEmptyCtaText}>Shop öffnen</Text>
+                      </Pressable>
                     </View>
                   )}
 
@@ -2742,9 +3213,18 @@ export default function App() {
                       </Pressable>
                     </View>
                   ) : (
-                    <Text style={styles.membershipPerk}>
-                      Öffne den Shop-Tab „Membership“, um Silber oder Gold zu aktivieren.
-                    </Text>
+                    <View style={styles.profileEmptyMembershipWrap}>
+                      <Text style={styles.profileEmptyMembershipText}>Keine aktive Membership</Text>
+                      <Pressable
+                        style={styles.profileEmptyCta}
+                        onPress={() => {
+                          setShopTab('membership');
+                          switchMainTab('shop');
+                        }}
+                      >
+                        <Text style={styles.profileEmptyCtaText}>Memberships ansehen</Text>
+                      </Pressable>
+                    </View>
                   )}
                 </View>
               )}
@@ -2838,6 +3318,112 @@ export default function App() {
           </ScrollView>
         </Animated.View>
 
+        {headerSearchOpen && (
+          <View style={styles.overlayLayer} pointerEvents="box-none">
+            <Pressable style={styles.overlayBackdrop} onPress={closeHeaderSearch} />
+            <View style={styles.searchOverlayCard}>
+              <View style={styles.searchOverlayHeader}>
+                <Text style={styles.searchOverlayTitle}>Suchen</Text>
+                <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderSearch}>
+                  <Ionicons name="close" size={20} color="#5E6676" />
+                </Pressable>
+              </View>
+              <TextInput
+                style={styles.searchOverlayInput}
+                value={headerSearchQuery}
+                onChangeText={setHeaderSearchQuery}
+                placeholder="Treatments, Memberships, Artikel"
+                placeholderTextColor={THEME.muted}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+
+              {!headerSearchQuery.trim() && (
+                <Text style={styles.searchOverlayHint}>
+                  Tipp: Suche nach „Laser“, „Mikrodermabrasion“ oder „Silber“.
+                </Text>
+              )}
+
+              {!!headerSearchQuery.trim() && globalSearchResults.length === 0 && (
+                <Text style={styles.searchOverlayHint}>Keine Ergebnisse gefunden.</Text>
+              )}
+
+              {!!headerSearchQuery.trim() && globalSearchResults.length > 0 && (
+                <ScrollView
+                  style={styles.searchOverlayResults}
+                  contentContainerStyle={styles.searchOverlayResultsContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {globalSearchResults.map((item) => (
+                    <Pressable
+                      key={`${item.type}-${item.id}`}
+                      style={styles.searchOverlayRow}
+                      onPress={() => onGlobalSearchSelect(item)}
+                    >
+                      <View style={styles.searchOverlayIconWrap}>
+                        <Ionicons name={searchResultIcon(item.type)} size={16} color={THEME.brand} />
+                      </View>
+                      <View style={styles.searchOverlayMain}>
+                        <Text style={styles.searchOverlayRowTitle}>{item.title}</Text>
+                        <Text style={styles.searchOverlayRowMeta}>{item.subtitle}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color="#8C93A2" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        )}
+
+        {cartSheetOpen && (
+          <View style={styles.overlayLayer} pointerEvents="box-none">
+            <Pressable style={styles.overlayBackdrop} onPress={closeHeaderCart} />
+            <View style={styles.cartOverlayCard}>
+              <View style={styles.searchOverlayHeader}>
+                <Text style={styles.searchOverlayTitle}>Warenkorb</Text>
+                <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderCart}>
+                  <Ionicons name="close" size={20} color="#5E6676" />
+                </Pressable>
+              </View>
+
+              {cartItems.length === 0 ? (
+                <Text style={styles.searchOverlayHint}>Dein Warenkorb ist aktuell leer.</Text>
+              ) : (
+                <ScrollView
+                  style={styles.searchOverlayResults}
+                  contentContainerStyle={styles.searchOverlayResultsContent}
+                >
+                  {cartItems.map((item) => (
+                    <View key={item.id} style={styles.cartOverlayRow}>
+                      <View style={styles.cartOverlayMain}>
+                        <Text style={styles.cartOverlayName}>{item.name}</Text>
+                        <Text style={styles.cartOverlayMeta}>{item.units}x • {formatPrice(item.unitCents)}</Text>
+                      </View>
+                      <Text style={styles.cartOverlayPrice}>{formatPrice(item.totalCents)}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={styles.cartOverlayFooter}>
+                <Text style={styles.cartOverlayTotalLabel}>Gesamt</Text>
+                <Text style={styles.cartOverlayTotalValue}>{formatPrice(totalCartCents)}</Text>
+              </View>
+
+              <Pressable
+                style={[styles.primaryCta, (checkoutLoading || cartSyncing || cartItems.length === 0) && styles.ctaDisabled]}
+                disabled={checkoutLoading || cartSyncing || cartItems.length === 0}
+                onPress={() => {
+                  void runCheckout();
+                }}
+              >
+                <Text style={styles.primaryCtaText}>{checkoutCtaLabel}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
         <View style={styles.bottomBar}>
           <BottomTab label="Home" active={mainTab === 'home'} onPress={() => switchMainTab('home')} />
           <BottomTab label="Shop" active={mainTab === 'shop'} onPress={() => switchMainTab('shop')} />
@@ -2907,47 +3493,237 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 120,
-    paddingTop: 8,
+    paddingBottom: 128,
+    paddingTop: 10,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  headerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: '#F8D9EA',
+    borderWidth: 1,
+    borderColor: '#F3C6DE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarText: {
+    color: '#B54982',
+    fontWeight: '800',
+    fontSize: 13,
   },
   headerClinic: {
-    fontSize: 12,
-    letterSpacing: 3,
+    fontSize: 11,
+    letterSpacing: 1.2,
     color: THEME.muted,
-    marginBottom: 2,
+    marginTop: 1,
   },
   headerTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '800',
     color: THEME.ink,
-    lineHeight: 40,
+    lineHeight: 36,
   },
   headerIcons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
-  iconButton: {
-    backgroundColor: THEME.surface,
-    borderColor: THEME.border,
+  iconButtonWrap: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E8ECF2',
     borderWidth: 1,
-    minWidth: 34,
-    textAlign: 'center',
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    width: 43,
+    height: 43,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  headerCartBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: THEME.brand,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  overlayLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    justifyContent: 'flex-start',
+  },
+  overlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(31,36,48,0.30)',
+  },
+  searchOverlayCard: {
+    marginTop: 72,
+    marginHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E9ECF2',
+    borderRadius: 16,
+    padding: 12,
+    maxHeight: 430,
+  },
+  cartOverlayCard: {
+    marginTop: 72,
+    marginHorizontal: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E9ECF2',
+    borderRadius: 16,
+    padding: 12,
+    maxHeight: 500,
+  },
+  searchOverlayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  searchOverlayTitle: {
+    fontSize: 20,
+    fontWeight: '800',
     color: THEME.ink,
-    overflow: 'hidden',
+  },
+  overlayCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  searchOverlayInput: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    color: THEME.ink,
+    marginBottom: 6,
+  },
+  searchOverlayHint: {
+    color: THEME.muted,
+    marginTop: 4,
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  searchOverlayResults: {
+    maxHeight: 280,
+  },
+  searchOverlayResultsContent: {
+    paddingTop: 4,
+    paddingBottom: 6,
+    gap: 6,
+  },
+  searchOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
+  },
+  searchOverlayIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: THEME.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchOverlayMain: {
+    flex: 1,
+    gap: 1,
+  },
+  searchOverlayRowTitle: {
+    color: THEME.ink,
+    fontWeight: '700',
+  },
+  searchOverlayRowMeta: {
+    color: THEME.muted,
+    fontSize: 12,
+  },
+  cartOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
+  },
+  cartOverlayMain: {
+    flex: 1,
+    marginRight: 10,
+  },
+  cartOverlayName: {
+    color: THEME.ink,
+    fontWeight: '700',
+    marginBottom: 1,
+  },
+  cartOverlayMeta: {
+    color: THEME.muted,
+    fontSize: 12,
+  },
+  cartOverlayPrice: {
+    color: THEME.ink,
+    fontWeight: '700',
+  },
+  cartOverlayFooter: {
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: THEME.border,
+    paddingTop: 10,
+  },
+  cartOverlayTotalLabel: {
+    color: THEME.muted,
+    fontWeight: '700',
+  },
+  cartOverlayTotalValue: {
+    color: THEME.ink,
+    fontWeight: '800',
+    fontSize: 18,
   },
   heroCard: {
-    backgroundColor: '#EADBC8',
+    backgroundColor: '#FFF2F8',
     borderWidth: 1,
-    borderColor: THEME.border,
+    borderColor: '#F6CEE3',
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
@@ -2999,11 +3775,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sectionTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: THEME.ink,
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 8,
+    marginBottom: 12,
   },
   sectionSubTitle: {
     fontSize: 18,
@@ -3016,9 +3792,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 12,
   },
   articleTag: {
     color: THEME.brand,
@@ -3039,9 +3815,45 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 14,
+  },
+  mapMock: {
+    height: 152,
+    borderRadius: 12,
+    backgroundColor: '#1A3954',
+    marginBottom: 10,
+    justifyContent: 'flex-end',
+    padding: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#2D4D6A',
+  },
+  mapMockLabel: {
+    color: 'rgba(255,255,255,0.72)',
+    fontWeight: '700',
+    fontSize: 12,
+    position: 'absolute',
+    left: 10,
+    top: 10,
+  },
+  mapMockPinWrap: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(21, 25, 35, 0.68)',
+    borderColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  mapMockPinText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12,
   },
   clinicName: {
     fontSize: 18,
@@ -3052,16 +3864,35 @@ const styles = StyleSheet.create({
   clinicMeta: {
     color: THEME.muted,
     marginBottom: 2,
+    flex: 1,
+  },
+  clinicMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  callNowCta: {
+    marginTop: 10,
+    backgroundColor: THEME.brand,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  callNowCtaText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
   },
   segmentRow: {
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 4,
     flexDirection: 'row',
     gap: 4,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   segmentBtn: {
     flex: 1,
@@ -3084,8 +3915,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     borderBottomWidth: 1,
-    borderBottomColor: '#E8E2D9',
-    marginBottom: 12,
+    borderBottomColor: '#E8ECF2',
+    marginBottom: 14,
   },
   shopTabBtn: {
     flex: 1,
@@ -3094,10 +3925,10 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   shopTabText: {
-    color: '#716353',
-    fontSize: 15,
+    color: '#7D8595',
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 10,
+    marginBottom: 9,
   },
   shopTabTextActive: {
     color: THEME.ink,
@@ -3113,13 +3944,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#EB6BA4',
   },
   shopPinkHeroCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 18,
     backgroundColor: '#EE76AC',
     borderWidth: 1,
     borderColor: '#F4A4C8',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   shopPinkHeroTitle: {
     color: '#FFFFFF',
@@ -3151,7 +3982,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -4,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   categoryTile: {
     width: '25%',
@@ -3159,28 +3990,35 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 86,
+    minHeight: 92,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EFE7DC',
-    borderRadius: 10,
+    borderRadius: 12,
   },
   categoryTileActive: {
     borderColor: '#EB6BA4',
     backgroundColor: '#FFF8FC',
   },
-  categoryTileIcon: {
-    color: '#827564',
-    fontSize: 20,
+  categoryTileIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F0E7DC',
+    backgroundColor: '#FFFFFF',
     marginBottom: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  categoryTileIconActive: {
-    color: '#EB6BA4',
+  categoryTileIconWrapActive: {
+    borderColor: '#F6C0DC',
+    backgroundColor: '#FFF5FA',
   },
   categoryTileText: {
     color: '#635547',
     fontWeight: '500',
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
   },
   categoryTileTextActive: {
@@ -3189,8 +4027,8 @@ const styles = StyleSheet.create({
   },
   shopListTitle: {
     color: THEME.ink,
-    fontSize: 33,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '800',
     marginBottom: 2,
   },
@@ -3203,13 +4041,13 @@ const styles = StyleSheet.create({
   treatmentGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4,
+    marginHorizontal: -5,
   },
   treatmentCard: {
     width: '50%',
-    paddingHorizontal: 4,
-    marginBottom: 10,
-    borderRadius: 12,
+    paddingHorizontal: 5,
+    marginBottom: 12,
+    borderRadius: 14,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -3251,8 +4089,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    padding: 13,
   },
   detailImage: {
     width: '100%',
@@ -3285,10 +4123,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   detailTitle: {
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: '800',
     color: THEME.ink,
-    lineHeight: 32,
+    lineHeight: 38,
     marginBottom: 8,
   },
   detailBody: {
@@ -3300,6 +4138,22 @@ const styles = StyleSheet.create({
     color: THEME.ink,
     fontWeight: '600',
     marginBottom: 4,
+  },
+  detailQuoteCard: {
+    marginTop: 6,
+    marginBottom: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F1D8E4',
+    backgroundColor: '#FFF4FA',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  detailQuoteText: {
+    color: '#5F4A57',
+    fontWeight: '600',
+    lineHeight: 20,
+    textAlign: 'center',
   },
   unitsRow: {
     flexDirection: 'row',
@@ -3334,6 +4188,27 @@ const styles = StyleSheet.create({
     color: THEME.ink,
     fontWeight: '600',
   },
+  detailPlanSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 6,
+  },
+  detailPlanSummaryMain: {
+    color: THEME.ink,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '800',
+  },
+  detailPlanSummaryDivider: {
+    color: '#C7B7A4',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  detailPlanSummaryMember: {
+    color: '#D45C94',
+    fontWeight: '700',
+  },
   priceLine: {
     color: THEME.muted,
     marginBottom: 4,
@@ -3358,11 +4233,11 @@ const styles = StyleSheet.create({
   secondaryCta: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#DABFA2',
+    borderColor: '#E3D5C8',
     borderRadius: 12,
     paddingVertical: 11,
     alignItems: 'center',
-    backgroundColor: '#F9EDDF',
+    backgroundColor: '#FFF6EF',
   },
   secondaryCtaActive: {
     backgroundColor: THEME.brand,
@@ -3407,6 +4282,169 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     lineHeight: 20,
   },
+  shopMembershipBlock: {
+    backgroundColor: THEME.surface,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 16,
+    padding: 13,
+    marginBottom: 14,
+  },
+  shopMembershipBlockActive: {
+    borderColor: '#EB6BA4',
+    shadowColor: '#EB6BA4',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  shopMembershipHero: {
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    backgroundColor: '#EE76AC',
+    borderWidth: 1,
+    borderColor: '#F4A4C8',
+    marginBottom: 12,
+  },
+  shopMembershipHeroEyebrow: {
+    color: '#FFE9F3',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+    letterSpacing: 0.6,
+  },
+  shopMembershipHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    marginBottom: 5,
+  },
+  shopMembershipHeroBody: {
+    color: '#FFE7F2',
+    lineHeight: 19,
+    marginBottom: 10,
+  },
+  shopMembershipPriceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shopMembershipHeroPrice: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 17,
+  },
+  shopMembershipHeroBadge: {
+    color: '#D45C94',
+    backgroundColor: '#FFF7FB',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontWeight: '700',
+    overflow: 'hidden',
+  },
+  shopMembershipBenefitsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -4,
+    marginBottom: 10,
+  },
+  shopMembershipBenefitCard: {
+    width: '50%',
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  shopMembershipBenefitCardAlt: {
+    opacity: 0.92,
+  },
+  shopMembershipBenefitText: {
+    color: '#4D3F31',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#F1D5E2',
+    backgroundColor: '#FFEFF7',
+    minHeight: 72,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 17,
+  },
+  shopMembershipIncludedTitle: {
+    color: THEME.ink,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  shopMembershipIncludedEmpty: {
+    color: THEME.muted,
+    marginBottom: 10,
+  },
+  shopMembershipIncludedCard: {
+    flexDirection: 'row',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    marginBottom: 9,
+  },
+  shopMembershipIncludedImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: '#D8C5AE',
+  },
+  shopMembershipIncludedImageMock: {
+    width: 72,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: '#D8C5AE',
+  },
+  shopMembershipIncludedBody: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  shopMembershipIncludedName: {
+    color: THEME.ink,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  shopMembershipIncludedMeta: {
+    color: THEME.muted,
+    marginBottom: 4,
+  },
+  shopMembershipIncludedLink: {
+    color: '#D45C94',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  shopMembershipResultsWrap: {
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  shopMembershipResultsTitle: {
+    color: THEME.ink,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  shopMembershipResultsRow: {
+    gap: 10,
+    paddingRight: 4,
+  },
+  shopMembershipResultImage: {
+    width: 124,
+    height: 124,
+    borderRadius: 12,
+    backgroundColor: '#D8C5AE',
+  },
   treatmentListCard: {
     backgroundColor: THEME.surface,
     borderWidth: 1,
@@ -3431,12 +4469,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cartBox: {
-    marginTop: 12,
+    marginTop: 14,
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 16,
+    padding: 13,
   },
   cartTitle: {
     fontSize: 18,
@@ -3453,27 +4491,237 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 6,
   },
-  rewardsCard: {
+  rewardsBalanceCard: {
+    position: 'relative',
     borderRadius: 16,
-    padding: 14,
+    padding: 15,
     backgroundColor: THEME.rewardsB,
     borderWidth: 1,
     borderColor: '#4D8F8B',
+    marginBottom: 14,
+    overflow: 'hidden',
+  },
+  rewardsBalanceGlow: {
+    position: 'absolute',
+    right: -42,
+    top: -42,
+    width: 150,
+    height: 150,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  rewardsBalanceLogo: {
+    color: '#ECFFFB',
+    fontSize: 30,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  rewardsBalanceLabel: {
+    color: '#D4EEEB',
+    marginBottom: 18,
+  },
+  rewardsCardStatsRow: {
+    flexDirection: 'row',
+    gap: 8,
     marginBottom: 12,
   },
-  rewardsPoints: {
-    color: '#F4FFFE',
-    fontSize: 34,
+  rewardsCardStatItem: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.24)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+  },
+  rewardsCardStatValue: {
+    color: '#FFFFFF',
     fontWeight: '800',
-    marginBottom: 3,
+    fontSize: 16,
+    marginBottom: 2,
   },
-  rewardsLabel: {
-    color: '#D8F1EE',
-    marginBottom: 6,
+  rewardsCardStatLabel: {
+    color: '#D9F0EC',
+    fontSize: 11,
+    fontWeight: '600',
   },
-  rewardsWallet: {
-    color: '#F4FFFE',
+  rewardsBalanceFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  rewardsBalanceMember: {
+    color: '#FFFFFF',
     fontWeight: '700',
+  },
+  rewardsBalanceJoined: {
+    color: '#CCE5E2',
+    marginTop: 2,
+    fontSize: 12,
+  },
+  rewardsBalanceRight: {
+    alignItems: 'flex-end',
+  },
+  rewardsBalanceWallet: {
+    color: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontWeight: '700',
+  },
+  rewardsBalanceCash: {
+    color: '#E5FAF7',
+    marginTop: 4,
+    fontSize: 12,
+  },
+  rewardsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  rewardsHeaderTitle: {
+    color: THEME.ink,
+    fontSize: 26,
+    lineHeight: 30,
+    fontWeight: '800',
+  },
+  rewardsHeaderLink: {
+    color: '#D45C94',
+    fontWeight: '700',
+  },
+  rewardsSegmentRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E2D9',
+    marginBottom: 10,
+  },
+  rewardsSegmentBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  rewardsSegmentBtnActive: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#EB6BA4',
+  },
+  rewardsSegmentText: {
+    color: '#7A6B5B',
+    fontWeight: '500',
+  },
+  rewardsSegmentTextActive: {
+    color: THEME.ink,
+    fontWeight: '700',
+  },
+  rewardsSectionTitle: {
+    color: THEME.ink,
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  rewardsActionRow: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  rewardsActionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    paddingRight: 8,
+  },
+  rewardsActionIconWrap: {
+    width: 33,
+    height: 33,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#F3D2E1',
+    backgroundColor: '#FFF4FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardsActionLabel: {
+    color: THEME.ink,
+    fontWeight: '600',
+    flex: 1,
+  },
+  rewardsActionBtn: {
+    backgroundColor: '#EB6BA4',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rewardsActionBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  rewardsRedeemRow: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 12,
+    padding: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  rewardsRedeemLabel: {
+    color: THEME.ink,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  rewardsRedeemHint: {
+    color: THEME.muted,
+  },
+  rewardsRedeemBtn: {
+    backgroundColor: THEME.brand,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rewardsRedeemBtnDisabled: {
+    opacity: 0.38,
+  },
+  rewardsRedeemBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  rewardsPastList: {
+    marginTop: 4,
+  },
+  rewardsPastEmpty: {
+    color: THEME.muted,
+    lineHeight: 21,
+  },
+  rewardsPastItem: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+  },
+  rewardsPastTitle: {
+    color: THEME.ink,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  rewardsPastMeta: {
+    color: THEME.muted,
+    marginBottom: 1,
   },
   scanCard: {
     backgroundColor: THEME.surface,
@@ -3511,65 +4759,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1,
   },
-  actionRow: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  actionLabel: {
-    flex: 1,
-    color: THEME.ink,
-    fontWeight: '600',
-    paddingRight: 8,
-  },
-  actionBtn: {
-    backgroundColor: '#EFCCAA',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  actionBtnText: {
-    color: THEME.ink,
-    fontWeight: '700',
-  },
-  redeemRow: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  redeemLabel: {
-    color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  redeemHint: {
-    color: THEME.muted,
-  },
-  redeemBtn: {
-    backgroundColor: THEME.brand,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  redeemBtnDisabled: {
-    opacity: 0.38,
-  },
-  redeemBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
   emptyCard: {
     backgroundColor: THEME.surface,
     borderWidth: 1,
@@ -3590,9 +4779,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 8,
+    borderRadius: 14,
+    padding: 11,
+    marginBottom: 10,
   },
   historyTitle: {
     color: THEME.ink,
@@ -3602,6 +4791,73 @@ const styles = StyleSheet.create({
   historyMeta: {
     color: THEME.muted,
     marginBottom: 1,
+  },
+  profileEmptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EFE7DC',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+  },
+  profileGhostList: {
+    marginBottom: 16,
+    gap: 10,
+  },
+  profileGhostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  profileGhostAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#ECE4DA',
+    backgroundColor: '#F8F6F1',
+  },
+  profileGhostLineWrap: {
+    flex: 1,
+    gap: 6,
+  },
+  profileGhostLine: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#ECE4DA',
+    width: '72%',
+  },
+  profileGhostLineWide: {
+    width: '88%',
+  },
+  profileEmptyTitle: {
+    color: THEME.muted,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  profileEmptyCta: {
+    alignSelf: 'center',
+    minWidth: 160,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: THEME.brand,
+    alignItems: 'center',
+  },
+  profileEmptyCtaText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  profileEmptyMembershipWrap: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  profileEmptyMembershipText: {
+    color: THEME.muted,
+    marginBottom: 12,
+    fontWeight: '600',
   },
   settingsCard: {
     backgroundColor: THEME.surface,
@@ -3743,28 +4999,45 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: 16,
+    left: 14,
+    right: 14,
+    bottom: 14,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: THEME.border,
-    backgroundColor: '#FFF6EA',
+    borderColor: '#E8ECF2',
+    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
     justifyContent: 'space-between',
+    shadowColor: '#657287',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
   },
   bottomTabBtn: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 14,
+    gap: 3,
+  },
+  bottomTabBtnActive: {
+    backgroundColor: '#FFF4FA',
+  },
+  bottomTabIcon: {
+    color: '#8B93A2',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  bottomTabIconActive: {
+    color: THEME.brand,
   },
   bottomTabLabel: {
     color: THEME.muted,
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: 12,
   },
   bottomTabLabelActive: {
     color: THEME.brand,

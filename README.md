@@ -1,8 +1,8 @@
-# Appointmentix - Dermis-inspirierte Homepage + Qualifizierungsformular
+# Curabo - Dermis-inspirierte Homepage + Qualifizierungsformular
 
 Dieses Projekt enthält jetzt:
 
-- eine **schlanke Homepage** im Dermis-Stil (aber im eigenen Appointmentix-Design)
+- eine **schlanke Homepage** im Dermis-Stil (aber im eigenen Curabo-Design)
 - ein **Build my app**-Flow mit Qualifizierungsformular
 - automatische **Weiterleitung zu Calendly** nach erfolgreichem Absenden
 - Backend-Endpoint zum Speichern von Leads (`POST /api/leads`)
@@ -76,7 +76,7 @@ Optional fuer Kampagnen-Provider:
 - `TWILIO_ACCOUNT_SID=...`
 - `TWILIO_AUTH_TOKEN=...`
 - `TWILIO_FROM_NUMBER=+43...`
-- `MOBILE_OTP_BRAND_NAME=Appointmentix`
+- `MOBILE_OTP_BRAND_NAME=Curabo`
 - `MOBILE_OTP_TTL_SECONDS=300`
 - `MOBILE_OTP_MAX_ATTEMPTS=5`
 - `MOBILE_OTP_RESEND_COOLDOWN_SECONDS=30`
@@ -199,7 +199,7 @@ Siehe `mobile/README.md` fuer die komplette Anleitung.
 
 Aktueller Stand:
 
-- `mobile/App.js` = Patienten-App MVP (Dermis-inspiriert, Appointmentix Design)
+- `mobile/App.js` = Patienten-App MVP (Dermis-inspiriert, Curabo Design)
 - `mobile/AppAdminLegacy.js` = vorherige Admin-Mobile-App als Backup
 
 Kurzfassung:
@@ -277,5 +277,55 @@ Was getestet wird:
 - Kampagne erstellen
 - Kampagne ausfuehren
 - Deliveries + Audit-Logs + Mobile Bundle
+
+## 12. Deployment auf Render + Domain curabo.app
+
+### 12.1 Render Deploy (Schritt 2)
+
+Im Repository ist eine Blueprint-Datei vorhanden:
+
+- `render.yaml`
+
+In Render:
+
+1. `New` -> `Blueprint`
+2. GitHub-Repo verbinden (`strasso/appointmentix`)
+3. Blueprint deployen
+4. Danach in den Service-Env-Variablen fehlende `sync: false` Werte setzen:
+   - `DATABASE_URL`
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_PUBLISHABLE_KEY`
+   - `STRIPE_WEBHOOK_SECRET`
+   - `CALENDLY_URL`
+
+Healthcheck:
+
+- `https://<dein-render-service>/api/health`
+
+### 12.2 Domain in Render (Schritt 3)
+
+Im Render-Service:
+
+1. `Settings` -> `Custom Domains`
+2. Beide Domains hinzufügen:
+   - `curabo.app`
+   - `www.curabo.app`
+3. Render zeigt dir danach die notwendigen DNS-Einträge an.
+
+### 12.3 DNS bei united-domains (Schritt 4)
+
+Bei `curabo.app` in united-domains DNS eintragen:
+
+1. Für `www`: den von Render angezeigten `CNAME` setzen.
+2. Für Apex `curabo.app`: die von Render angezeigten `A`/`ALIAS`-Werte setzen.
+3. Speichern und DNS-Propagation abwarten.
+
+Prüfen:
+
+```bash
+dig +short www.curabo.app
+dig +short curabo.app
+curl -I https://www.curabo.app/api/health
+```
 # appointmentix
 # appointmentix
