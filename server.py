@@ -125,6 +125,11 @@ PATIENT_PAYMENT_STATUSES = {
   "canceled",
   "pending",
 }
+PATIENT_CHECKOUT_PAYMENT_METHODS = {
+  "card",
+  "paypal",
+  "klarna",
+}
 STRIPE_TO_ADMIN_SUBSCRIPTION_STATUS = {
   "active": "active",
   "trialing": "trialing",
@@ -2240,6 +2245,16 @@ def normalize_patient_payment_status(value: object, fallback: str = "pending") -
   if status in PATIENT_PAYMENT_STATUSES:
     return status
   return fallback
+
+
+def normalize_patient_checkout_method(value: object, fallback: str = "card") -> str:
+  candidate = str(value or "").strip().lower()
+  if candidate in PATIENT_CHECKOUT_PAYMENT_METHODS:
+    return candidate
+  resolved_fallback = str(fallback or "").strip().lower()
+  if resolved_fallback in PATIENT_CHECKOUT_PAYMENT_METHODS:
+    return resolved_fallback
+  return "card"
 
 
 def resolve_catalog_membership_plan(clinic_row, membership_id: str) -> dict | None:
@@ -5573,7 +5588,15 @@ def mobile_membership_activate():
   patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
   patient_name = sanitize_patient_name(payload.get("memberName") or payload.get("name"))
   membership_id = str(payload.get("membershipId", "")).strip()
-  payment_status = normalize_patient_payment_status(payload.get("paymentStatus"), "paid")
+  payment_method = normalize_patient_checkout_method(
+    payload.get("paymentMethod") or payload.get("payment_method"),
+    "card",
+  )
+  payment_status_raw = payload.get("paymentStatus")
+  if payment_status_raw is None:
+    payment_status = "pending" if payment_method == "klarna" else "paid"
+  else:
+    payment_status = normalize_patient_payment_status(payment_status_raw, "paid")
 
   if len(clinic_name) < 2:
     return jsonify({"error": "clinicName ist erforderlich."}), 400
@@ -5610,6 +5633,8 @@ def mobile_membership_activate():
       "patientEmail": patient_email,
       "membershipId": membership_id,
       "membershipName": str(membership_row["membership_name"] or membership_id),
+      "paymentMethod": payment_method,
+      "paymentStatus": payment_status,
     },
     event_source="patient_app",
   )
@@ -5623,6 +5648,7 @@ def mobile_membership_activate():
     metadata={
       "patientEmail": patient_email,
       "membershipId": membership_id,
+      "paymentMethod": payment_method,
       "paymentStatus": payment_status,
     },
   )
@@ -5795,7 +5821,15 @@ def mobile_checkout_complete():
   clinic_name = str(payload.get("clinicName", "")).strip()
   patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
   session_id = sanitize_campaign_text(payload.get("sessionId"), 120)
-  payment_status = normalize_patient_payment_status(payload.get("paymentStatus"), "paid")
+  payment_method = normalize_patient_checkout_method(
+    payload.get("paymentMethod") or payload.get("payment_method"),
+    "card",
+  )
+  payment_status_raw = payload.get("paymentStatus")
+  if payment_status_raw is None:
+    payment_status = "pending" if payment_method == "klarna" else "paid"
+  else:
+    payment_status = normalize_patient_payment_status(payment_status_raw, "paid")
   raw_items = payload.get("cartItems")
 
   if len(clinic_name) < 2:
@@ -5863,6 +5897,7 @@ def mobile_checkout_complete():
       "itemCount": len(line_items),
       "earnedPoints": earned_points,
       "paymentStatus": payment_status,
+      "paymentMethod": payment_method,
       "orderId": order_id,
       "lineItems": line_items[:20],
     },
@@ -5879,6 +5914,7 @@ def mobile_checkout_complete():
       "patientEmail": patient_email,
       "totalCents": total_cents,
       "items": len(line_items),
+      "paymentMethod": payment_method,
       "paymentStatus": payment_status,
     },
   )
@@ -5901,6 +5937,8 @@ def mobile_checkout_complete():
       "totalCents": total_cents,
       "currency": "eur",
       "earnedPoints": earned_points,
+      "paymentMethod": payment_method,
+      "paymentStatus": payment_status,
       "lineItems": line_items,
       "membership": serialize_patient_membership_row(updated_membership) if updated_membership else None,
     }

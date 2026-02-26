@@ -93,6 +93,8 @@ Bei aktivem Backend laufen Add-to-Cart und Checkout serverseitig, inkl. produkti
   - `member`
   - `included` (0 EUR bei inkludiertem Treatment)
 - `Jetzt bezahlen` ruft `/api/mobile/checkout/complete` auf.
+- In der App kann die Zahlart pro Checkout gewählt werden (`Karte/Apple Pay`, `PayPal`, `Klarna`).
+- Die Zahlart wird als `paymentMethod` an das Backend übertragen und in Eventspur/Audit gespeichert.
 - Nach Checkout werden Membership-Status und Payment-Status serverseitig synchronisiert.
 - Offline-Demo bleibt weiterhin moeglich (lokaler Fallback ohne Backend).
 

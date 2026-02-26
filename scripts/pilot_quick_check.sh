@@ -277,6 +277,7 @@ print(json.dumps({
     "clinicName": sys.argv[1],
     "memberEmail": sys.argv[3],
     "sessionId": "pilot_quick_check",
+    "paymentMethod": "paypal",
     "paymentStatus": "paid",
     "cartItems": [{"treatmentId": sys.argv[2], "units": 2}],
 }))
@@ -293,11 +294,14 @@ if not payload.get("success"):
 order_id=str(payload.get("orderId") or "").strip()
 if not order_id:
     raise SystemExit("Checkout ohne orderId.")
+payment_method=str(payload.get("paymentMethod") or "").strip().lower()
+if payment_method != "paypal":
+    raise SystemExit(f"Checkout paymentMethod unerwartet: {payment_method}")
 line_items=payload.get("lineItems") or []
 if not line_items:
     raise SystemExit("Checkout ohne lineItems.")
 earned=int(payload.get("earnedPoints") or 0)
-print(f"Checkout ok. orderId={order_id}, earnedPoints={earned}")
+print(f"Checkout ok. orderId={order_id}, paymentMethod={payment_method}, earnedPoints={earned}")
 PY
 
 echo "[7/7] Runtime-Kampagnen Smoke ..."

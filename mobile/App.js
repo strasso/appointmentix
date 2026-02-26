@@ -48,6 +48,21 @@ const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
 const APP_DEFAULT_CLINIC_NAME = process.env.EXPO_PUBLIC_DEFAULT_CLINIC_NAME || '';
 const MOBILE_OTP_COOLDOWN_SECONDS_FALLBACK = 30;
 const SHOW_TECHNICAL_SETUP = __DEV__;
+const CHECKOUT_METHOD_OPTIONS = [
+  { id: 'card', label: 'Karte / Apple Pay' },
+  { id: 'paypal', label: 'PayPal' },
+  { id: 'klarna', label: 'Klarna' },
+];
+
+function checkoutMethodLabel(methodId) {
+  const candidate = String(methodId || '').trim().toLowerCase();
+  const match = CHECKOUT_METHOD_OPTIONS.find((item) => item.id === candidate);
+  return match?.label || CHECKOUT_METHOD_OPTIONS[0].label;
+}
+
+function checkoutDefaultPaymentStatus(methodId) {
+  return String(methodId || '').trim().toLowerCase() === 'klarna' ? 'pending' : 'paid';
+}
 
 const HOME_ARTICLES = [
   {
@@ -1002,6 +1017,7 @@ export default function App() {
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [cartSheetOpen, setCartSheetOpen] = useState(false);
+  const [selectedCheckoutMethod, setSelectedCheckoutMethod] = useState('card');
 
   const [cartItems, setCartItems] = useState([]);
   const [cartSyncing, setCartSyncing] = useState(false);
@@ -1901,12 +1917,34 @@ export default function App() {
     Alert.alert('Zum Warenkorb hinzugefügt', `${selectedTreatment.name} (${units}x)`);
   }
 
+  function updateCartItemUnits(itemId, nextUnits) {
+    const normalizedUnits = Math.max(1, Math.min(20, Number(nextUnits || 1)));
+    setCartItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const unitCents = Math.max(0, Number(item.unitCents || 0));
+        return {
+          ...item,
+          units: normalizedUnits,
+          totalCents: unitCents * normalizedUnits,
+        };
+      })
+    );
+  }
+
+  function removeCartItem(itemId) {
+    setCartItems((prev) => prev.filter((item) => item.id !== itemId));
+  }
+
   async function runCheckout() {
     if (cartItems.length === 0) {
       Alert.alert('Warenkorb leer', 'Bitte wähle zuerst mindestens eine Behandlung.');
       return;
     }
     if (checkoutLoading || cartSyncing) return;
+    const paymentMethod = String(selectedCheckoutMethod || 'card').toLowerCase();
+    const paymentStatus = checkoutDefaultPaymentStatus(paymentMethod);
+    const paymentMethodText = checkoutMethodLabel(paymentMethod);
 
     if (analyticsConnected) {
       const normalized = normalizeUrl(analyticsBaseUrl);
@@ -1922,7 +1960,8 @@ export default function App() {
           clinicName: resolvedClinicName,
           memberEmail: String(settingsEmail || '').trim().toLowerCase(),
           sessionId: appSessionId,
-          paymentStatus: 'paid',
+          paymentStatus,
+          paymentMethod,
           cartItems: cartItems.map((item) => ({
             treatmentId: String(item.treatmentId || item.id || ''),
             units: Math.max(1, Number(item.units || 1)),
@@ -1958,10 +1997,10 @@ export default function App() {
         setUnits(1);
 
         tapFeedback(8);
-        track(`Kauf abgeschlossen: ${formatPrice(spentCents)} | +${earnedPoints} Punkte`);
+        track(`Kauf abgeschlossen (${paymentMethodText}): ${formatPrice(spentCents)} | +${earnedPoints} Punkte`);
         Alert.alert(
           'Kauf erfolgreich',
-          `Gesamt: ${formatPrice(spentCents)}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}`
+          `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}`
         );
       } catch (error) {
         Alert.alert('Checkout fehlgeschlagen', String(error?.message || error));
@@ -1991,14 +2030,14 @@ export default function App() {
     setUnits(1);
 
     tapFeedback(8);
-    track(`Kauf abgeschlossen: ${formatPrice(spentCents)} | +${earnedPoints} Punkte`, 'purchase_success', {
+    track(`Kauf abgeschlossen (${paymentMethodText}): ${formatPrice(spentCents)} | +${earnedPoints} Punkte`, 'purchase_success', {
       treatmentId: cartItems.map((item) => item.name).join(', ').slice(0, 100),
       amountCents: spentCents,
-      metadata: { items: cartItems.length, earnedPoints },
+      metadata: { items: cartItems.length, earnedPoints, paymentMethod, paymentStatus },
     });
     Alert.alert(
       'Kauf erfolgreich',
-      `Gesamt: ${formatPrice(spentCents)}\nVerdiente Punkte: ${earnedPoints}\n\nFür Tests kannst du im Stripe-Checkout die Karte 4242 4242 4242 4242 nutzen.`
+      `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\n\nFür Tests kannst du im Stripe-Checkout die Karte 4242 4242 4242 4242 nutzen.`
     );
   }
 
@@ -2935,6 +2974,25 @@ export default function App() {
                     </Text>
                   ))}
                   <Text style={styles.cartTotal}>Gesamt: {formatPrice(totalCartCents)}</Text>
+                  <View style={styles.checkoutMethodWrap}>
+                    <Text style={styles.checkoutMethodLabel}>Zahlart</Text>
+                    <View style={styles.checkoutMethodRow}>
+                      {CHECKOUT_METHOD_OPTIONS.map((option) => {
+                        const active = selectedCheckoutMethod === option.id;
+                        return (
+                          <Pressable
+                            key={`box-${option.id}`}
+                            style={[styles.checkoutMethodChip, active && styles.checkoutMethodChipActive]}
+                            onPress={() => setSelectedCheckoutMethod(option.id)}
+                          >
+                            <Text style={[styles.checkoutMethodChipText, active && styles.checkoutMethodChipTextActive]}>
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
                   <Pressable
                     style={[styles.primaryCta, (checkoutLoading || cartSyncing) && styles.ctaDisabled]}
                     disabled={checkoutLoading || cartSyncing}
@@ -3398,13 +3456,52 @@ export default function App() {
                     <View key={item.id} style={styles.cartOverlayRow}>
                       <View style={styles.cartOverlayMain}>
                         <Text style={styles.cartOverlayName}>{item.name}</Text>
-                        <Text style={styles.cartOverlayMeta}>{item.units}x • {formatPrice(item.unitCents)}</Text>
+                        <Text style={styles.cartOverlayMeta}>Einzelpreis: {formatPrice(item.unitCents)}</Text>
+                        <View style={styles.cartOverlayControlsRow}>
+                          <Pressable
+                            style={styles.cartOverlayStepBtn}
+                            onPress={() => updateCartItemUnits(item.id, Number(item.units || 1) - 1)}
+                          >
+                            <Text style={styles.cartOverlayStepBtnText}>−</Text>
+                          </Pressable>
+                          <Text style={styles.cartOverlayUnitsText}>{Math.max(1, Number(item.units || 1))}</Text>
+                          <Pressable
+                            style={styles.cartOverlayStepBtn}
+                            onPress={() => updateCartItemUnits(item.id, Number(item.units || 1) + 1)}
+                          >
+                            <Text style={styles.cartOverlayStepBtnText}>+</Text>
+                          </Pressable>
+                          <Pressable style={styles.cartOverlayRemoveBtn} onPress={() => removeCartItem(item.id)}>
+                            <Ionicons name="trash-outline" size={14} color="#8A4C21" />
+                            <Text style={styles.cartOverlayRemoveText}>Entfernen</Text>
+                          </Pressable>
+                        </View>
                       </View>
                       <Text style={styles.cartOverlayPrice}>{formatPrice(item.totalCents)}</Text>
                     </View>
                   ))}
                 </ScrollView>
               )}
+
+              <View style={styles.checkoutMethodWrap}>
+                <Text style={styles.checkoutMethodLabel}>Zahlart</Text>
+                <View style={styles.checkoutMethodRow}>
+                  {CHECKOUT_METHOD_OPTIONS.map((option) => {
+                    const active = selectedCheckoutMethod === option.id;
+                    return (
+                      <Pressable
+                        key={`overlay-${option.id}`}
+                        style={[styles.checkoutMethodChip, active && styles.checkoutMethodChipActive]}
+                        onPress={() => setSelectedCheckoutMethod(option.id)}
+                      >
+                        <Text style={[styles.checkoutMethodChipText, active && styles.checkoutMethodChipTextActive]}>
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
 
               <View style={styles.cartOverlayFooter}>
                 <Text style={styles.cartOverlayTotalLabel}>Gesamt</Text>
@@ -3700,6 +3797,89 @@ const styles = StyleSheet.create({
   cartOverlayPrice: {
     color: THEME.ink,
     fontWeight: '700',
+  },
+  cartOverlayControlsRow: {
+    marginTop: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  cartOverlayStepBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartOverlayStepBtnText: {
+    color: THEME.ink,
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: -1,
+  },
+  cartOverlayUnitsText: {
+    minWidth: 20,
+    textAlign: 'center',
+    color: THEME.ink,
+    fontWeight: '700',
+  },
+  cartOverlayRemoveBtn: {
+    marginLeft: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    minHeight: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E9D8C7',
+    backgroundColor: '#FFF6EE',
+  },
+  cartOverlayRemoveText: {
+    color: '#8A4C21',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  checkoutMethodWrap: {
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  checkoutMethodLabel: {
+    color: THEME.muted,
+    fontWeight: '700',
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  checkoutMethodRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  checkoutMethodChip: {
+    minHeight: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutMethodChipActive: {
+    borderColor: '#E8C9A7',
+    backgroundColor: '#FFF3E3',
+  },
+  checkoutMethodChipText: {
+    color: THEME.muted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  checkoutMethodChipTextActive: {
+    color: THEME.brand,
   },
   cartOverlayFooter: {
     marginTop: 8,
