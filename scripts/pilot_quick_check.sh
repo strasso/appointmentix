@@ -18,7 +18,7 @@ Was geprueft wird:
   1) Health Endpoint
   2) Mobile Klinik-Suche Endpoint
   3) Mobile Klinik-Bundle Endpoint
-  4) Mobile OTP Request/Verify (lokaler Debug)
+  4) Mobile OTP Request/Resend/Verify (lokaler Debug)
   5) Membership Aktivierung + Status Sync
   6) Cart/Add + Checkout Eventspur
   7) Runtime Campaign Smoke-Test
@@ -129,7 +129,7 @@ if [[ -z "${TREATMENT_ID}" ]]; then
   exit 1
 fi
 
-echo "[4/7] Mobile OTP Request/Verify pruefen ..."
+echo "[4/7] Mobile OTP Request/Resend/Verify pruefen ..."
 OTP_PHONE="+436641234567"
 OTP_REQUEST_PAYLOAD="$(python3 - <<'PY' "${CLINIC_NAME}" "${OTP_PHONE}"
 import json,sys
@@ -147,7 +147,8 @@ if not payload.get("success"):
     if code == "OTP_DELIVERY_FAILED":
         raise SystemExit(
             "OTP request fehlgeschlagen: SMS-Zustellung aktuell nicht moeglich "
-            "(Twilio fehlt/ungueltig). Fuer lokalen Test MOBILE_OTP_DEBUG=true setzen."
+            "(Twilio fehlt/ungueltig). Fuer lokalen Test MOBILE_OTP_DEBUG=true setzen "
+            "oder MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE=true aktivieren."
         )
     raise SystemExit(f"OTP request fehlgeschlagen: {payload}")
 request_id = str(payload.get("requestId") or "").strip()
@@ -160,6 +161,35 @@ print("OTP request ok.")
 PY
 OTP_REQUEST_ID="$(json_field "${OTP_REQUEST_RAW}" "requestId")"
 OTP_DEBUG_CODE="$(json_field "${OTP_REQUEST_RAW}" "debugCode")"
+
+OTP_RESEND_PAYLOAD="$(python3 - <<'PY' "${CLINIC_NAME}" "${OTP_PHONE}"
+import json,sys
+print(json.dumps({"clinicName":sys.argv[1], "phone":sys.argv[2]}))
+PY
+)"
+OTP_RESEND_RAW="$(curl -sS -X POST "${BASE_URL}/api/mobile/auth/otp/resend" \
+  -H "Content-Type: application/json" \
+  -d "${OTP_RESEND_PAYLOAD}")"
+python3 - <<'PY' "${OTP_RESEND_RAW}"
+import json, sys
+payload = json.loads(sys.argv[1])
+if payload.get("success"):
+    request_id = str(payload.get("requestId") or "").strip()
+    if not request_id:
+        raise SystemExit("OTP resend success ohne requestId.")
+    print("OTP resend ok.")
+    raise SystemExit(0)
+
+error_code = str(payload.get("errorCode") or "").strip().upper()
+if error_code == "OTP_COOLDOWN":
+    retry = int(payload.get("retryAfterSeconds") or 0)
+    if retry <= 0:
+        raise SystemExit("OTP_COOLDOWN ohne retryAfterSeconds.")
+    print(f"OTP resend cooldown ok ({retry}s).")
+    raise SystemExit(0)
+
+raise SystemExit(f"OTP resend fehlgeschlagen: {payload}")
+PY
 
 OTP_VERIFY_PAYLOAD="$(python3 - <<'PY' "${CLINIC_NAME}" "${OTP_PHONE}" "${OTP_REQUEST_ID}" "${OTP_DEBUG_CODE}"
 import json,sys

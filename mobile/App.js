@@ -44,10 +44,25 @@ const CLINIC = {
 
 // White-label defaults for patient app (optional):
 // If set, the app loads clinic bundle automatically on first launch.
-const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
+const APP_PRODUCTION_BACKEND_URL = 'https://www.curabo.app';
+const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || APP_PRODUCTION_BACKEND_URL;
+const APP_FALLBACK_BACKEND_URLS = [
+  process.env.EXPO_PUBLIC_API_BASE_URL_FALLBACK || '',
+  process.env.EXPO_PUBLIC_API_BASE_URL_ALT || '',
+  APP_PRODUCTION_BACKEND_URL,
+  'https://curabo.app',
+];
 const APP_DEFAULT_CLINIC_NAME = process.env.EXPO_PUBLIC_DEFAULT_CLINIC_NAME || '';
 const MOBILE_OTP_COOLDOWN_SECONDS_FALLBACK = 30;
-const SHOW_TECHNICAL_SETUP = __DEV__;
+const TECHNICAL_SETUP_VISIBLE_BY_DEFAULT = String(process.env.EXPO_PUBLIC_SHOW_TECHNICAL_SETUP || '').toLowerCase() === 'true';
+const ALLOW_TECHNICAL_SETUP = TECHNICAL_SETUP_VISIBLE_BY_DEFAULT;
+const PREFER_PUBLIC_BACKENDS_OVERRIDE = String(process.env.EXPO_PUBLIC_PREFER_PUBLIC_BACKEND || '').trim().toLowerCase();
+const PREFER_PUBLIC_BACKENDS_DEFAULT = PREFER_PUBLIC_BACKENDS_OVERRIDE
+  ? PREFER_PUBLIC_BACKENDS_OVERRIDE === 'true'
+  : !__DEV__;
+const OTP_REQUEST_TIMEOUT_MS = 15000;
+const OTP_VERIFY_TIMEOUT_MS = 18000;
+const OTP_RETRY_COUNT = 1;
 const CHECKOUT_METHOD_OPTIONS = [
   { id: 'card', label: 'Karte / Apple Pay' },
   { id: 'paypal', label: 'PayPal' },
@@ -275,6 +290,7 @@ const REWARD_REDEEMS = [
 const STORAGE_KEYS = {
   analyticsBaseUrl: 'appointmentix.analyticsBaseUrl',
   clinicName: 'appointmentix.clinicName',
+  clinicId: 'appointmentix.clinicId',
   settingsName: 'appointmentix.settingsName',
   settingsEmail: 'appointmentix.settingsEmail',
   patientPhone: 'appointmentix.patientPhone',
@@ -327,6 +343,46 @@ function normalizeUrl(value) {
     /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostCandidate);
   const scheme = isPrivateLanHost ? 'http' : 'https';
   return `${scheme}://${candidate}`.replace(/\/+$/, '');
+}
+
+function isPrivateNetworkBaseUrl(value) {
+  const normalized = normalizeUrl(value);
+  if (!normalized) return false;
+  let host = '';
+  try {
+    host = new URL(normalized).hostname.toLowerCase();
+  } catch {
+    host = normalized.replace(/^https?:\/\//i, '').split('/')[0].split(':')[0].toLowerCase();
+  }
+  return (
+    host === 'localhost'
+    || host.startsWith('127.')
+    || host.startsWith('10.')
+    || host.startsWith('192.168.')
+    || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+  );
+}
+
+function resolveApiCandidates(...values) {
+  const seen = new Set();
+  const candidates = [];
+  for (const value of [...values, ...APP_FALLBACK_BACKEND_URLS]) {
+    const normalized = normalizeUrl(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    candidates.push(normalized);
+  }
+  return candidates;
+}
+
+function prioritizeApiCandidates(candidates, options = {}) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  const preferPublic = options.preferPublic === true;
+  if (!preferPublic) return list;
+  return [
+    ...list.filter((item) => !isPrivateNetworkBaseUrl(item)),
+    ...list.filter((item) => isPrivateNetworkBaseUrl(item)),
+  ];
 }
 
 function resolveExpoBackendUrl() {
@@ -476,9 +532,18 @@ function formatClock(ts) {
   return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
 }
 
-async function fetchClinicBundle(baseUrl, clinicName) {
+async function fetchClinicBundle(baseUrl, clinicName, clinicId = '') {
   const safeBaseUrl = normalizeUrl(baseUrl);
-  const query = clinicName ? `?clinicName=${encodeURIComponent(clinicName.trim())}` : '';
+  const params = new URLSearchParams();
+  const safeClinicName = String(clinicName || '').trim();
+  const safeClinicId = String(clinicId || '').trim();
+  if (safeClinicId) {
+    params.set('clinicId', safeClinicId);
+  }
+  if (safeClinicName) {
+    params.set('clinicName', safeClinicName);
+  }
+  const query = params.toString() ? `?${params.toString()}` : '';
   const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/clinic-bundle${query}`, {
     method: 'GET',
     headers: {
@@ -488,7 +553,7 @@ async function fetchClinicBundle(baseUrl, clinicName) {
 
   if (!response.ok) {
     const text = await response.text();
-    let message = 'Klinikdaten konnten nicht geladen werden.';
+    let message = 'MedSpa-Daten konnten nicht geladen werden.';
     if (text) {
       try {
         const parsed = JSON.parse(text);
@@ -517,7 +582,7 @@ async function fetchClinicSearch(baseUrl, query, limit = 10) {
 
   if (!response.ok) {
     const text = await response.text();
-    let message = 'Klinik-Suche fehlgeschlagen.';
+    let message = 'MedSpa-Suche fehlgeschlagen.';
     if (text) {
       try {
         const parsed = JSON.parse(text);
@@ -541,6 +606,16 @@ function parseJsonPayload(rawText) {
   }
 }
 
+function localizeClinicTerms(message) {
+  const text = String(message || '').trim();
+  if (!text) return text;
+  return text
+    .replace(/Klinikname/gi, 'MedSpa')
+    .replace(/Klinik-Code/gi, 'MedSpa-Code')
+    .replace(/Klinik-/gi, 'MedSpa-')
+    .replace(/Klinik/gi, 'MedSpa');
+}
+
 function buildApiError(defaultMessage, statusCode, rawText) {
   const parsed = parseJsonPayload(rawText);
   let message = defaultMessage;
@@ -552,6 +627,7 @@ function buildApiError(defaultMessage, statusCode, rawText) {
   } else if (rawText) {
     message = String(rawText).trim();
   }
+  message = localizeClinicTerms(message);
 
   const error = new Error(message || defaultMessage);
   error.status = Number(statusCode || 0);
@@ -580,7 +656,7 @@ async function requestPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
+  }, { timeoutMs: OTP_REQUEST_TIMEOUT_MS, retries: OTP_RETRY_COUNT, retryDelayMs: 450 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -599,7 +675,7 @@ async function resendPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
+  }, { timeoutMs: OTP_REQUEST_TIMEOUT_MS, retries: OTP_RETRY_COUNT, retryDelayMs: 450 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -617,7 +693,7 @@ async function verifyPhoneOtp(baseUrl, payload) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload || {}),
-  }, { timeoutMs: 25000, retries: 2, retryDelayMs: 800 });
+  }, { timeoutMs: OTP_VERIFY_TIMEOUT_MS, retries: OTP_RETRY_COUNT, retryDelayMs: 500 });
 
   const text = await response.text();
   if (!response.ok) {
@@ -641,9 +717,19 @@ async function fetchBackendHealth(baseUrl) {
   return response.json();
 }
 
-function describeConnectionError(baseUrl, error) {
+function describeConnectionError(baseUrl, error, options = {}) {
+  const includeTechnicalDetails = options.includeTechnicalDetails === true;
   const message = String(error?.message || error || '').trim();
   const normalized = normalizeUrl(baseUrl);
+  const isPrivate = isPrivateNetworkBaseUrl(normalized);
+  if (!includeTechnicalDetails) {
+    if (!message) return 'Service aktuell nicht erreichbar. Bitte später erneut versuchen.';
+    const lower = message.toLowerCase();
+    if (lower.includes('request timeout') || lower.includes('network request failed') || lower.includes('failed to fetch')) {
+      return 'Service aktuell nicht erreichbar. Bitte später erneut versuchen.';
+    }
+    return message;
+  }
   if (normalized.includes(':4137')) {
     return [
       'Verbindung fehlgeschlagen.',
@@ -653,6 +739,13 @@ function describeConnectionError(baseUrl, error) {
     ].join('\n');
   }
   if (message.toLowerCase().includes('request timeout')) {
+    if (!isPrivate) {
+      return [
+        'Service hat nicht rechtzeitig geantwortet.',
+        `URL: ${normalized || '(leer)'}`,
+        'Bitte später erneut versuchen oder kurz den Netzwerkstatus prüfen.',
+      ].join('\n');
+    }
     return [
       'Backend hat nicht rechtzeitig geantwortet.',
       `URL: ${normalized || '(leer)'}`,
@@ -660,6 +753,13 @@ function describeConnectionError(baseUrl, error) {
     ].join('\n');
   }
   if (message.toLowerCase().includes('network request failed')) {
+    if (!isPrivate) {
+      return [
+        'Service ist aktuell nicht erreichbar.',
+        `URL: ${normalized || '(leer)'}`,
+        'Bitte Internetverbindung prüfen und erneut versuchen.',
+      ].join('\n');
+    }
     return [
       'Netzwerk nicht erreichbar.',
       `URL: ${normalized || '(leer)'}`,
@@ -988,7 +1088,8 @@ export default function App() {
   const [settingsName, setSettingsName] = useState('Anna Muster');
   const [settingsEmail, setSettingsEmail] = useState('anna@muster.at');
   const [analyticsBaseUrl, setAnalyticsBaseUrl] = useState('');
-  const [clinicLookupName, setClinicLookupName] = useState(CLINIC.name);
+  const [clinicLookupName, setClinicLookupName] = useState(APP_DEFAULT_CLINIC_NAME || '');
+  const [clinicLookupId, setClinicLookupId] = useState('');
   const [analyticsConnected, setAnalyticsConnected] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -1013,7 +1114,7 @@ export default function App() {
   const [otpUiType, setOtpUiType] = useState('neutral');
   const [otpCooldownUntil, setOtpCooldownUntil] = useState(0);
   const [otpCountdown, setOtpCountdown] = useState(0);
-  const [showTechnicalSetup, setShowTechnicalSetup] = useState(false);
+  const [showTechnicalSetup, setShowTechnicalSetup] = useState(TECHNICAL_SETUP_VISIBLE_BY_DEFAULT);
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [cartSheetOpen, setCartSheetOpen] = useState(false);
@@ -1023,6 +1124,7 @@ export default function App() {
   const [cartSyncing, setCartSyncing] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const tabFadeAnim = useRef(new Animated.Value(1)).current;
+  const clinicSearchRequestRef = useRef(0);
   const appSessionId = useMemo(
     () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     []
@@ -1156,16 +1258,18 @@ export default function App() {
 
   const resolvedOnboardingBaseUrl = normalizeUrl(onboardingBaseUrl || analyticsBaseUrl || APP_DEFAULT_BACKEND_URL);
   const needsBackendProvisioning = !resolvedOnboardingBaseUrl;
+  const shouldPreferPublicBackends = PREFER_PUBLIC_BACKENDS_DEFAULT && !showTechnicalSetup;
 
-  async function runWithBaseUrlFallback(baseUrlHint, runner) {
-    const candidates = [];
-    const preferred = normalizeUrl(baseUrlHint);
-    if (preferred) {
-      candidates.push(preferred);
-    }
-    if (expoBackendUrl && !candidates.includes(expoBackendUrl)) {
-      candidates.push(expoBackendUrl);
-    }
+  async function runWithBaseUrlFallback(baseUrlHint, runner, options = {}) {
+    const preferPublic = options.preferPublic === true;
+    const resolvedCandidates = resolveApiCandidates(
+      baseUrlHint,
+      analyticsBaseUrl,
+      onboardingBaseUrl,
+      expoBackendUrl,
+      APP_DEFAULT_BACKEND_URL
+    );
+    const candidates = prioritizeApiCandidates(resolvedCandidates, { preferPublic });
     if (candidates.length === 0) {
       throw new Error('Backend URL fehlt');
     }
@@ -1175,13 +1279,16 @@ export default function App() {
       const candidate = candidates[idx];
       try {
         const value = await runner(candidate);
-        if (candidate !== normalizeUrl(analyticsBaseUrl)) {
+        if (candidate !== normalizeUrl(analyticsBaseUrl) && candidate !== normalizeUrl(onboardingBaseUrl)) {
           setAnalyticsBaseUrl(candidate);
           setOnboardingBaseUrl(candidate);
           await writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, candidate);
         }
         return { value, baseUrl: candidate, usedFallback: idx > 0 };
       } catch (error) {
+        if (error && typeof error === 'object') {
+          error.baseUrlCandidate = candidate;
+        }
         lastError = error;
         const canTryNext = idx < candidates.length - 1 && shouldRetryRequest(error);
         if (!canTryNext) {
@@ -1326,16 +1433,20 @@ export default function App() {
     }
   }
 
-  async function loadClinicBundle(nextBaseUrl = '', nextClinicName = '', nextEmail = '') {
+  async function loadClinicBundle(nextBaseUrl = '', nextClinicName = '', nextClinicId = '', nextEmail = '', options = {}) {
+    const silentFailure = options.silentFailure === true;
     const normalized = normalizeUrl(nextBaseUrl || analyticsBaseUrl);
     if (!normalized) {
       setAnalyticsConnected(false);
-      Alert.alert('Service nicht verfügbar', 'Klinikdaten konnten nicht geladen werden.');
+      if (!silentFailure) {
+        Alert.alert('Service nicht verfügbar', 'MedSpa-Daten konnten nicht geladen werden.');
+      }
       return;
     }
 
     const resolvedClinicName = String(nextClinicName || clinicLookupName || '').trim();
-    const payload = await fetchClinicBundle(normalized, resolvedClinicName);
+    const resolvedClinicId = String(nextClinicId || clinicLookupId || '').trim();
+    const payload = await fetchClinicBundle(normalized, resolvedClinicName, resolvedClinicId);
     const catalog = payload.catalog || {};
     const clinic = payload.clinic || {};
 
@@ -1381,39 +1492,57 @@ export default function App() {
         setClinicLookupName(clinic.name);
         setClinicSearchQuery(clinic.name);
       }
+      if (clinic.id) {
+        setClinicLookupId(String(clinic.id));
+      }
     }
 
     setAnalyticsBaseUrl(normalized);
     setOnboardingBaseUrl(normalized);
     setAnalyticsConnected(true);
     await syncMembershipStatus(normalized, clinic.name || resolvedClinicName || clinicLookupName, nextEmail || settingsEmail);
-    track(`Klinikdaten geladen: ${clinic.name || clinicLookupName}`);
+    track(`MedSpa-Daten geladen: ${clinic.name || clinicLookupName}`);
+    return clinic;
   }
 
   async function connectAnalytics(options = {}) {
     if (connectLoading) return;
     const sourceBaseUrl = showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl;
-    const normalized = normalizeUrl(sourceBaseUrl);
+    const normalizedCandidates = prioritizeApiCandidates(
+      resolveApiCandidates(sourceBaseUrl, expoBackendUrl, APP_DEFAULT_BACKEND_URL),
+      { preferPublic: shouldPreferPublicBackends }
+    );
+    const normalized = normalizedCandidates[0] || '';
     const resolvedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
+    const resolvedClinicId = String(options.clinicId ?? clinicLookupId ?? '').trim();
     const nextEmail = String(options.memberEmail ?? settingsEmail).trim().toLowerCase();
     const nextName = String(options.memberName ?? settingsName).trim();
     const completeOnboarding = options.completeOnboarding !== false;
     const silentFailure = options.silentFailure === true;
     if (!normalized) {
       setAnalyticsConnected(false);
-      Alert.alert('Service nicht verfügbar', 'Klinik-Verbindung ist aktuell nicht verfügbar.');
+      Alert.alert('Service nicht verfügbar', 'MedSpa-Verbindung ist aktuell nicht verfügbar.');
       return;
     }
-    if (!resolvedClinicName) {
-      Alert.alert('Klinikname fehlt', 'Bitte suche und wähle zuerst eine Klinik.');
+    if (!resolvedClinicName && !resolvedClinicId) {
+      Alert.alert('MedSpa fehlt', 'Bitte suche und wähle zuerst eine MedSpa.');
       return;
     }
 
     setConnectLoading(true);
     try {
-      await loadClinicBundle(normalized, resolvedClinicName, nextEmail);
-      await writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, normalized);
-      await writeSecureValue(STORAGE_KEYS.clinicName, resolvedClinicName);
+      const { value: loadedClinic, baseUrl: connectedBaseUrl } = await runWithBaseUrlFallback(
+        normalized,
+        (baseUrlCandidate) =>
+          loadClinicBundle(baseUrlCandidate, resolvedClinicName, resolvedClinicId, nextEmail, { silentFailure: true }),
+        { preferPublic: shouldPreferPublicBackends }
+      );
+      const persistedBaseUrl = normalizeUrl(connectedBaseUrl || normalized);
+      const persistedClinicName = String(loadedClinic?.name || resolvedClinicName || '').trim();
+      const persistedClinicId = String(loadedClinic?.id || resolvedClinicId || '').trim();
+      await writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, persistedBaseUrl);
+      await writeSecureValue(STORAGE_KEYS.clinicName, persistedClinicName);
+      await writeSecureValue(STORAGE_KEYS.clinicId, persistedClinicId);
       if (nextName) {
         setSettingsName(nextName);
         await writeSecureValue(STORAGE_KEYS.settingsName, nextName);
@@ -1426,11 +1555,13 @@ export default function App() {
         await writeSecureValue(STORAGE_KEYS.onboardingDone, '1');
       }
       setShowOnboarding(false);
-      setBackendCheckMessage(`Verbindung OK: ${normalized}`);
-      track('Klinik verbunden');
+      setBackendCheckMessage(showTechnicalSetup ? `Verbindung OK: ${persistedBaseUrl}` : 'Verbindung erfolgreich.');
+      track('MedSpa verbunden');
     } catch (error) {
       setAnalyticsConnected(false);
-      const helpMessage = describeConnectionError(normalized, error);
+      const helpMessage = describeConnectionError(normalized || sourceBaseUrl, error, {
+        includeTechnicalDetails: showTechnicalSetup,
+      });
       setBackendCheckMessage(helpMessage);
       if (!silentFailure) {
         Alert.alert('Backend-Verbindung fehlgeschlagen', helpMessage);
@@ -1444,7 +1575,10 @@ export default function App() {
 
   async function runBackendHealthCheck() {
     const sourceBaseUrl = showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl;
-    const normalized = normalizeUrl(sourceBaseUrl) || expoBackendUrl;
+    const normalized = prioritizeApiCandidates(
+      resolveApiCandidates(sourceBaseUrl, expoBackendUrl, APP_DEFAULT_BACKEND_URL),
+      { preferPublic: shouldPreferPublicBackends }
+    )[0] || '';
     if (!normalized) {
       Alert.alert('Backend URL fehlt', 'Bitte gib zuerst die Backend-URL ein.');
       return;
@@ -1452,18 +1586,22 @@ export default function App() {
 
     setBackendCheckLoading(true);
     try {
-      const { value: payload, baseUrl } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
-        fetchBackendHealth(baseUrlCandidate)
+      const { value: payload, baseUrl } = await runWithBaseUrlFallback(
+        normalized,
+        (baseUrlCandidate) => fetchBackendHealth(baseUrlCandidate),
+        { preferPublic: shouldPreferPublicBackends }
       );
       if (payload?.status === 'ok') {
-        const message = `Health-Check erfolgreich: ${baseUrl}`;
+        const message = showTechnicalSetup ? `Health-Check erfolgreich: ${baseUrl}` : 'Health-Check erfolgreich.';
         setBackendCheckMessage(message);
         Alert.alert('Backend erreichbar', message);
       } else {
         throw new Error('Health-Check Antwort ungültig.');
       }
     } catch (error) {
-      const helpMessage = describeConnectionError(normalized, error);
+      const helpMessage = describeConnectionError(normalized, error, {
+        includeTechnicalDetails: showTechnicalSetup,
+      });
       setBackendCheckMessage(helpMessage);
       Alert.alert('Backend-Test fehlgeschlagen', helpMessage);
     } finally {
@@ -1471,49 +1609,105 @@ export default function App() {
     }
   }
 
-  async function runClinicSearch() {
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl) || expoBackendUrl;
-    if (!normalized) {
+  async function runClinicSearch(options = {}) {
+    const queryValue = String(options.query ?? clinicSearchQuery ?? '').trim();
+    const silent = options.silent === true;
+    const candidates = prioritizeApiCandidates(
+      resolveApiCandidates(
+        showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl,
+        expoBackendUrl,
+        APP_DEFAULT_BACKEND_URL
+      ),
+      { preferPublic: shouldPreferPublicBackends }
+    );
+    if (candidates.length === 0) {
       setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
       return;
     }
+    if (queryValue.length < 1) {
+      setClinicSearchResults([]);
+      setBackendCheckMessage('');
+      return;
+    }
 
+    const requestToken = Date.now();
+    clinicSearchRequestRef.current = requestToken;
     setClinicSearchLoading(true);
+    let lastError = null;
+    let lastEmptyBaseUrl = '';
     try {
-      const { value: response, baseUrl } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
-        fetchClinicSearch(baseUrlCandidate, clinicSearchQuery, 12)
-      );
-      const clinics = Array.isArray(response.clinics) ? response.clinics : [];
-      setClinicSearchResults(clinics);
-      setBackendCheckMessage(`Klinik-Suche verbunden über: ${baseUrl}`);
-      if (clinics.length > 0) {
-        const exact = clinics.find(
-          (entry) =>
-            String(entry?.name || '').trim().toLowerCase() === String(clinicSearchQuery || '').trim().toLowerCase()
-        );
-        if (exact?.name) {
-          setClinicLookupName(String(exact.name).trim());
+      for (const baseUrl of candidates) {
+        try {
+          const response = await fetchClinicSearch(baseUrl, queryValue, 12);
+          if (clinicSearchRequestRef.current !== requestToken) {
+            return;
+          }
+          const clinics = (Array.isArray(response.clinics) ? response.clinics : []).map((entry) => ({
+            ...entry,
+            _sourceBaseUrl: baseUrl,
+          }));
+          if (clinics.length === 0) {
+            lastEmptyBaseUrl = baseUrl;
+            continue;
+          }
+
+          setClinicSearchResults(clinics);
+          setBackendCheckMessage(
+            showTechnicalSetup ? `MedSpa-Suche verbunden über: ${baseUrl}` : 'MedSpa-Suche verbunden.'
+          );
+          const exact = clinics.find(
+            (entry) =>
+              String(entry?.name || '').trim().toLowerCase() === queryValue.toLowerCase()
+          );
+          if (exact?.name) {
+            selectClinicFromSearch(exact);
+          }
+          return;
+        } catch (error) {
+          lastError = error;
         }
       }
-      if (clinics.length === 0) {
-        setBackendCheckMessage('Keine Klinik gefunden. Bitte Suchbegriff anpassen.');
+      if (clinicSearchRequestRef.current !== requestToken) {
+        return;
       }
-    } catch (error) {
-      const helpMessage = describeConnectionError(normalized, error);
-      setBackendCheckMessage(helpMessage);
+      setClinicSearchResults([]);
+      if (lastError) {
+        if (!silent) {
+          const helpMessage = describeConnectionError(candidates[0], lastError, {
+            includeTechnicalDetails: showTechnicalSetup,
+          });
+          setBackendCheckMessage(helpMessage);
+        }
+        return;
+      }
+      if (lastEmptyBaseUrl && showTechnicalSetup) {
+        setBackendCheckMessage(`Keine MedSpa-Treffer über: ${lastEmptyBaseUrl}`);
+        return;
+      }
+      setBackendCheckMessage('Keine MedSpa-Treffer. Bitte Eingabe anpassen.');
     } finally {
-      setClinicSearchLoading(false);
+      if (clinicSearchRequestRef.current === requestToken) {
+        setClinicSearchLoading(false);
+      }
     }
   }
 
-  function selectClinicFromSearch(clinic) {
-    const name = String(clinic?.name || '').trim();
-    if (!name) return;
-    setClinicLookupName(name);
-    setClinicSearchQuery(name);
-    setOtpUiMessage('');
-    setOtpUiType('neutral');
+function selectClinicFromSearch(clinic) {
+  const name = String(clinic?.name || '').trim();
+  if (!name) return;
+  const sourceBaseUrl = normalizeUrl(clinic?._sourceBaseUrl || '');
+  if (sourceBaseUrl) {
+    setOnboardingBaseUrl(sourceBaseUrl);
+    setAnalyticsBaseUrl(sourceBaseUrl);
+    void writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, sourceBaseUrl);
   }
+  setClinicLookupName(name);
+  setClinicLookupId(String(clinic?.id ?? '').trim());
+  setClinicSearchQuery(name);
+  setBackendCheckMessage('');
+  setOtpUiMessage('');
+  setOtpUiType('neutral');
+}
 
   function setOtpFeedback(message, type = 'neutral') {
     setOtpUiMessage(String(message || '').trim());
@@ -1574,6 +1768,11 @@ export default function App() {
       return;
     }
 
+    if (errorCode === 'OTP_DELIVERY_FAILED') {
+      setOtpFeedback('SMS-Zustellung aktuell nicht möglich. Bitte später erneut versuchen oder als Gast fortfahren.', 'error');
+      return;
+    }
+
     setOtpFeedback(String(error?.message || fallbackMessage || 'OTP-Anfrage fehlgeschlagen.'), 'error');
   }
 
@@ -1607,18 +1806,45 @@ export default function App() {
     setOtpResendLoading(false);
   }
 
-  function continueToAccessStep() {
-    const selectedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
-    if (!selectedClinicName) {
-      Alert.alert('Klinik fehlt', 'Bitte suche zuerst deine Klinik.');
+function continueToAccessStep() {
+  const selectedClinicName = String(clinicLookupName || '').trim();
+  const selectedClinicId = String(clinicLookupId || '').trim();
+  const queryName = String(clinicSearchQuery || '').trim();
+  const matchesTypedQuery =
+    !queryName || selectedClinicName.toLowerCase() === queryName.toLowerCase();
+
+  if (!selectedClinicName && !selectedClinicId) {
+    setBackendCheckMessage('Bitte wähle eine MedSpa aus der Liste aus.');
+    Alert.alert('MedSpa fehlt', 'Bitte suche zuerst deine MedSpa.');
+    return;
+  }
+    if (!selectedClinicId) {
+      setBackendCheckMessage('Bitte eine MedSpa direkt aus dem Dropdown auswählen.');
+      Alert.alert('MedSpa auswählen', 'Bitte wähle eine MedSpa aus der Trefferliste aus.');
       return;
     }
+    if (!matchesTypedQuery) {
+      setBackendCheckMessage('Bitte eine MedSpa aus dem Dropdown auswählen.');
+      Alert.alert('MedSpa auswählen', 'Bitte wähle eine MedSpa direkt aus der Trefferliste.');
+      return;
+    }
+    clinicSearchRequestRef.current = 0;
+    setClinicSearchLoading(false);
+    setClinicSearchResults([]);
+    setBackendCheckMessage('');
     resetOtpFlow();
     setOnboardingStep('access');
   }
 
   async function useQrOrReferralCode() {
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl) || expoBackendUrl;
+    const normalized = prioritizeApiCandidates(
+      resolveApiCandidates(
+        showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl,
+        expoBackendUrl,
+        APP_DEFAULT_BACKEND_URL
+      ),
+      { preferPublic: shouldPreferPublicBackends }
+    )[0] || '';
     if (!normalized) {
       setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
       return;
@@ -1626,15 +1852,23 @@ export default function App() {
 
     const rawCode = String(scanCodeValue || '').trim();
     if (!rawCode) {
-      setBackendCheckMessage('Bitte gib einen Klinik- oder QR-Code ein.');
+      setBackendCheckMessage('Bitte gib einen MedSpa- oder QR-Code ein.');
       return;
     }
 
     let parsedClinicName = resolveClinicNameFromQrOrCode(rawCode);
+    let resolvedBaseForQr = normalized;
     try {
-      const { value: resolved } = await runWithBaseUrlFallback(normalized, (baseUrlCandidate) =>
-        resolveClinicByCode(baseUrlCandidate, { code: rawCode })
+      const { value: resolved, baseUrl: resolvedBaseUrl } = await runWithBaseUrlFallback(
+        normalized,
+        (baseUrlCandidate) => resolveClinicByCode(baseUrlCandidate, { code: rawCode }),
+        { preferPublic: shouldPreferPublicBackends }
       );
+      if (resolvedBaseUrl) {
+        resolvedBaseForQr = normalizeUrl(resolvedBaseUrl);
+        setAnalyticsBaseUrl(resolvedBaseUrl);
+        setOnboardingBaseUrl(resolvedBaseUrl);
+      }
       const resolvedName = String(resolved?.resolvedClinicName || resolved?.clinic?.name || '').trim();
       if (resolvedName) {
         parsedClinicName = resolvedName;
@@ -1650,10 +1884,11 @@ export default function App() {
 
     setClinicSearchQuery(parsedClinicName);
     setClinicLookupName(parsedClinicName);
+    setClinicLookupId('');
     setScanCodeValue('');
 
     try {
-      const response = await fetchClinicSearch(normalized, parsedClinicName, 8);
+      const response = await fetchClinicSearch(resolvedBaseForQr, parsedClinicName, 8);
       const clinics = Array.isArray(response.clinics) ? response.clinics : [];
       setClinicSearchResults(clinics);
       if (clinics.length > 0) {
@@ -1678,15 +1913,23 @@ export default function App() {
       return;
     }
 
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
-    const effectiveBaseUrl = normalized || expoBackendUrl;
+    const normalized = prioritizeApiCandidates(
+      resolveApiCandidates(
+        showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl,
+        expoBackendUrl,
+        APP_DEFAULT_BACKEND_URL
+      ),
+      { preferPublic: shouldPreferPublicBackends }
+    )[0] || '';
+    const effectiveBaseUrl = normalized;
     const resolvedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
+    const resolvedClinicId = String(clinicLookupId || '').trim();
     if (!effectiveBaseUrl) {
       setOtpFeedback('Backend nicht verbunden. Bitte später erneut versuchen.', 'warning');
       return;
     }
-    if (!resolvedClinicName) {
-      setOtpFeedback('Bitte wähle zuerst eine Klinik aus.', 'warning');
+    if (!resolvedClinicName && !resolvedClinicId) {
+      setOtpFeedback('Bitte wähle zuerst eine MedSpa aus.', 'warning');
       return;
     }
 
@@ -1695,13 +1938,19 @@ export default function App() {
       setOtpLoading(true);
       setOtpFeedback('Code wird angefordert ...', 'info');
       try {
-        const { value: response, baseUrl } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
-          requestPhoneOtp(baseUrlCandidate, {
-            clinicName: resolvedClinicName,
-            phone: normalizedPhone,
-          })
+        const { value: response, baseUrl } = await runWithBaseUrlFallback(
+          effectiveBaseUrl,
+          (baseUrlCandidate) =>
+            requestPhoneOtp(baseUrlCandidate, {
+              clinicId: resolvedClinicId || undefined,
+              clinicName: resolvedClinicName,
+              phone: normalizedPhone,
+            }),
+          { preferPublic: shouldPreferPublicBackends }
         );
-        setBackendCheckMessage(`OTP-Service verbunden über: ${baseUrl}`);
+        setBackendCheckMessage(
+          showTechnicalSetup ? `OTP-Service verbunden über: ${baseUrl}` : 'OTP-Service verbunden.'
+        );
         setOtpRequestId(String(response.requestId || '').trim());
         setOtpRequestedPhone(normalizedPhone);
         setOtpExpiresAt(String(response.expiresAt || '').trim());
@@ -1724,13 +1973,17 @@ export default function App() {
     setOtpLoading(true);
     setOtpFeedback('Code wird bestätigt ...', 'info');
     try {
-      const { value: response } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
-        verifyPhoneOtp(baseUrlCandidate, {
-          clinicName: resolvedClinicName,
-          phone: normalizedPhone,
-          requestId: otpRequestId,
-          code: safeOtpCode,
-        })
+      const { value: response } = await runWithBaseUrlFallback(
+        effectiveBaseUrl,
+        (baseUrlCandidate) =>
+          verifyPhoneOtp(baseUrlCandidate, {
+            clinicId: resolvedClinicId || undefined,
+            clinicName: resolvedClinicName,
+            phone: normalizedPhone,
+            requestId: otpRequestId,
+            code: safeOtpCode,
+          }),
+        { preferPublic: shouldPreferPublicBackends }
       );
       const memberEmail = String(response.memberEmail || '').trim().toLowerCase();
       const memberName = String(response.memberName || settingsName || '').trim();
@@ -1742,12 +1995,13 @@ export default function App() {
       setPatientGuestMode(false);
       await writeSecureValue(STORAGE_KEYS.patientPhone, normalizedPhone);
       await writeSecureValue(STORAGE_KEYS.patientGuestMode, '0');
-      setOtpFeedback('Telefonnummer bestätigt. Verbinde Klinik ...', 'success');
+      setOtpFeedback('Telefonnummer bestätigt. Verbinde MedSpa ...', 'success');
       setOtpCooldownUntil(0);
       setOtpCountdown(0);
       setOtpCode('');
 
       await connectAnalytics({
+        clinicId: resolvedClinicId,
         memberEmail,
         memberName,
         completeOnboarding: true,
@@ -1767,29 +2021,43 @@ export default function App() {
       return;
     }
 
-    const normalized = normalizeUrl(showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl);
-    const effectiveBaseUrl = normalized || expoBackendUrl;
+    const normalized = prioritizeApiCandidates(
+      resolveApiCandidates(
+        showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl,
+        expoBackendUrl,
+        APP_DEFAULT_BACKEND_URL
+      ),
+      { preferPublic: shouldPreferPublicBackends }
+    )[0] || '';
+    const effectiveBaseUrl = normalized;
     const resolvedClinicName = String(clinicLookupName || clinicSearchQuery || '').trim();
+    const resolvedClinicId = String(clinicLookupId || '').trim();
     const normalizedPhone = normalizePhone(patientPhone);
     if (!effectiveBaseUrl) {
       setOtpFeedback('Backend nicht verbunden. Bitte später erneut versuchen.', 'warning');
       return;
     }
-    if (!resolvedClinicName || !normalizedPhone) {
-      setOtpFeedback('Klinik oder Telefonnummer fehlt.', 'warning');
+    if ((!resolvedClinicName && !resolvedClinicId) || !normalizedPhone) {
+      setOtpFeedback('MedSpa oder Telefonnummer fehlt.', 'warning');
       return;
     }
 
     setOtpResendLoading(true);
     setOtpFeedback('Code wird neu gesendet ...', 'info');
     try {
-      const { value: response, baseUrl } = await runWithBaseUrlFallback(effectiveBaseUrl, (baseUrlCandidate) =>
-        resendPhoneOtp(baseUrlCandidate, {
-          clinicName: resolvedClinicName,
-          phone: normalizedPhone,
-        })
+      const { value: response, baseUrl } = await runWithBaseUrlFallback(
+        effectiveBaseUrl,
+        (baseUrlCandidate) =>
+          resendPhoneOtp(baseUrlCandidate, {
+            clinicId: resolvedClinicId || undefined,
+            clinicName: resolvedClinicName,
+            phone: normalizedPhone,
+          }),
+        { preferPublic: shouldPreferPublicBackends }
       );
-      setBackendCheckMessage(`OTP-Service verbunden über: ${baseUrl}`);
+      setBackendCheckMessage(
+        showTechnicalSetup ? `OTP-Service verbunden über: ${baseUrl}` : 'OTP-Service verbunden.'
+      );
       setOtpRequestId(String(response.requestId || '').trim());
       setOtpRequestedPhone(normalizedPhone);
       setOtpExpiresAt(String(response.expiresAt || '').trim());
@@ -1803,12 +2071,14 @@ export default function App() {
   }
 
   async function continueAsGuest() {
+    const resolvedClinicId = String(clinicLookupId || '').trim();
     resetOtpFlow();
     setPatientGuestMode(true);
     setPatientPhone('');
     await writeSecureValue(STORAGE_KEYS.patientPhone, '');
     await writeSecureValue(STORAGE_KEYS.patientGuestMode, '1');
     await connectAnalytics({
+      clinicId: resolvedClinicId,
       memberEmail: '',
       completeOnboarding: true,
       silentFailure: true,
@@ -1819,6 +2089,7 @@ export default function App() {
     setShowOnboarding(true);
     setOnboardingStep('clinic');
     setClinicSearchResults([]);
+    setClinicLookupId('');
     setSelectedTreatment(null);
     setCartItems([]);
     setMembershipStatus(null);
@@ -1827,6 +2098,7 @@ export default function App() {
     setPatientGuestMode(false);
     resetOtpFlow();
     await writeSecureValue(STORAGE_KEYS.clinicName, '');
+    await writeSecureValue(STORAGE_KEYS.clinicId, '');
     await writeSecureValue(STORAGE_KEYS.patientPhone, '');
     await writeSecureValue(STORAGE_KEYS.patientGuestMode, '');
     await writeSecureValue(STORAGE_KEYS.onboardingDone, '');
@@ -1854,7 +2126,7 @@ export default function App() {
       const normalized = normalizeUrl(analyticsBaseUrl);
       const resolvedClinicName = String(clinicProfile.name || clinicLookupName || clinicSearchQuery || '').trim();
       if (!normalized || !resolvedClinicName) {
-        Alert.alert('Backend fehlt', 'Bitte zuerst Klinik verbinden oder als Offline-Demo fortfahren.');
+        Alert.alert('Backend fehlt', 'Bitte zuerst MedSpa verbinden oder als Offline-Demo fortfahren.');
         return;
       }
 
@@ -1950,7 +2222,7 @@ export default function App() {
       const normalized = normalizeUrl(analyticsBaseUrl);
       const resolvedClinicName = String(clinicProfile.name || clinicLookupName || clinicSearchQuery || '').trim();
       if (!normalized || !resolvedClinicName) {
-        Alert.alert('Backend fehlt', 'Bitte zuerst Klinik verbinden oder als Offline-Demo fortfahren.');
+        Alert.alert('Backend fehlt', 'Bitte zuerst MedSpa verbinden oder als Offline-Demo fortfahren.');
         return;
       }
 
@@ -2151,7 +2423,7 @@ export default function App() {
     const memberEmail = String(settingsEmail || '').trim().toLowerCase();
     const resolvedClinicName = String(clinicProfile.name || clinicLookupName || '').trim();
     if (!normalized || !resolvedClinicName || !memberEmail) {
-      Alert.alert('Daten fehlen', 'Backend, Klinikname oder E-Mail fehlt.');
+      Alert.alert('Daten fehlen', 'Backend, MedSpa-Name oder E-Mail fehlt.');
       return;
     }
 
@@ -2195,6 +2467,7 @@ export default function App() {
     (async () => {
       const storedBaseUrl = normalizeUrl(await readSecureValue(STORAGE_KEYS.analyticsBaseUrl));
       const storedClinicName = String(await readSecureValue(STORAGE_KEYS.clinicName)).trim();
+      const storedClinicId = String(await readSecureValue(STORAGE_KEYS.clinicId)).trim();
       const storedOnboardingDone = String(await readSecureValue(STORAGE_KEYS.onboardingDone)).trim();
       const storedName = String(await readSecureValue(STORAGE_KEYS.settingsName)).trim();
       const storedEmail = String(await readSecureValue(STORAGE_KEYS.settingsEmail)).trim();
@@ -2214,7 +2487,11 @@ export default function App() {
       if (storedPatientGuestMode) {
         setPatientGuestMode(true);
       }
-      const initialBaseUrl = storedBaseUrl || defaultBaseUrl || expoDetectedBaseUrl;
+      const initialCandidates = prioritizeApiCandidates(
+        resolveApiCandidates(storedBaseUrl, defaultBaseUrl, expoDetectedBaseUrl),
+        { preferPublic: PREFER_PUBLIC_BACKENDS_DEFAULT }
+      );
+      const initialBaseUrl = initialCandidates[0] || '';
       const initialClinicName = storedClinicName || defaultClinicName;
       if (initialBaseUrl) {
         setAnalyticsBaseUrl(initialBaseUrl);
@@ -2224,20 +2501,29 @@ export default function App() {
         setClinicLookupName(initialClinicName);
         setClinicSearchQuery(initialClinicName);
       }
+      if (storedClinicId) {
+        setClinicLookupId(storedClinicId);
+      }
 
-      if (initialBaseUrl && initialClinicName) {
-        try {
-          await loadClinicBundle(initialBaseUrl, initialClinicName);
-          if (!isActive) return;
-          if (storedOnboardingDone !== '1') {
-            setShowOnboarding(true);
-            setOnboardingStep('clinic');
-          }
-          setIsBootstrapping(false);
-          return;
-        } catch (error) {
-          if (isActive) {
-            setBackendCheckMessage(describeConnectionError(initialBaseUrl, error));
+      if ((initialClinicName || storedClinicId) && initialCandidates.length > 0) {
+        for (const candidate of initialCandidates) {
+          try {
+            await loadClinicBundle(candidate, initialClinicName, storedClinicId);
+            if (!isActive) return;
+            if (storedOnboardingDone !== '1') {
+              setShowOnboarding(true);
+              setOnboardingStep('clinic');
+            }
+            setIsBootstrapping(false);
+            return;
+          } catch (error) {
+            if (isActive) {
+              setBackendCheckMessage(
+                describeConnectionError(candidate, error, {
+                  includeTechnicalDetails: showTechnicalSetup,
+                })
+              );
+            }
           }
         }
       }
@@ -2297,6 +2583,16 @@ export default function App() {
     return () => clearInterval(timerId);
   }, [otpCooldownUntil]);
 
+  useEffect(() => {
+    if (!showOnboarding || onboardingStep !== 'clinic') return undefined;
+    const query = String(clinicSearchQuery || '').trim();
+    if (query.length < 1) return undefined;
+    const timeoutId = setTimeout(() => {
+      void runClinicSearch({ query, silent: true });
+    }, 380);
+    return () => clearTimeout(timeoutId);
+  }, [showOnboarding, onboardingStep, clinicSearchQuery]);
+
   const hasCart = cartItems.length > 0;
   const cartCtaLabel = cartSyncing ? 'Wird hinzugefügt ...' : 'In den Warenkorb';
   const checkoutCtaLabel = checkoutLoading ? 'Wird verarbeitet ...' : 'Jetzt bezahlen';
@@ -2338,15 +2634,15 @@ export default function App() {
           <View style={styles.onboardingCard}>
             <Text style={styles.onboardingEyebrow}>APPOINTMENTIX</Text>
             <Text style={styles.onboardingTitle}>
-              {onboardingStep === 'clinic' ? 'Finde deine Klinik' : 'Telefonnummer bestätigen'}
+              {onboardingStep === 'clinic' ? 'Finde deine MedSpa' : 'Telefonnummer bestätigen'}
             </Text>
             <Text style={styles.onboardingBody}>
               {onboardingStep === 'clinic'
-                ? 'Suche deine MedSpa-Klinik nach Name oder nutze einen QR-/Referral-Code.'
+                ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code.'
                 : 'Melde dich mit Telefonnummer an oder fahre als Gast fort.'}
             </Text>
 
-            {SHOW_TECHNICAL_SETUP && (
+            {ALLOW_TECHNICAL_SETUP && (
               <Pressable
                 style={[styles.secondaryCta, styles.techToggleCta]}
                 onPress={() => setShowTechnicalSetup((prev) => !prev)}
@@ -2357,7 +2653,7 @@ export default function App() {
               </Pressable>
             )}
 
-            {SHOW_TECHNICAL_SETUP && showTechnicalSetup && (
+            {ALLOW_TECHNICAL_SETUP && showTechnicalSetup && (
               <View style={styles.inlineInfoBox}>
                 <Text style={styles.inlineInfoTitle}>
                   {needsBackendProvisioning ? 'Technische Einrichtung (intern)' : 'Backend-URL (bei Netzwerkwechsel)'}
@@ -2388,11 +2684,22 @@ export default function App() {
 
             {onboardingStep === 'clinic' && (
               <View>
-                <Text style={styles.sectionSubTitle}>Klinik suchen</Text>
+                <Text style={styles.sectionSubTitle}>MedSpa suchen</Text>
                 <TextInput
                   style={styles.input}
                   value={clinicSearchQuery}
-                  onChangeText={setClinicSearchQuery}
+                  onChangeText={(value) => {
+                    const next = String(value || '');
+                    setClinicSearchQuery(next);
+                    setBackendCheckMessage('');
+                    if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
+                      setClinicLookupName('');
+                      setClinicLookupId('');
+                    }
+                    if (!next.trim()) {
+                      setClinicSearchResults([]);
+                    }
+                  }}
                   placeholder="MedSpa Name eingeben"
                   placeholderTextColor={THEME.muted}
                   autoCorrect={false}
@@ -2409,32 +2716,44 @@ export default function App() {
                   }}
                 >
                   <Text style={styles.secondaryCtaText}>
-                    {clinicSearchLoading ? 'Suche läuft ...' : 'Klinik suchen'}
+                    {clinicSearchLoading ? 'Suche läuft ...' : 'MedSpa suchen'}
                   </Text>
                 </Pressable>
 
                 {clinicSearchResults.length > 0 && (
                   <View style={styles.searchResultsCard}>
-                    {clinicSearchResults.map((clinic, index) => {
-                      const clinicName = String(clinic?.name || '').trim();
-                      const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
-                      const isLast = index === clinicSearchResults.length - 1;
-                      return (
-                        <Pressable
-                          key={clinicName || `clinic-${index}`}
-                          style={[styles.searchResultRow, isLast && styles.searchResultRowLast]}
-                          onPress={() => selectClinicFromSearch(clinic)}
-                        >
-                          <View style={styles.searchResultMain}>
-                            <Text style={styles.searchResultName}>{clinicName || 'Klinik'}</Text>
-                            <Text style={styles.searchResultMeta}>
-                              {[clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'Klinikprofil'}
-                            </Text>
-                          </View>
-                          <Text style={styles.searchSelectLabel}>{isSelected ? 'Ausgewählt' : 'Wählen'}</Text>
-                        </Pressable>
-                      );
-                    })}
+                    <ScrollView
+                      style={styles.searchResultsScroll}
+                      contentContainerStyle={styles.searchResultsScrollContent}
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator
+                    >
+                      {clinicSearchResults.map((clinic, index) => {
+                        const clinicName = String(clinic?.name || '').trim();
+                        const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
+                        const isLast = index === clinicSearchResults.length - 1;
+                        return (
+                          <Pressable
+                            key={clinicName || `clinic-${index}`}
+                            style={[styles.searchResultRow, isLast && styles.searchResultRowLast]}
+                            onPress={() => selectClinicFromSearch(clinic)}
+                          >
+                            <View style={styles.searchResultMain}>
+                              <Text style={styles.searchResultName}>{clinicName || 'MedSpa'}</Text>
+                              <Text style={styles.searchResultMeta}>
+                                {[clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'MedSpa-Profil'}
+                              </Text>
+                            </View>
+                            <Text style={styles.searchSelectLabel}>{isSelected ? 'Ausgewählt' : 'Wählen'}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+                {String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSearchResults.length === 0 && (
+                  <View style={styles.searchResultsCard}>
+                    <Text style={styles.searchEmptyText}>Keine MedSpa-Treffer. Bitte Eingabe anpassen.</Text>
                   </View>
                 )}
 
@@ -2458,7 +2777,7 @@ export default function App() {
                 </Pressable>
 
                 <Text style={styles.analyticsStatus}>
-                  Ausgewählte Klinik: {clinicLookupName || 'Noch nicht ausgewählt'}
+                  Ausgewählte MedSpa: {clinicLookupName || 'Noch nicht ausgewählt'}
                 </Text>
 
                 <Pressable
@@ -2551,12 +2870,14 @@ export default function App() {
                     setOnboardingStep('clinic');
                   }}
                 >
-                  <Text style={styles.secondaryCtaText}>Zurück zur Kliniksuche</Text>
+                  <Text style={styles.secondaryCtaText}>Zurück zur MedSpa-Suche</Text>
                 </Pressable>
               </View>
             )}
 
-            {!!backendCheckMessage && <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>}
+            {!!backendCheckMessage && onboardingStep === 'clinic' && (
+              <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>
+            )}
 
             <Pressable
               style={styles.secondaryCta}
@@ -2637,7 +2958,7 @@ export default function App() {
                 </View>
               ))}
 
-              <Text style={styles.sectionTitle}>Klinik</Text>
+              <Text style={styles.sectionTitle}>MedSpa</Text>
               <View style={styles.clinicCard}>
                 <View style={styles.mapMock}>
                   <Text style={styles.mapMockLabel}>Map</Text>
@@ -2747,7 +3068,7 @@ export default function App() {
                   {browseItems.length === 0 && (
                     <View style={styles.emptyCard}>
                       <Text style={styles.emptyTitle}>Keine Behandlungen in dieser Kategorie</Text>
-                      <Text style={styles.emptyBody}>Passe später den Klinik-Katalog im Backend an.</Text>
+                      <Text style={styles.emptyBody}>Passe später den MedSpa-Katalog im Backend an.</Text>
                     </View>
                   )}
                 </View>
@@ -3033,7 +3354,7 @@ export default function App() {
               <View style={styles.inlineInfoBox}>
                 <Text style={styles.inlineInfoTitle}>So funktioniert es live</Text>
                 <Text style={styles.inlineInfoText}>• Empfang scannt den QR aus der App</Text>
-                <Text style={styles.inlineInfoText}>• Besuch wird in der Klinik-Historie verbucht</Text>
+                <Text style={styles.inlineInfoText}>• Besuch wird in der MedSpa-Historie verbucht</Text>
                 <Text style={styles.inlineInfoText}>• Punkte werden automatisch gutgeschrieben</Text>
               </View>
             </View>
@@ -3307,19 +3628,19 @@ export default function App() {
                     keyboardType="email-address"
                   />
 
-                  <Text style={styles.sectionSubTitle}>Klinik-App Verbindung</Text>
-                  <Text style={styles.analyticsStatus}>Klinik: {clinicProfile.name || 'Nicht gesetzt'}</Text>
+                  <Text style={styles.sectionSubTitle}>MedSpa-App Verbindung</Text>
+                  <Text style={styles.analyticsStatus}>MedSpa: {clinicProfile.name || 'Nicht gesetzt'}</Text>
                   <Pressable
                     style={styles.secondaryCta}
                     onPress={async () => {
                       try {
                         await loadClinicBundle();
                       } catch (error) {
-                        Alert.alert('Klinikdaten konnten nicht geladen werden', String(error?.message || error));
+                        Alert.alert('MedSpa-Daten konnten nicht geladen werden', String(error?.message || error));
                       }
                     }}
                   >
-                    <Text style={styles.secondaryCtaText}>Klinikdaten neu laden</Text>
+                    <Text style={styles.secondaryCtaText}>MedSpa-Daten neu laden</Text>
                   </Pressable>
                   <Pressable
                     style={styles.secondaryCta}
@@ -3334,11 +3655,11 @@ export default function App() {
                   </Pressable>
                   <Text style={styles.analyticsStatus}>
                     {analyticsConnected
-                      ? 'Klinikdaten sind verbunden.'
-                      : 'Klinikdaten sind aktuell nicht verbunden.'}
+                      ? 'MedSpa-Daten sind verbunden.'
+                      : 'MedSpa-Daten sind aktuell nicht verbunden.'}
                   </Text>
                   <Text style={styles.analyticsStatus}>
-                    Klinik-Metriken und Kampagnen werden ausschließlich im Web-Dashboard verwaltet.
+                    MedSpa-Metriken und Kampagnen werden ausschließlich im Web-Dashboard verwaltet.
                   </Text>
                   {!!backendCheckMessage && <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>}
                   <Text style={styles.analyticsStatus}>
@@ -3354,7 +3675,7 @@ export default function App() {
                       void disconnectClinicSession();
                     }}
                   >
-                    <Text style={styles.secondaryCtaText}>Von Klinik abmelden</Text>
+                    <Text style={styles.secondaryCtaText}>Von MedSpa abmelden</Text>
                   </Pressable>
 
                   <View style={styles.inlineInfoBox}>
@@ -5112,6 +5433,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     overflow: 'hidden',
   },
+  searchResultsScroll: {
+    maxHeight: 196,
+  },
+  searchResultsScrollContent: {
+    paddingVertical: 2,
+  },
   searchResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -5141,6 +5468,12 @@ const styles = StyleSheet.create({
     color: THEME.brand,
     fontWeight: '700',
     fontSize: 12,
+  },
+  searchEmptyText: {
+    color: THEME.muted,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    fontSize: 13,
   },
   inlineInfoBox: {
     marginTop: 8,

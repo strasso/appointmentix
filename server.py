@@ -181,6 +181,16 @@ except ValueError:
 
 MOBILE_OTP_DEBUG = os.getenv("MOBILE_OTP_DEBUG", "true").lower() in {"1", "true", "yes"}
 MOBILE_OTP_BRAND_NAME = str(os.getenv("MOBILE_OTP_BRAND_NAME", "Appointmentix")).strip() or "Appointmentix"
+MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE = os.getenv(
+  "MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE",
+  "false",
+).lower() in {"1", "true", "yes"}
+BOOTSTRAP_MEDSPA_ENABLED = os.getenv("BOOTSTRAP_MEDSPA_ENABLED", "true").lower() in {"1", "true", "yes"}
+BOOTSTRAP_MEDSPA_NAME = str(os.getenv("BOOTSTRAP_MEDSPA_NAME", "Moser Milani Medical Spa")).strip()
+BOOTSTRAP_MEDSPA_WEBSITE = str(os.getenv("BOOTSTRAP_MEDSPA_WEBSITE", "")).strip()
+BOOTSTRAP_MEDSPA_LOGO_URL = str(os.getenv("BOOTSTRAP_MEDSPA_LOGO_URL", "")).strip()
+BOOTSTRAP_MEDSPA_BRAND_COLOR = str(os.getenv("BOOTSTRAP_MEDSPA_BRAND_COLOR", "#163A4A")).strip()
+BOOTSTRAP_MEDSPA_ACCENT_COLOR = str(os.getenv("BOOTSTRAP_MEDSPA_ACCENT_COLOR", "#EB6C13")).strip()
 
 DEFAULT_MOBILE_CATEGORIES = [
   {"id": "gesicht", "label": "Gesicht"},
@@ -458,6 +468,73 @@ def ensure_clinic_memberships(conn: DBConnectionAdapter) -> None:
     WHERE role IS NULL OR role = ''
     """
   )
+
+
+def ensure_bootstrap_medspa(conn: DBConnectionAdapter) -> None:
+  if not BOOTSTRAP_MEDSPA_ENABLED:
+    return
+  clinic_name = str(BOOTSTRAP_MEDSPA_NAME or "").strip()
+  if len(clinic_name) < 2:
+    return
+
+  existing = conn.execute(
+    """
+    SELECT id, name
+    FROM clinics
+    WHERE LOWER(name) = LOWER(?)
+    LIMIT 1
+    """,
+    (clinic_name,),
+  ).fetchone()
+
+  if existing:
+    ensure_clinic_catalog_row(conn, int(existing["id"]), str(existing["name"]))
+    return
+
+  brand_color = (
+    BOOTSTRAP_MEDSPA_BRAND_COLOR
+    if HEX_COLOR_PATTERN.match(BOOTSTRAP_MEDSPA_BRAND_COLOR or "")
+    else "#163A4A"
+  )
+  accent_color = (
+    BOOTSTRAP_MEDSPA_ACCENT_COLOR
+    if HEX_COLOR_PATTERN.match(BOOTSTRAP_MEDSPA_ACCENT_COLOR or "")
+    else "#EB6C13"
+  )
+
+  clinic_id = insert_and_get_id(
+    conn,
+    """
+    INSERT INTO clinics (
+      name,
+      logo_url,
+      website,
+      brand_color,
+      accent_color,
+      font_family,
+      design_preset,
+      calendly_url,
+      subscription_status,
+      stripe_customer_id,
+      stripe_subscription_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """,
+    (
+      clinic_name,
+      BOOTSTRAP_MEDSPA_LOGO_URL,
+      BOOTSTRAP_MEDSPA_WEBSITE,
+      brand_color,
+      accent_color,
+      "Gabarito, DM Sans, sans-serif",
+      "clean",
+      CALENDLY_URL,
+      "inactive",
+      None,
+      None,
+    ),
+  )
+  ensure_clinic_catalog_row(conn, int(clinic_id), clinic_name)
 
 
 def init_db() -> None:
@@ -1066,6 +1143,7 @@ def init_db() -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_users_clinic_id ON users(clinic_id)")
 
     ensure_clinic_memberships(conn)
+    ensure_bootstrap_medspa(conn)
     ensure_clinic_catalog_rows(conn)
 
 
@@ -2186,15 +2264,22 @@ def issue_mobile_phone_otp(clinic_id: int, phone_e164: str):
     used_debug_delivery = False
 
     if delivery_status != "sent":
-      with get_db() as conn:
-        conn.execute("DELETE FROM mobile_phone_otps WHERE request_id = ?", (request_id,))
-      return (
-        mobile_otp_error_payload(
-          delivery_error or "OTP-SMS konnte nicht gesendet werden.",
-          "OTP_DELIVERY_FAILED",
-        ),
-        503,
-      )
+      if MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE:
+        # Optional local fallback for pilots/dev environments without stable SMS provisioning.
+        delivery_status = "debug_fallback"
+        delivery_error = delivery_error or "SMS-Zustellung fehlgeschlagen. Debug-Fallback aktiv."
+        provider_message_id = ""
+        used_debug_delivery = True
+      else:
+        with get_db() as conn:
+          conn.execute("DELETE FROM mobile_phone_otps WHERE request_id = ?", (request_id,))
+        return (
+          mobile_otp_error_payload(
+            delivery_error or "OTP-SMS konnte nicht gesendet werden.",
+            "OTP_DELIVERY_FAILED",
+          ),
+          503,
+        )
 
   with get_db() as conn:
     conn.execute(
@@ -4846,7 +4931,7 @@ def admin_clinic_detail(clinic_id: int):
 
   clinic_row = get_clinic_row_by_id(clinic_id)
   if not clinic_row:
-    return jsonify({"error": "Klinik nicht gefunden."}), 404
+    return jsonify({"error": "MedSpa nicht gefunden."}), 404
 
   with get_db() as conn:
     member_rows = conn.execute(
@@ -4938,7 +5023,7 @@ def admin_update_subscription(clinic_id: int):
 
   clinic_row = get_clinic_row_by_id(clinic_id)
   if not clinic_row:
-    return jsonify({"error": "Klinik nicht gefunden."}), 404
+    return jsonify({"error": "MedSpa nicht gefunden."}), 404
 
   payload = request.get_json(silent=True) or {}
   subscription_status = str(payload.get("subscriptionStatus", "")).strip().lower()
@@ -5313,19 +5398,29 @@ def me():
 @app.get("/api/mobile/clinic-bundle")
 def mobile_clinic_bundle():
   clinic_name = str(request.args.get("clinicName", "")).strip()
+  clinic_id_raw = str(request.args.get("clinicId", "")).strip()
   clinic_row = None
+  clinic_id = 0
 
-  if clinic_name:
+  try:
+    clinic_id = int(clinic_id_raw) if clinic_id_raw else 0
+  except ValueError:
+    clinic_id = 0
+
+  if clinic_id > 0:
+    clinic_row = get_clinic_row_by_id(clinic_id)
+
+  if clinic_row is None and clinic_name:
     clinic_row = get_clinic_row_by_name(clinic_name)
-  else:
+  elif clinic_row is None:
     user_row = get_current_user_row()
     if user_row and user_row["clinic_id"]:
       clinic_row = get_clinic_row_by_id(int(user_row["clinic_id"]))
 
   if not clinic_row:
-    if clinic_name:
-      return jsonify({"error": "Klinik nicht gefunden."}), 404
-    return jsonify({"error": "Bitte clinicName übergeben oder anmelden."}), 400
+    if clinic_name or clinic_id > 0:
+      return jsonify({"error": "MedSpa nicht gefunden."}), 404
+    return jsonify({"error": "Bitte clinicName/clinicId übergeben oder anmelden."}), 400
 
   catalog = load_clinic_catalog_bundle(clinic_row)
   clinic_title = str(clinic_row["name"])
@@ -5377,7 +5472,7 @@ def mobile_clinics_resolve_code():
 
   clinic_row = resolve_clinic_row_from_mobile_code(raw_code)
   if not clinic_row:
-    return jsonify({"error": "Klinik-Code konnte nicht aufgelöst werden."}), 404
+    return jsonify({"error": "MedSpa-Code konnte nicht aufgelöst werden."}), 404
 
   return jsonify(
     {
@@ -5388,20 +5483,38 @@ def mobile_clinics_resolve_code():
   )
 
 
+def resolve_mobile_clinic_from_payload(payload: dict) -> tuple[object | None, str]:
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  clinic_id_raw = payload.get("clinicId")
+
+  clinic_row = None
+  clinic_id_value = 0
+  try:
+    clinic_id_value = int(str(clinic_id_raw or "").strip())
+  except (TypeError, ValueError):
+    clinic_id_value = 0
+
+  if clinic_id_value > 0:
+    clinic_row = get_clinic_row_by_id(clinic_id_value)
+  if clinic_row is None and len(clinic_name) >= 2:
+    clinic_row = get_clinic_row_by_name(clinic_name)
+
+  return clinic_row, clinic_name
+
+
 @app.post("/api/mobile/auth/otp/request")
 def mobile_auth_otp_request():
   payload = request.get_json(silent=True) or {}
-  clinic_name = str(payload.get("clinicName", "")).strip()
+  clinic_row, clinic_name = resolve_mobile_clinic_from_payload(payload)
   phone_e164 = sanitize_phone_e164(payload.get("phone"))
 
-  if len(clinic_name) < 2:
-    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if clinic_row is None and len(clinic_name) < 2 and not payload.get("clinicId"):
+    return jsonify({"error": "clinicName oder clinicId ist erforderlich."}), 400
   if not phone_e164:
     return jsonify({"error": "Bitte gib eine gültige Telefonnummer im internationalen Format an."}), 400
 
-  clinic_row = get_clinic_row_by_name(clinic_name)
   if not clinic_row:
-    return jsonify({"error": "Klinik nicht gefunden."}), 404
+    return jsonify({"error": "MedSpa nicht gefunden."}), 404
 
   clinic_id = int(clinic_row["id"])
   response_payload, status_code = issue_mobile_phone_otp(clinic_id, phone_e164)
@@ -5411,17 +5524,16 @@ def mobile_auth_otp_request():
 @app.post("/api/mobile/auth/otp/resend")
 def mobile_auth_otp_resend():
   payload = request.get_json(silent=True) or {}
-  clinic_name = str(payload.get("clinicName", "")).strip()
+  clinic_row, clinic_name = resolve_mobile_clinic_from_payload(payload)
   phone_e164 = sanitize_phone_e164(payload.get("phone"))
 
-  if len(clinic_name) < 2:
-    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if clinic_row is None and len(clinic_name) < 2 and not payload.get("clinicId"):
+    return jsonify({"error": "clinicName oder clinicId ist erforderlich."}), 400
   if not phone_e164:
     return jsonify({"error": "Bitte gib eine gültige Telefonnummer im internationalen Format an."}), 400
 
-  clinic_row = get_clinic_row_by_name(clinic_name)
   if not clinic_row:
-    return jsonify({"error": "Klinik nicht gefunden."}), 404
+    return jsonify({"error": "MedSpa nicht gefunden."}), 404
 
   response_payload, status_code = issue_mobile_phone_otp(int(clinic_row["id"]), phone_e164)
   return jsonify(response_payload), status_code
@@ -5430,13 +5542,13 @@ def mobile_auth_otp_resend():
 @app.post("/api/mobile/auth/otp/verify")
 def mobile_auth_otp_verify():
   payload = request.get_json(silent=True) or {}
-  clinic_name = str(payload.get("clinicName", "")).strip()
+  clinic_row, clinic_name = resolve_mobile_clinic_from_payload(payload)
   phone_e164 = sanitize_phone_e164(payload.get("phone"))
   request_id = str(payload.get("requestId", "")).strip()
   code = normalize_mobile_otp_code(payload.get("code"))
 
-  if len(clinic_name) < 2:
-    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if clinic_row is None and len(clinic_name) < 2 and not payload.get("clinicId"):
+    return jsonify({"error": "clinicName oder clinicId ist erforderlich."}), 400
   if not phone_e164:
     return jsonify({"error": "Bitte gib eine gültige Telefonnummer an."}), 400
   if len(request_id) < 8:
@@ -5449,7 +5561,6 @@ def mobile_auth_otp_verify():
       )
     ), 400
 
-  clinic_row = get_clinic_row_by_name(clinic_name)
   if not clinic_row:
     return jsonify({"error": "Klinik nicht gefunden."}), 404
 

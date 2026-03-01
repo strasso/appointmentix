@@ -77,6 +77,15 @@ Bei aktivem Backend laufen Add-to-Cart und Checkout serverseitig, inkl. produkti
   - `OTP_EXPIRED`
   - `OTP_ATTEMPTS_EXCEEDED`
   - `OTP_REQUEST_NOT_FOUND`
+  - `OTP_DELIVERY_FAILED`
+
+### Pilot-/Fallback-Modus ohne funktionierende SMS-Zustellung
+
+- `MOBILE_OTP_DEBUG=false` kann aktiv bleiben.
+- Wenn Twilio temporär ausfällt oder noch nicht final freigeschaltet ist:
+  - `MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE=true`
+- Dann liefert das Backend bei Delivery-Fehlern trotzdem einen `debugCode` (nur für lokale/pilotierte Umgebungen), damit der Flow testbar bleibt.
+- Für echten Go-Live wieder auf `false` setzen.
 
 ### OTP UX-Verhalten (App)
 
