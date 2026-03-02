@@ -1444,6 +1444,39 @@ def serialize_admin_clinic(row) -> dict:
   }
 
 
+def resolve_public_clinic_profile(clinic_name: str) -> dict:
+  normalized = re.sub(r"\s+", " ", str(clinic_name or "").strip().lower())
+  normalized_compact = normalized.replace(" ", "")
+  profiles = {
+    "moser milani medical spa": {
+      "address": "Schottengasse 7, 1010 Wien",
+      "city": "Wien",
+      "phone": "+43 1 236 13 36",
+      "openingHours": "Mo - Sa, 09:00 - 17:00",
+      "latitude": 48.210888,
+      "longitude": 16.367784,
+    },
+  }
+  if normalized in profiles:
+    return profiles[normalized]
+  # tolerate minor spacing/typing drift ("Moser  Milani...", "MoserMilani...")
+  for key, profile in profiles.items():
+    key_compact = key.replace(" ", "")
+    if key in normalized or normalized in key or key_compact in normalized_compact:
+      return profile
+  return profiles.get(
+    normalized,
+    {
+      "address": "",
+      "city": "",
+      "phone": "",
+      "openingHours": "Mo - Sa, 09:00 - 17:00",
+      "latitude": None,
+      "longitude": None,
+    },
+  )
+
+
 def get_clinic_row_by_name(clinic_name: str):
   normalized = clinic_name.strip().lower()
   if not normalized:
@@ -1505,11 +1538,17 @@ def get_clinic_row_by_name(clinic_name: str):
 
 def serialize_public_clinic(row) -> dict:
   name = str(row["name"] or "")
+  profile = resolve_public_clinic_profile(name)
   return {
     "id": row["id"],
     "name": name,
     "shortName": build_clinic_short_name(name),
-    "city": "",
+    "city": profile["city"],
+    "address": profile["address"],
+    "phone": profile["phone"],
+    "openingHours": profile["openingHours"],
+    "latitude": profile["latitude"],
+    "longitude": profile["longitude"],
     "website": row["website"],
     "logoUrl": row["logo_url"],
     "brandColor": row["brand_color"],
@@ -5423,23 +5462,11 @@ def mobile_clinic_bundle():
     return jsonify({"error": "Bitte clinicName/clinicId übergeben oder anmelden."}), 400
 
   catalog = load_clinic_catalog_bundle(clinic_row)
-  clinic_title = str(clinic_row["name"])
+  public_clinic = serialize_public_clinic(clinic_row)
 
   return jsonify(
     {
-      "clinic": {
-        "id": clinic_row["id"],
-        "name": clinic_title,
-        "shortName": build_clinic_short_name(clinic_title),
-        "address": "",
-        "openingHours": "Mo - Sa, 09:00 - 17:00",
-        "phone": "",
-        "city": "",
-        "website": clinic_row["website"],
-        "logoUrl": clinic_row["logo_url"],
-        "brandColor": clinic_row["brand_color"],
-        "accentColor": clinic_row["accent_color"],
-      },
+      "clinic": public_clinic,
       "catalog": catalog,
       "fetchedAt": utc_now_iso(),
     }

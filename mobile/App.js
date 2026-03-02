@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import Constants from 'expo-constants';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
 import {
   ActivityIndicator,
@@ -9,6 +10,7 @@ import {
   Easing,
   Image,
   Pressable,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -18,19 +20,28 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker } from 'react-native-maps';
 
 const THEME = {
-  background: '#F5F6FA',
+  background: '#F4F6FB',
   surface: '#FFFFFF',
-  ink: '#1F2430',
-  muted: '#7C8393',
-  brand: '#EB6BA4',
-  brandSoft: '#FBE6F1',
-  accent: '#5CA3A8',
+  ink: '#121826',
+  muted: '#667189',
+  brand: '#C75D9A',
+  brandSoft: '#F9E8F2',
+  accent: '#4AA3B3',
   good: '#1F8E52',
-  border: '#E9ECF2',
-  rewardsA: '#71BAC0',
-  rewardsB: '#3F8F97',
+  border: '#E6EAF3',
+  rewardsA: '#79C6CD',
+  rewardsB: '#458F97',
+};
+
+const SOFT_CARD_SHADOW = {
+  shadowColor: '#111A2A',
+  shadowOpacity: 0.08,
+  shadowRadius: 20,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 3,
 };
 
 const CLINIC = {
@@ -40,7 +51,41 @@ const CLINIC = {
   openingHours: 'Mo - Sa, 09:00 - 17:00',
   phone: '+43 1 236 13 36',
   city: 'Wien',
+  latitude: 48.210888,
+  longitude: 16.367784,
 };
+
+const DEFAULT_MAP_REGION = {
+  latitude: 48.2082,
+  longitude: 16.3738,
+  latitudeDelta: 0.018,
+  longitudeDelta: 0.018,
+};
+
+const LOCAL_MEDSPA_DIRECTORY = [
+  {
+    id: 'local-moser-milani',
+    name: 'Moser Milani Medical Spa',
+    city: 'Wien',
+    website: 'https://milani.at',
+    logoUrl: '',
+    brandColor: '#16A34A',
+    accentColor: '#EB6C13',
+    latitude: 48.210888,
+    longitude: 16.367784,
+  },
+  {
+    id: 'local-muster',
+    name: 'Musterklinik',
+    city: 'Wien',
+    website: '',
+    logoUrl: '',
+    brandColor: THEME.brand,
+    accentColor: THEME.accent,
+    latitude: DEFAULT_MAP_REGION.latitude,
+    longitude: DEFAULT_MAP_REGION.longitude,
+  },
+];
 
 // White-label defaults for patient app (optional):
 // If set, the app loads clinic bundle automatically on first launch.
@@ -431,6 +476,92 @@ function resolveClinicNameFromQrOrCode(rawValue) {
     return decodeURIComponent(raw.slice('appointmentix://clinic/'.length)).trim();
   }
   return raw;
+}
+
+function resolveClinicCoordinates(clinicLike) {
+  const latitude = Number(clinicLike?.latitude);
+  const longitude = Number(clinicLike?.longitude);
+  if (
+    Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180
+  ) {
+    return { latitude, longitude };
+  }
+  return {
+    latitude: DEFAULT_MAP_REGION.latitude,
+    longitude: DEFAULT_MAP_REGION.longitude,
+  };
+}
+
+function buildLocalClinicFallbackResults(query, clinicProfile, clinicLookupName, clinicLookupId, baseUrl) {
+  const needle = String(query || '').trim().toLowerCase();
+  const candidatePool = [
+    ...LOCAL_MEDSPA_DIRECTORY,
+    {
+      id: clinicLookupId || '',
+      name: clinicLookupName || '',
+      city: clinicProfile?.city || '',
+      website: clinicProfile?.website || '',
+      logoUrl: clinicProfile?.logoUrl || '',
+      brandColor: clinicProfile?.brandColor || '',
+      accentColor: clinicProfile?.accentColor || '',
+      latitude: clinicProfile?.latitude,
+      longitude: clinicProfile?.longitude,
+    },
+    {
+      id: '',
+      name: clinicProfile?.name || '',
+      city: clinicProfile?.city || '',
+      website: clinicProfile?.website || '',
+      logoUrl: clinicProfile?.logoUrl || '',
+      brandColor: clinicProfile?.brandColor || '',
+      accentColor: clinicProfile?.accentColor || '',
+      latitude: clinicProfile?.latitude,
+      longitude: clinicProfile?.longitude,
+    },
+    {
+      id: '',
+      name: CLINIC.name,
+      city: CLINIC.city,
+      website: '',
+      logoUrl: '',
+      brandColor: THEME.brand,
+      accentColor: THEME.accent,
+      latitude: CLINIC.latitude,
+      longitude: CLINIC.longitude,
+    },
+  ];
+
+  const unique = [];
+  const seen = new Set();
+  for (const entry of candidatePool) {
+    const name = String(entry?.name || '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({
+      ...entry,
+      _sourceBaseUrl: normalizeUrl(baseUrl || '') || '',
+    });
+  }
+
+  if (!needle) return unique;
+  return unique.filter((entry) => String(entry?.name || '').toLowerCase().includes(needle));
+}
+
+function clinicMatchRank(name, query) {
+  const safeName = String(name || '').trim().toLowerCase();
+  const safeQuery = String(query || '').trim().toLowerCase();
+  if (!safeQuery) return 0;
+  if (safeName === safeQuery) return 0;
+  if (safeName.startsWith(safeQuery)) return 1;
+  if (safeName.includes(safeQuery)) return 2;
+  return 3;
 }
 
 function absolutizeMediaUrl(baseUrl, rawUrl) {
@@ -973,14 +1104,20 @@ function TopHeader({
       </View>
       <View style={styles.headerIcons}>
         <Pressable
-          style={styles.iconButtonWrap}
+          style={({ pressed }) => [
+            styles.iconButtonWrap,
+            pressed && styles.tapScaleSoft,
+          ]}
           onPress={onSearchPress}
           hitSlop={8}
         >
           <Ionicons name="search-outline" size={22} color="#5E6676" />
         </Pressable>
         <Pressable
-          style={styles.iconButtonWrap}
+          style={({ pressed }) => [
+            styles.iconButtonWrap,
+            pressed && styles.tapScaleSoft,
+          ]}
           onPress={onCartPress}
           hitSlop={8}
         >
@@ -999,7 +1136,11 @@ function TopHeader({
 function TabButton({ label, active, onPress }) {
   return (
     <Pressable
-      style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+      style={({ pressed }) => [
+        styles.segmentBtn,
+        active && styles.segmentBtnActive,
+        pressed && styles.tapScaleSoft,
+      ]}
       onPress={onPress}
     >
       <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
@@ -1009,7 +1150,14 @@ function TabButton({ label, active, onPress }) {
 
 function ShopTabButton({ label, active, onPress }) {
   return (
-    <Pressable style={styles.shopTabBtn} onPress={onPress}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.shopTabBtn,
+        active && styles.shopTabBtnActive,
+        pressed && styles.tapScaleSoft,
+      ]}
+      onPress={onPress}
+    >
       <Text style={[styles.shopTabText, active && styles.shopTabTextActive]}>{label}</Text>
       <View style={[styles.shopTabUnderline, active && styles.shopTabUnderlineActive]} />
     </Pressable>
@@ -1027,7 +1175,11 @@ function BottomTab({ label, active, onPress }) {
   const iconSpec = iconByTab[label] || { active: 'ellipse', inactive: 'ellipse-outline' };
   return (
     <Pressable
-      style={[styles.bottomTabBtn, active && styles.bottomTabBtnActive]}
+      style={({ pressed }) => [
+        styles.bottomTabBtn,
+        active && styles.bottomTabBtnActive,
+        pressed && styles.tapScaleSoft,
+      ]}
       onPress={onPress}
     >
       <Ionicons
@@ -1043,7 +1195,13 @@ function BottomTab({ label, active, onPress }) {
 function TreatmentCard({ treatment, onPress }) {
   const imageUrl = preferredTreatmentImage(treatment);
   return (
-    <Pressable style={styles.treatmentCard} onPress={() => onPress(treatment)}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.treatmentCard,
+        pressed && styles.tapScaleCard,
+      ]}
+      onPress={() => onPress(treatment)}
+    >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.treatmentImageReal} />
       ) : (
@@ -1096,6 +1254,7 @@ export default function App() {
   const [clinicSearchQuery, setClinicSearchQuery] = useState('');
   const [clinicSearchResults, setClinicSearchResults] = useState([]);
   const [clinicSearchLoading, setClinicSearchLoading] = useState(false);
+  const [clinicDropdownOpen, setClinicDropdownOpen] = useState(false);
   const [onboardingBaseUrl, setOnboardingBaseUrl] = useState('');
   const [backendCheckLoading, setBackendCheckLoading] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
@@ -1218,6 +1377,48 @@ export default function App() {
     return [...treatmentMatches, ...membershipMatches, ...articleMatches].slice(0, 12);
   }, [headerSearchQuery, treatmentCategories, treatments, memberships, homeArticles]);
 
+  const clinicSuggestionResults = useMemo(() => {
+    const query = String(clinicSearchQuery || '').trim();
+    const queryLower = query.toLowerCase();
+    const fallback = buildLocalClinicFallbackResults(
+      query,
+      clinicProfile,
+      clinicLookupName,
+      clinicLookupId,
+      normalizeUrl(onboardingBaseUrl || analyticsBaseUrl || APP_DEFAULT_BACKEND_URL)
+    );
+    const merged = [...clinicSearchResults, ...fallback];
+    const seen = new Set();
+    const unique = [];
+    for (const entry of merged) {
+      const name = String(entry?.name || '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(entry);
+    }
+    const filtered = queryLower
+      ? unique.filter((entry) => String(entry?.name || '').toLowerCase().includes(queryLower))
+      : unique;
+    filtered.sort((a, b) => {
+      const aName = String(a?.name || '');
+      const bName = String(b?.name || '');
+      const rankDelta = clinicMatchRank(aName, queryLower) - clinicMatchRank(bName, queryLower);
+      if (rankDelta !== 0) return rankDelta;
+      return aName.localeCompare(bName, 'de', { sensitivity: 'base' });
+    });
+    return filtered.slice(0, 25);
+  }, [
+    clinicSearchQuery,
+    clinicSearchResults,
+    clinicProfile,
+    clinicLookupName,
+    clinicLookupId,
+    onboardingBaseUrl,
+    analyticsBaseUrl,
+  ]);
+
   const selectedCategory = useMemo(() => {
     return (
       treatmentCategories.find((item) => String(item.id || '') === String(categoryId || ''))
@@ -1259,6 +1460,19 @@ export default function App() {
   const resolvedOnboardingBaseUrl = normalizeUrl(onboardingBaseUrl || analyticsBaseUrl || APP_DEFAULT_BACKEND_URL);
   const needsBackendProvisioning = !resolvedOnboardingBaseUrl;
   const shouldPreferPublicBackends = PREFER_PUBLIC_BACKENDS_DEFAULT && !showTechnicalSetup;
+  const clinicCoordinates = useMemo(
+    () => resolveClinicCoordinates(clinicProfile),
+    [clinicProfile]
+  );
+  const clinicMapRegion = useMemo(
+    () => ({
+      latitude: clinicCoordinates.latitude,
+      longitude: clinicCoordinates.longitude,
+      latitudeDelta: DEFAULT_MAP_REGION.latitudeDelta,
+      longitudeDelta: DEFAULT_MAP_REGION.longitudeDelta,
+    }),
+    [clinicCoordinates]
+  );
 
   async function runWithBaseUrlFallback(baseUrlHint, runner, options = {}) {
     const preferPublic = options.preferPublic === true;
@@ -1612,6 +1826,7 @@ export default function App() {
   async function runClinicSearch(options = {}) {
     const queryValue = String(options.query ?? clinicSearchQuery ?? '').trim();
     const silent = options.silent === true;
+    const allowEmpty = options.allowEmpty === true;
     const candidates = prioritizeApiCandidates(
       resolveApiCandidates(
         showOnboarding ? onboardingBaseUrl || analyticsBaseUrl : analyticsBaseUrl,
@@ -1621,14 +1836,28 @@ export default function App() {
       { preferPublic: shouldPreferPublicBackends }
     );
     if (candidates.length === 0) {
-      setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
+      const localFallback = buildLocalClinicFallbackResults(
+        queryValue,
+        clinicProfile,
+        clinicLookupName,
+        clinicLookupId,
+        ''
+      );
+      if (localFallback.length > 0) {
+        setClinicSearchResults(localFallback);
+        setClinicDropdownOpen(true);
+        setBackendCheckMessage('Lokale MedSpa-Liste aktiv.');
+      } else {
+        setBackendCheckMessage('Service aktuell nicht erreichbar. Bitte später erneut versuchen.');
+      }
       return;
     }
-    if (queryValue.length < 1) {
+    if (queryValue.length < 1 && !allowEmpty) {
       setClinicSearchResults([]);
       setBackendCheckMessage('');
       return;
     }
+    const effectiveQuery = queryValue.length < 1 ? '' : queryValue;
 
     const requestToken = Date.now();
     clinicSearchRequestRef.current = requestToken;
@@ -1638,20 +1867,47 @@ export default function App() {
     try {
       for (const baseUrl of candidates) {
         try {
-          const response = await fetchClinicSearch(baseUrl, queryValue, 12);
+          const response = await fetchClinicSearch(baseUrl, effectiveQuery, 12);
           if (clinicSearchRequestRef.current !== requestToken) {
             return;
           }
-          const clinics = (Array.isArray(response.clinics) ? response.clinics : []).map((entry) => ({
+          let clinics = (Array.isArray(response.clinics) ? response.clinics : []).map((entry) => ({
             ...entry,
             _sourceBaseUrl: baseUrl,
           }));
+          if (clinics.length === 0 && queryValue.length > 0) {
+            try {
+              const broadResponse = await fetchClinicSearch(baseUrl, '', 25);
+              const allClinics = Array.isArray(broadResponse.clinics) ? broadResponse.clinics : [];
+              const needle = queryValue.toLowerCase();
+              clinics = allClinics
+                .filter((entry) => String(entry?.name || '').trim().toLowerCase().includes(needle))
+                .map((entry) => ({
+                  ...entry,
+                  _sourceBaseUrl: baseUrl,
+                }));
+            } catch {
+              // fallback bleibt leer
+            }
+          }
           if (clinics.length === 0) {
-            lastEmptyBaseUrl = baseUrl;
-            continue;
+            const localFallback = buildLocalClinicFallbackResults(
+              queryValue,
+              clinicProfile,
+              clinicLookupName,
+              clinicLookupId,
+              baseUrl
+            );
+            if (localFallback.length > 0) {
+              clinics = localFallback;
+            } else {
+              lastEmptyBaseUrl = baseUrl;
+              continue;
+            }
           }
 
           setClinicSearchResults(clinics);
+          setClinicDropdownOpen(true);
           setBackendCheckMessage(
             showTechnicalSetup ? `MedSpa-Suche verbunden über: ${baseUrl}` : 'MedSpa-Suche verbunden.'
           );
@@ -1671,7 +1927,28 @@ export default function App() {
         return;
       }
       setClinicSearchResults([]);
+      if (queryValue.length < 1) {
+        setBackendCheckMessage('');
+        return;
+      }
       if (lastError) {
+        const localFallback = buildLocalClinicFallbackResults(
+          queryValue,
+          clinicProfile,
+          clinicLookupName,
+          clinicLookupId,
+          candidates[0]
+        );
+        if (localFallback.length > 0) {
+          setClinicSearchResults(localFallback);
+          setClinicDropdownOpen(true);
+          if (showTechnicalSetup) {
+            setBackendCheckMessage(`Lokale MedSpa-Liste aktiv (Backend aktuell nicht erreichbar).`);
+          } else {
+            setBackendCheckMessage('');
+          }
+          return;
+        }
         if (!silent) {
           const helpMessage = describeConnectionError(candidates[0], lastError, {
             includeTechnicalDetails: showTechnicalSetup,
@@ -1681,7 +1958,33 @@ export default function App() {
         return;
       }
       if (lastEmptyBaseUrl && showTechnicalSetup) {
+        const localFallback = buildLocalClinicFallbackResults(
+          queryValue,
+          clinicProfile,
+          clinicLookupName,
+          clinicLookupId,
+          candidates[0]
+        );
+        if (localFallback.length > 0) {
+          setClinicSearchResults(localFallback);
+          setClinicDropdownOpen(true);
+          setBackendCheckMessage('Lokale MedSpa-Liste aktiv.');
+          return;
+        }
         setBackendCheckMessage(`Keine MedSpa-Treffer über: ${lastEmptyBaseUrl}`);
+        return;
+      }
+      const localFallback = buildLocalClinicFallbackResults(
+        queryValue,
+        clinicProfile,
+        clinicLookupName,
+        clinicLookupId,
+        candidates[0]
+      );
+      if (localFallback.length > 0) {
+        setClinicSearchResults(localFallback);
+        setClinicDropdownOpen(true);
+        setBackendCheckMessage(showTechnicalSetup ? 'Lokale MedSpa-Liste aktiv.' : '');
         return;
       }
       setBackendCheckMessage('Keine MedSpa-Treffer. Bitte Eingabe anpassen.');
@@ -1704,6 +2007,7 @@ function selectClinicFromSearch(clinic) {
   setClinicLookupName(name);
   setClinicLookupId(String(clinic?.id ?? '').trim());
   setClinicSearchQuery(name);
+  setClinicDropdownOpen(false);
   setBackendCheckMessage('');
   setOtpUiMessage('');
   setOtpUiType('neutral');
@@ -1807,33 +2111,139 @@ function selectClinicFromSearch(clinic) {
   }
 
 function continueToAccessStep() {
-  const selectedClinicName = String(clinicLookupName || '').trim();
-  const selectedClinicId = String(clinicLookupId || '').trim();
+  let selectedClinicName = String(clinicLookupName || '').trim();
+  let selectedClinicId = String(clinicLookupId || '').trim();
   const queryName = String(clinicSearchQuery || '').trim();
-  const matchesTypedQuery =
-    !queryName || selectedClinicName.toLowerCase() === queryName.toLowerCase();
+
+  // Auto-pick best match from dropdown/local fallback if user only typed a partial name.
+  if ((!selectedClinicName || !selectedClinicId) && queryName) {
+    const queryLower = queryName.toLowerCase();
+    const bestMatch =
+      clinicSuggestionResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase() === queryLower
+      )
+      || clinicSuggestionResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase().startsWith(queryLower)
+      )
+      || clinicSuggestionResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase().includes(queryLower)
+      );
+    const fallbackResults = buildLocalClinicFallbackResults(
+      queryName,
+      clinicProfile,
+      clinicLookupName,
+      clinicLookupId,
+      normalizeUrl(onboardingBaseUrl || analyticsBaseUrl || APP_DEFAULT_BACKEND_URL)
+    );
+    const fallbackMatch =
+      fallbackResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase() === queryLower
+      )
+      || fallbackResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase().startsWith(queryLower)
+      )
+      || fallbackResults.find(
+        (entry) => String(entry?.name || '').trim().toLowerCase().includes(queryLower)
+      );
+    const resolvedMatch = bestMatch || fallbackMatch;
+
+    if (resolvedMatch) {
+      const bestName = String(resolvedMatch?.name || '').trim();
+      const bestId = String(resolvedMatch?.id || '').trim();
+      if (bestName) {
+        selectedClinicName = bestName;
+        selectedClinicId = bestId;
+        setClinicLookupName(bestName);
+        setClinicLookupId(bestId);
+        setClinicSearchQuery(bestName);
+      }
+    }
+  }
 
   if (!selectedClinicName && !selectedClinicId) {
     setBackendCheckMessage('Bitte wähle eine MedSpa aus der Liste aus.');
     Alert.alert('MedSpa fehlt', 'Bitte suche zuerst deine MedSpa.');
     return;
   }
-    if (!selectedClinicId) {
-      setBackendCheckMessage('Bitte eine MedSpa direkt aus dem Dropdown auswählen.');
-      Alert.alert('MedSpa auswählen', 'Bitte wähle eine MedSpa aus der Trefferliste aus.');
+
+  clinicSearchRequestRef.current = 0;
+  setClinicSearchLoading(false);
+  setClinicSearchResults([]);
+  setClinicDropdownOpen(false);
+  setBackendCheckMessage('');
+  resetOtpFlow();
+  setOnboardingStep('access');
+}
+
+  async function openClinicInMaps() {
+    const clinicName = String(clinicProfile?.name || clinicLookupName || '').trim() || 'MedSpa';
+    const addressCandidate = [clinicProfile?.address, clinicProfile?.city].filter(Boolean).join(', ');
+    const locationQuery = String(addressCandidate || clinicName).trim();
+    const coords = resolveClinicCoordinates(clinicProfile);
+    const encodedLabel = encodeURIComponent(clinicName);
+    const encodedQuery = encodeURIComponent(locationQuery);
+    const hasExactCoords =
+      Number.isFinite(Number(clinicProfile?.latitude))
+      && Number.isFinite(Number(clinicProfile?.longitude));
+
+    const iosUrl = hasExactCoords
+      ? `http://maps.apple.com/?ll=${coords.latitude},${coords.longitude}&q=${encodedLabel}`
+      : `http://maps.apple.com/?q=${encodedQuery}`;
+    const crossPlatformUrl = hasExactCoords
+      ? `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodedQuery}`;
+
+    const preferredUrl = Platform.OS === 'ios' ? iosUrl : crossPlatformUrl;
+    const fallbackUrl = Platform.OS === 'ios' ? crossPlatformUrl : iosUrl;
+    try {
+      const preferredSupported = await Linking.canOpenURL(preferredUrl);
+      if (preferredSupported) {
+        await Linking.openURL(preferredUrl);
+        track('MedSpa in Maps geöffnet', 'clinic_map_open', {
+          metadata: {
+            clinicName,
+            method: Platform.OS === 'ios' ? 'apple_maps' : 'google_maps',
+          },
+        });
+        return;
+      }
+      const fallbackSupported = await Linking.canOpenURL(fallbackUrl);
+      if (fallbackSupported) {
+        await Linking.openURL(fallbackUrl);
+        track('MedSpa in Maps geöffnet (Fallback)', 'clinic_map_open', {
+          metadata: {
+            clinicName,
+            method: Platform.OS === 'ios' ? 'google_maps_fallback' : 'apple_maps_fallback',
+          },
+        });
+      } else {
+        Alert.alert('Karte nicht verfügbar', 'Auf diesem Gerät konnte keine Karten-App geöffnet werden.');
+      }
+    } catch {
+      Alert.alert('Karte nicht verfügbar', 'Die Kartenansicht konnte nicht geöffnet werden.');
+    }
+  }
+
+  async function callClinicNow() {
+    const phoneRaw = String(clinicProfile?.phone || '').trim();
+    if (!phoneRaw) {
+      Alert.alert('Telefonnummer fehlt', 'Für diese MedSpa ist noch keine Telefonnummer hinterlegt.');
       return;
     }
-    if (!matchesTypedQuery) {
-      setBackendCheckMessage('Bitte eine MedSpa aus dem Dropdown auswählen.');
-      Alert.alert('MedSpa auswählen', 'Bitte wähle eine MedSpa direkt aus der Trefferliste.');
-      return;
+    const dialTarget = `tel:${phoneRaw.replace(/\s+/g, '')}`;
+    try {
+      const supported = await Linking.canOpenURL(dialTarget);
+      if (!supported) {
+        Alert.alert('Anruf nicht möglich', `Bitte manuell anrufen: ${phoneRaw}`);
+        return;
+      }
+      await Linking.openURL(dialTarget);
+      track(`Call now: ${phoneRaw}`, 'clinic_call_click', {
+        metadata: { clinicName: clinicProfile.name || '' },
+      });
+    } catch {
+      Alert.alert('Anruf nicht möglich', `Bitte manuell anrufen: ${phoneRaw}`);
     }
-    clinicSearchRequestRef.current = 0;
-    setClinicSearchLoading(false);
-    setClinicSearchResults([]);
-    setBackendCheckMessage('');
-    resetOtpFlow();
-    setOnboardingStep('access');
   }
 
   async function useQrOrReferralCode() {
@@ -1894,6 +2304,7 @@ function continueToAccessStep() {
       if (clinics.length > 0) {
         selectClinicFromSearch(clinics[0]);
         resetOtpFlow();
+        setBackendCheckMessage('');
         setOnboardingStep('access');
         return;
       }
@@ -1901,6 +2312,7 @@ function continueToAccessStep() {
       // Falls Suche fehlschlaegt, kann Nutzer trotzdem manuell weiter.
     }
     resetOtpFlow();
+    setBackendCheckMessage('');
     setOnboardingStep('access');
   }
 
@@ -2586,12 +2998,12 @@ function continueToAccessStep() {
   useEffect(() => {
     if (!showOnboarding || onboardingStep !== 'clinic') return undefined;
     const query = String(clinicSearchQuery || '').trim();
-    if (query.length < 1) return undefined;
+    if (query.length < 1 && !clinicDropdownOpen) return undefined;
     const timeoutId = setTimeout(() => {
-      void runClinicSearch({ query, silent: true });
+      void runClinicSearch({ query, silent: true, allowEmpty: clinicDropdownOpen });
     }, 380);
     return () => clearTimeout(timeoutId);
-  }, [showOnboarding, onboardingStep, clinicSearchQuery]);
+  }, [showOnboarding, onboardingStep, clinicSearchQuery, clinicDropdownOpen]);
 
   const hasCart = cartItems.length > 0;
   const cartCtaLabel = cartSyncing ? 'Wird hinzugefügt ...' : 'In den Warenkorb';
@@ -2691,6 +3103,7 @@ function continueToAccessStep() {
                   onChangeText={(value) => {
                     const next = String(value || '');
                     setClinicSearchQuery(next);
+                    setClinicDropdownOpen(true);
                     setBackendCheckMessage('');
                     if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
                       setClinicLookupName('');
@@ -2700,11 +3113,16 @@ function continueToAccessStep() {
                       setClinicSearchResults([]);
                     }
                   }}
+                  onFocus={() => {
+                    setClinicDropdownOpen(true);
+                    void runClinicSearch({ query: clinicSearchQuery, silent: true, allowEmpty: true });
+                  }}
                   placeholder="MedSpa Name eingeben"
                   placeholderTextColor={THEME.muted}
                   autoCorrect={false}
                   returnKeyType="search"
                   onSubmitEditing={() => {
+                    setClinicDropdownOpen(true);
                     void runClinicSearch();
                   }}
                 />
@@ -2712,6 +3130,7 @@ function continueToAccessStep() {
                   style={[styles.secondaryCta, clinicSearchLoading && styles.ctaDisabled]}
                   disabled={clinicSearchLoading}
                   onPress={() => {
+                    setClinicDropdownOpen(true);
                     void runClinicSearch();
                   }}
                 >
@@ -2720,7 +3139,7 @@ function continueToAccessStep() {
                   </Text>
                 </Pressable>
 
-                {clinicSearchResults.length > 0 && (
+                {clinicDropdownOpen && clinicSuggestionResults.length > 0 && (
                   <View style={styles.searchResultsCard}>
                     <ScrollView
                       style={styles.searchResultsScroll}
@@ -2728,10 +3147,10 @@ function continueToAccessStep() {
                       nestedScrollEnabled
                       showsVerticalScrollIndicator
                     >
-                      {clinicSearchResults.map((clinic, index) => {
+                      {clinicSuggestionResults.map((clinic, index) => {
                         const clinicName = String(clinic?.name || '').trim();
                         const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
-                        const isLast = index === clinicSearchResults.length - 1;
+                        const isLast = index === clinicSuggestionResults.length - 1;
                         return (
                           <Pressable
                             key={clinicName || `clinic-${index}`}
@@ -2751,7 +3170,7 @@ function continueToAccessStep() {
                     </ScrollView>
                   </View>
                 )}
-                {String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSearchResults.length === 0 && (
+                {clinicDropdownOpen && String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSuggestionResults.length === 0 && (
                   <View style={styles.searchResultsCard}>
                     <Text style={styles.searchEmptyText}>Keine MedSpa-Treffer. Bitte Eingabe anpassen.</Text>
                   </View>
@@ -2960,13 +3379,19 @@ function continueToAccessStep() {
 
               <Text style={styles.sectionTitle}>MedSpa</Text>
               <View style={styles.clinicCard}>
-                <View style={styles.mapMock}>
-                  <Text style={styles.mapMockLabel}>Map</Text>
-                  <View style={styles.mapMockPinWrap}>
-                    <Ionicons name="location" size={14} color="#FF8BBE" />
-                    <Text style={styles.mapMockPinText}>{clinicProfile.city || 'Wien'}</Text>
+                <Pressable style={styles.mapWrap} onPress={() => { void openClinicInMaps(); }}>
+                  <MapView style={styles.mapView} initialRegion={clinicMapRegion}>
+                    <Marker
+                      coordinate={clinicCoordinates}
+                      title={clinicProfile.name || 'MedSpa'}
+                      description={clinicProfile.address || clinicProfile.city || 'Standort'}
+                    />
+                  </MapView>
+                  <View style={styles.mapOpenHint}>
+                    <Ionicons name="map-outline" size={13} color="#FFFFFF" />
+                    <Text style={styles.mapOpenHintText}>In Maps öffnen</Text>
                   </View>
-                </View>
+                </Pressable>
                 <Text style={styles.clinicName}>{clinicProfile.name}</Text>
                 <View style={styles.clinicMetaRow}>
                   <Ionicons name="location-outline" size={14} color="#8E95A1" />
@@ -2978,11 +3403,7 @@ function continueToAccessStep() {
                 </View>
                 <Pressable
                   style={styles.callNowCta}
-                  onPress={() => {
-                    track(`Call now: ${clinicProfile.phone || '+43...'}`, 'clinic_call_click', {
-                      metadata: { clinicName: clinicProfile.name || '' },
-                    });
-                  }}
+                  onPress={() => { void callClinicNow(); }}
                 >
                   <Text style={styles.callNowCtaText}>Call now</Text>
                 </Pressable>
@@ -3048,7 +3469,7 @@ function continueToAccessStep() {
                           <Ionicons
                             name={categoryIconName(cat.id)}
                             size={20}
-                            color={categoryId === cat.id ? '#EB6BA4' : '#7E8695'}
+                            color={categoryId === cat.id ? THEME.brand : '#7E8695'}
                           />
                         </View>
                         <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
@@ -3884,9 +4305,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 12,
+    borderRadius: 22,
+    padding: 18,
+    marginTop: 14,
+    ...SOFT_CARD_SHADOW,
   },
   onboardingEyebrow: {
     color: THEME.muted,
@@ -3895,9 +4317,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   onboardingTitle: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '800',
+    letterSpacing: -0.4,
     color: THEME.ink,
     marginBottom: 6,
   },
@@ -3918,7 +4341,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -3926,22 +4349,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerAvatar: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 999,
-    backgroundColor: '#F8D9EA',
+    backgroundColor: '#FBEAF3',
     borderWidth: 1,
-    borderColor: '#F3C6DE',
+    borderColor: '#F3D1E4',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerAvatarText: {
-    color: '#B54982',
+    color: '#AC3A80',
     fontWeight: '800',
-    fontSize: 13,
+    fontSize: 14,
   },
   headerClinic: {
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 1.2,
     color: THEME.muted,
     marginTop: 1,
@@ -3951,21 +4374,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.ink,
     lineHeight: 36,
+    letterSpacing: -0.4,
   },
   headerIcons: {
     flexDirection: 'row',
     gap: 12,
   },
   iconButtonWrap: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E8ECF2',
+    backgroundColor: '#FBFCFF',
+    borderColor: '#E3E8F3',
     borderWidth: 1,
-    width: 43,
-    height: 43,
+    width: 48,
+    height: 48,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    ...SOFT_CARD_SHADOW,
   },
   headerCartBadge: {
     position: 'absolute',
@@ -3998,22 +4423,24 @@ const styles = StyleSheet.create({
   searchOverlayCard: {
     marginTop: 72,
     marginHorizontal: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FBFCFF',
     borderWidth: 1,
     borderColor: '#E9ECF2',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 24,
+    padding: 14,
     maxHeight: 430,
+    ...SOFT_CARD_SHADOW,
   },
   cartOverlayCard: {
     marginTop: 72,
     marginHorizontal: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FBFCFF',
     borderWidth: 1,
     borderColor: '#E9ECF2',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 24,
+    padding: 14,
     maxHeight: 500,
+    ...SOFT_CARD_SHADOW,
   },
   searchOverlayHeader: {
     flexDirection: 'row',
@@ -4022,7 +4449,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchOverlayTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: THEME.ink,
   },
@@ -4222,12 +4649,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   heroCard: {
-    backgroundColor: '#FFF2F8',
+    backgroundColor: '#F7F9FE',
     borderWidth: 1,
-    borderColor: '#F6CEE3',
-    borderRadius: 18,
-    padding: 16,
+    borderColor: '#E6EAF3',
+    borderRadius: 24,
+    padding: 20,
     marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
   },
   heroEyebrow: {
     fontSize: 11,
@@ -4236,10 +4664,11 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: THEME.ink,
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   heroBody: {
     color: THEME.muted,
@@ -4249,9 +4678,9 @@ const styles = StyleSheet.create({
   heroCta: {
     alignSelf: 'flex-start',
     backgroundColor: THEME.brand,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: 13,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
   },
   heroCtaText: {
     color: '#fff',
@@ -4261,9 +4690,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 18,
     padding: 14,
     marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
   },
   financeTitle: {
     color: THEME.ink,
@@ -4276,7 +4706,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
     color: THEME.ink,
     marginTop: 8,
@@ -4293,9 +4723,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 13,
+    borderRadius: 20,
+    padding: 14,
     marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
   },
   articleTag: {
     color: THEME.brand,
@@ -4316,45 +4747,41 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderColor: THEME.border,
     borderWidth: 1,
-    borderRadius: 16,
-    padding: 13,
+    borderRadius: 20,
+    padding: 14,
     marginBottom: 14,
+    ...SOFT_CARD_SHADOW,
   },
-  mapMock: {
-    height: 152,
-    borderRadius: 12,
-    backgroundColor: '#1A3954',
+  mapWrap: {
+    height: 168,
+    borderRadius: 16,
     marginBottom: 10,
-    justifyContent: 'flex-end',
-    padding: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#2D4D6A',
+    borderColor: THEME.border,
   },
-  mapMockLabel: {
-    color: 'rgba(255,255,255,0.72)',
-    fontWeight: '700',
-    fontSize: 12,
+  mapView: {
+    height: '100%',
+    width: '100%',
+  },
+  mapOpenHint: {
     position: 'absolute',
-    left: 10,
-    top: 10,
-  },
-  mapMockPinWrap: {
-    alignSelf: 'center',
-    backgroundColor: 'rgba(21, 25, 35, 0.68)',
+    right: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(21, 25, 35, 0.78)',
     borderColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
   },
-  mapMockPinText: {
+  mapOpenHintText: {
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 12,
+    fontSize: 11,
   },
   clinicName: {
     fontSize: 18,
@@ -4376,8 +4803,8 @@ const styles = StyleSheet.create({
   callNowCta: {
     marginTop: 10,
     backgroundColor: THEME.brand,
-    borderRadius: 12,
-    paddingVertical: 11,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   callNowCtaText: {
@@ -4389,16 +4816,17 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 4,
+    borderRadius: 20,
+    padding: 5,
     flexDirection: 'row',
     gap: 4,
     marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
   },
   segmentBtnActive: {
@@ -4414,47 +4842,55 @@ const styles = StyleSheet.create({
   },
   shopTabsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8ECF2',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFD',
+    padding: 5,
     marginBottom: 14,
+    ...SOFT_CARD_SHADOW,
   },
   shopTabBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 4,
-    paddingBottom: 0,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  shopTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E4E9F3',
   },
   shopTabText: {
     color: '#7D8595',
     fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 9,
+    fontWeight: '600',
+    marginBottom: 0,
   },
   shopTabTextActive: {
-    color: THEME.ink,
+    color: THEME.brand,
     fontWeight: '700',
   },
   shopTabUnderline: {
-    height: 3,
-    width: '100%',
-    borderRadius: 999,
-    backgroundColor: 'transparent',
+    height: 0,
+    width: 0,
   },
   shopTabUnderlineActive: {
-    backgroundColor: '#EB6BA4',
+    backgroundColor: 'transparent',
   },
   shopPinkHeroCard: {
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 18,
-    backgroundColor: '#EE76AC',
+    backgroundColor: '#FBEAF3',
     borderWidth: 1,
-    borderColor: '#F4A4C8',
+    borderColor: '#F2D2E4',
     marginBottom: 16,
+    ...SOFT_CARD_SHADOW,
   },
   shopPinkHeroTitle: {
-    color: '#FFFFFF',
+    color: '#2B2336',
     fontSize: 28,
     lineHeight: 32,
     fontWeight: '800',
@@ -4462,21 +4898,21 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   shopPinkHeroBody: {
-    color: '#FFEAF4',
+    color: '#6A607A',
     textAlign: 'center',
     marginBottom: 12,
   },
   shopPinkHeroCta: {
     alignSelf: 'center',
-    backgroundColor: '#FFF7FB',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#F5CFE1',
+    borderColor: '#EADCE9',
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 9,
   },
   shopPinkHeroCtaText: {
-    color: '#D45C94',
+    color: THEME.brand,
     fontWeight: '700',
   },
   categoryGrid: {
@@ -4494,26 +4930,26 @@ const styles = StyleSheet.create({
     minHeight: 92,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 12,
+    borderColor: '#E8EDF5',
+    borderRadius: 14,
   },
   categoryTileActive: {
-    borderColor: '#EB6BA4',
-    backgroundColor: '#FFF8FC',
+    borderColor: '#DAB3CB',
+    backgroundColor: '#FFF6FB',
   },
   categoryTileIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#F0E7DC',
+    borderColor: '#ECEFF6',
     backgroundColor: '#FFFFFF',
     marginBottom: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryTileIconWrapActive: {
-    borderColor: '#F6C0DC',
+    borderColor: '#E8BED7',
     backgroundColor: '#FFF5FA',
   },
   categoryTileText: {
@@ -4528,8 +4964,8 @@ const styles = StyleSheet.create({
   },
   shopListTitle: {
     color: THEME.ink,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '800',
     marginBottom: 2,
   },
@@ -4548,11 +4984,12 @@ const styles = StyleSheet.create({
     width: '50%',
     paddingHorizontal: 5,
     marginBottom: 12,
-    borderRadius: 14,
-    overflow: 'hidden',
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE7DC',
+    borderColor: '#E8EDF5',
+    overflow: 'hidden',
+    ...SOFT_CARD_SHADOW,
   },
   treatmentImageMock: {
     height: 116,
@@ -4590,8 +5027,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 13,
+    borderRadius: 22,
+    padding: 16,
+    ...SOFT_CARD_SHADOW,
   },
   detailImage: {
     width: '100%',
@@ -4624,7 +5062,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   detailTitle: {
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: '800',
     color: THEME.ink,
     lineHeight: 38,
@@ -4645,8 +5083,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#F1D8E4',
-    backgroundColor: '#FFF4FA',
+    borderColor: '#E8D8C8',
+    backgroundColor: '#FBF4EC',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -4707,7 +5145,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   detailPlanSummaryMember: {
-    color: '#D45C94',
+    color: THEME.brand,
     fontWeight: '700',
   },
   priceLine: {
@@ -4755,17 +5193,19 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   membershipCardActive: {
-    backgroundColor: '#F4E3CF',
-    borderColor: '#D3B693',
+    backgroundColor: '#FCEFF6',
+    borderColor: '#E6C6D9',
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 18,
+    padding: 14,
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   membershipName: {
     fontSize: 20,
@@ -4787,43 +5227,44 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 13,
+    borderRadius: 20,
+    padding: 14,
     marginBottom: 14,
+    ...SOFT_CARD_SHADOW,
   },
   shopMembershipBlockActive: {
-    borderColor: '#EB6BA4',
-    shadowColor: '#EB6BA4',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: '#E2B8D2',
+    shadowColor: THEME.brand,
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   shopMembershipHero: {
-    borderRadius: 14,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 14,
-    backgroundColor: '#EE76AC',
+    backgroundColor: '#F8E8F2',
     borderWidth: 1,
-    borderColor: '#F4A4C8',
+    borderColor: '#EACDE0',
     marginBottom: 12,
   },
   shopMembershipHeroEyebrow: {
-    color: '#FFE9F3',
+    color: '#7A5D76',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
     letterSpacing: 0.6,
   },
   shopMembershipHeroTitle: {
-    color: '#FFFFFF',
+    color: '#2B2336',
     fontSize: 30,
     lineHeight: 34,
     fontWeight: '800',
     marginBottom: 5,
   },
   shopMembershipHeroBody: {
-    color: '#FFE7F2',
+    color: '#695E78',
     lineHeight: 19,
     marginBottom: 10,
   },
@@ -4834,13 +5275,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   shopMembershipHeroPrice: {
-    color: '#FFFFFF',
+    color: '#2B2336',
     fontWeight: '800',
     fontSize: 17,
   },
   shopMembershipHeroBadge: {
-    color: '#D45C94',
-    backgroundColor: '#FFF7FB',
+    color: THEME.brand,
+    backgroundColor: '#FFFDF9',
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -4862,11 +5303,11 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   shopMembershipBenefitText: {
-    color: '#4D3F31',
+    color: '#41394F',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#F1D5E2',
-    backgroundColor: '#FFEFF7',
+    borderColor: '#E9DCE8',
+    backgroundColor: '#FFF8FD',
     minHeight: 72,
     paddingHorizontal: 10,
     paddingVertical: 9,
@@ -4921,7 +5362,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   shopMembershipIncludedLink: {
-    color: '#D45C94',
+    color: THEME.brand,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -4950,9 +5391,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     marginBottom: 8,
+    ...SOFT_CARD_SHADOW,
   },
   treatmentListTitle: {
     color: THEME.ink,
@@ -4994,7 +5436,7 @@ const styles = StyleSheet.create({
   },
   rewardsBalanceCard: {
     position: 'relative',
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 15,
     backgroundColor: THEME.rewardsB,
     borderWidth: 1,
@@ -5091,7 +5533,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   rewardsHeaderLink: {
-    color: '#D45C94',
+    color: THEME.brand,
     fontWeight: '700',
   },
   rewardsSegmentRow: {
@@ -5107,7 +5549,7 @@ const styles = StyleSheet.create({
   },
   rewardsSegmentBtnActive: {
     borderBottomWidth: 3,
-    borderBottomColor: '#EB6BA4',
+    borderBottomColor: THEME.brand,
   },
   rewardsSegmentText: {
     color: '#7A6B5B',
@@ -5147,8 +5589,8 @@ const styles = StyleSheet.create({
     height: 33,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#F3D2E1',
-    backgroundColor: '#FFF4FA',
+    borderColor: '#ECD8E8',
+    backgroundColor: '#FFF8FD',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -5158,7 +5600,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rewardsActionBtn: {
-    backgroundColor: '#EB6BA4',
+    backgroundColor: THEME.brand,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -5172,12 +5614,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EFE7DC',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   rewardsRedeemLabel: {
     color: THEME.ink,
@@ -5211,9 +5654,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EFE7DC',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 10,
     marginBottom: 8,
+    ...SOFT_CARD_SHADOW,
   },
   rewardsPastTitle: {
     color: THEME.ink,
@@ -5228,9 +5672,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 12,
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   scanTitle: {
     color: THEME.ink,
@@ -5280,9 +5725,10 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 11,
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   historyTitle: {
     color: THEME.ink,
@@ -5297,9 +5743,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EFE7DC',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 14,
     marginBottom: 10,
+    ...SOFT_CARD_SHADOW,
   },
   profileGhostList: {
     marginBottom: 16,
@@ -5364,8 +5811,9 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
+    ...SOFT_CARD_SHADOW,
   },
   input: {
     minHeight: 42,
@@ -5426,12 +5874,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   searchResultsCard: {
-    backgroundColor: '#FDF5E9',
+    backgroundColor: '#FFFCF7',
     borderWidth: 1,
     borderColor: THEME.border,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 6,
     overflow: 'hidden',
+    ...SOFT_CARD_SHADOW,
   },
   searchResultsScroll: {
     maxHeight: 196,
@@ -5498,6 +5947,14 @@ const styles = StyleSheet.create({
   ctaDisabled: {
     opacity: 0.6,
   },
+  tapScaleSoft: {
+    transform: [{ scale: 0.985 }],
+    opacity: 0.96,
+  },
+  tapScaleCard: {
+    transform: [{ scale: 0.992 }],
+    opacity: 0.98,
+  },
   lastActionBox: {
     marginTop: 8,
     backgroundColor: '#EFE2D0',
@@ -5515,25 +5972,25 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     bottom: 14,
-    borderRadius: 24,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#E8ECF2',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#DEE5F0',
+    backgroundColor: 'rgba(255,255,255,0.97)',
     flexDirection: 'row',
     paddingVertical: 9,
     paddingHorizontal: 8,
     justifyContent: 'space-between',
-    shadowColor: '#657287',
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
+    shadowColor: '#1A2438',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   bottomTabBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 6,
-    borderRadius: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
     gap: 3,
   },
   bottomTabBtnActive: {
