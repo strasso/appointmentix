@@ -239,64 +239,6 @@ IMPORT_GENERIC_SERVICE_LABELS = {
   "mehr",
   "more",
 }
-IMPORT_TREATMENT_KEYWORDS = {
-  "behandlung",
-  "behandlungen",
-  "treatment",
-  "treatments",
-  "therapie",
-  "therapien",
-  "laser",
-  "haarentfernung",
-  "epilation",
-  "botox",
-  "hyaluron",
-  "filler",
-  "injectable",
-  "injectables",
-  "needling",
-  "microneedling",
-  "peeling",
-  "facial",
-  "gesicht",
-  "haut",
-  "skin",
-  "prp",
-  "lippen",
-  "lip",
-  "microdermabrasion",
-  "hydrafacial",
-  "akne",
-  "narben",
-  "thermage",
-  "cellulite",
-}
-IMPORT_BLOCKED_SERVICE_KEYWORDS = {
-  "app",
-  "branding",
-  "session",
-  "buchen",
-  "verkaufen",
-  "willkommen",
-  "konfigurieren",
-  "arr",
-  "award",
-  "awards",
-  "kliniken",
-  "waehlen",
-  "wahlen",
-  "patientenerwartungen",
-  "praemie",
-  "praemien",
-  "angebot",
-  "angebote",
-  "paket",
-  "pakete",
-  "kostenfrei",
-  "kostenlose",
-  "mehr",
-  "zurueck",
-}
 EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 PHONE_PATTERN = re.compile(r"(?<!\w)(\+?\d[\d\s()./-]{6,}\d)")
 PRICE_PATTERN = re.compile(
@@ -4794,34 +4736,6 @@ def extract_contacts_from_import_soup(soup: BeautifulSoup) -> tuple[list[str], l
   return phones, emails
 
 
-def looks_like_treatment_title_for_import(title: str) -> bool:
-  normalized = normalize_keyword_text(title)
-  if not normalized:
-    return False
-
-  tokens = normalized.split()
-  token_set = set(tokens)
-  if len(tokens) > 8:
-    return False
-  if token_set & IMPORT_BLOCKED_SERVICE_KEYWORDS:
-    return False
-  if not (token_set & IMPORT_TREATMENT_KEYWORDS):
-    return False
-
-  lowered = title.lower()
-  if title.startswith(("+", "-", "*")):
-    return False
-  if any(char.isdigit() for char in title):
-    return False
-  if "%" in title:
-    return False
-  if "," in title and len(tokens) > 5:
-    return False
-  if any(fragment in lowered for fragment in (" app ", " branding", " buchen", " verkaufen")):
-    return False
-  return True
-
-
 def normalize_service_title_for_import(raw_value: object) -> str:
   title = clean_import_text(raw_value, 120)
   if not title:
@@ -4845,8 +4759,6 @@ def normalize_service_title_for_import(raw_value: object) -> str:
     return ""
   digit_count = len(re.findall(r"\d", stripped))
   if digit_count > max(3, int(len(stripped) * 0.35)):
-    return ""
-  if not looks_like_treatment_title_for_import(stripped):
     return ""
   return stripped
 
@@ -4904,7 +4816,6 @@ def extract_import_data_from_pages(pages: list[dict]) -> dict:
   seen_service: set[str] = set()
   seen_price: set[tuple[str, str]] = set()
   root_page_url = str(pages[0]["url"]) if pages else ""
-  has_service_like_pages = any(is_service_like_import_url(str(page.get("url", ""))) for page in pages)
 
   for page in pages:
     soup = page["soup"]
@@ -4933,9 +4844,7 @@ def extract_import_data_from_pages(pages: list[dict]) -> dict:
       seen_email.add(normalized)
       emails.append(normalized)
 
-    include_services = is_service_like_import_url(page_url) or (
-      (not has_service_like_pages) and (page_url == root_page_url or len(pages) == 1)
-    )
+    include_services = is_service_like_import_url(page_url) or page_url == root_page_url or len(pages) == 1
     if include_services:
       for service_item in extract_services_from_import_soup(soup, page_url):
         service_key = normalize_keyword_text(service_item["title"])
