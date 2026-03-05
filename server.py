@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 import os
 import re
 import secrets
@@ -9,10 +10,11 @@ import hmac
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, quote_plus, unquote_plus, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote_plus, urljoin, urlparse
 
 import stripe
 import requests
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_from_directory, session
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -201,6 +203,254 @@ DEFAULT_MOBILE_CATEGORIES = [
 ]
 ALLOWED_UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
+IMPORT_MAX_PAGES = 10
+IMPORT_MAX_PAGE_BYTES = 1_000_000
+IMPORT_MAX_HOME_ARTICLES = 3
+IMPORT_FETCH_TIMEOUT = (4, 10)
+IMPORT_USER_AGENT = "Appointmentix-ClinicImportV1/1.0 (+https://appointmentix.de; support@appointmentix.de)"
+IMPORT_ALLOWED_PATH_KEYWORDS = (
+  "/services",
+  "/treatments",
+  "/leistungen",
+  "/preise",
+  "/price",
+  "/kontakt",
+  "/contact",
+  "/blog",
+  "/news",
+  "/neuigkeiten",
+  "/wissen",
+  "/tipps",
+  "/insights",
+  "/artikel",
+  "/article",
+  "/magazin",
+  "/ratgeber",
+)
+IMPORT_SERVICE_PATH_KEYWORDS = (
+  "/services",
+  "/treatments",
+  "/leistungen",
+  "/preise",
+  "/price",
+)
+IMPORT_CONTENT_PATH_KEYWORDS = (
+  "/blog",
+  "/news",
+  "/neuigkeiten",
+  "/wissen",
+  "/tipps",
+  "/insights",
+  "/artikel",
+  "/article",
+  "/magazin",
+  "/ratgeber",
+)
+IMPORT_GENERIC_SERVICE_LABELS = {
+  "service",
+  "services",
+  "treatment",
+  "treatments",
+  "behandlung",
+  "behandlungen",
+  "leistung",
+  "leistungen",
+  "price",
+  "preise",
+  "pricing",
+  "kontakt",
+  "contact",
+  "home",
+  "mehr",
+  "more",
+  "gesicht",
+  "koerper",
+  "haare",
+  "injectables",
+  "premium",
+}
+IMPORT_GENERIC_ARTICLE_LABELS = {
+  "blog",
+  "news",
+  "neuigkeiten",
+  "wissen",
+  "tipps",
+  "ratgeber",
+  "magazin",
+  "artikel",
+  "article",
+  "insights",
+  "read more",
+  "mehr lesen",
+}
+IMPORT_TREATMENT_KEYWORDS = {
+  "behandlung",
+  "behandlungen",
+  "treatment",
+  "treatments",
+  "therapie",
+  "therapien",
+  "laser",
+  "haarentfernung",
+  "epilation",
+  "botox",
+  "hyaluron",
+  "filler",
+  "injectable",
+  "injectables",
+  "needling",
+  "microneedling",
+  "peeling",
+  "facial",
+  "gesicht",
+  "haut",
+  "skin",
+  "prp",
+  "lippen",
+  "lip",
+  "microdermabrasion",
+  "hydrafacial",
+  "akne",
+  "narben",
+  "thermage",
+  "cellulite",
+}
+IMPORT_TREATMENT_CATEGORY_KEYWORDS = {
+  "haare": {
+    "haar",
+    "haare",
+    "hair",
+    "epilation",
+    "mesohair",
+    "alopez",
+    "kopfhaut",
+  },
+  "injectables": {
+    "botox",
+    "hyaluron",
+    "filler",
+    "lippen",
+    "lip",
+    "toxin",
+    "inject",
+    "injekt",
+  },
+  "koerper": {
+    "koerper",
+    "körper",
+    "body",
+    "bauch",
+    "beine",
+    "oberschenkel",
+    "ruecken",
+    "rücken",
+    "arme",
+    "po",
+    "brust",
+    "cellulite",
+    "abdominoplastik",
+    "fettabsaug",
+    "liposuktion",
+    "intim",
+  },
+  "premium": {
+    "thermage",
+    "fraxel",
+    "ultherapy",
+    "morpheus",
+    "radiofrequenz",
+    "co2",
+    "laser",
+    "bodytite",
+    "vaser",
+  },
+}
+IMPORT_BLOCKED_NAME_KEYWORDS = {
+  "arzt",
+  "aerztin",
+  "aerzte",
+  "aerztinnen",
+  "behandlungen",
+  "behandlung",
+  "chirurgie",
+  "schoenheitschirurgie",
+  "plastische",
+  "aesthetische",
+  "aesthetik",
+  "zentrum",
+  "wien",
+  "app",
+  "branding",
+  "session",
+  "buchen",
+  "verkaufen",
+  "willkommen",
+  "konfigurieren",
+  "arr",
+  "award",
+  "awards",
+  "waehlen",
+  "wahlen",
+  "patientenerwartungen",
+  "praemie",
+  "praemien",
+  "angebot",
+  "angebote",
+  "paket",
+  "pakete",
+  "kostenfrei",
+  "kostenlose",
+  "mehr",
+  "zurueck",
+  "termin",
+  "book",
+  "demo",
+  "free",
+}
+IMPORT_BLOCKED_SERVICE_KEYWORDS = {
+  "app",
+  "branding",
+  "session",
+  "buchen",
+  "verkaufen",
+  "willkommen",
+  "konfigurieren",
+  "arr",
+  "award",
+  "awards",
+  "kliniken",
+  "waehlen",
+  "wahlen",
+  "patientenerwartungen",
+  "praemie",
+  "praemien",
+  "angebot",
+  "angebote",
+  "paket",
+  "pakete",
+  "kostenfrei",
+  "kostenlose",
+  "mehr",
+  "zurueck",
+}
+EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
+PHONE_PATTERN = re.compile(r"(?<!\w)(\+?\d[\d\s()./-]{6,}\d)")
+PRICE_PATTERN = re.compile(
+  r"((?:ab\s*)?(?:\d{1,4}(?:[.,]\d{2})?)\s?(?:€|eur|euro)|(?:€\s?\d{1,4}(?:[.,]\d{2})?))",
+  re.IGNORECASE,
+)
+DATE_ISO_PATTERN = re.compile(r"\b(20\d{2})[-/](0?[1-9]|1[0-2])[-/](0?[1-9]|[12]\d|3[01])\b")
+DATE_DMY_PATTERN = re.compile(r"\b(0?[1-9]|[12]\d|3[01])[.](0?[1-9]|1[0-2])[.](20\d{2})\b")
+IMPORT_BLOCKED_IMAGE_KEYWORDS = (
+  "logo",
+  "icon",
+  "favicon",
+  "sprite",
+  "avatar",
+  "placeholder",
+  "blank",
+  "tracking",
+)
 
 DEFAULT_TREATMENT_GALLERY_URLS = [
   "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1000&q=80",
@@ -781,6 +1031,18 @@ def init_db() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_audit_logs_clinic_created ON audit_logs(clinic_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS clinic_import_services (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          title TEXT NOT NULL,
+          price_text TEXT,
+          source_url TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_clinic_import_services_clinic_id ON clinic_import_services(clinic_id);
         """
       )
     else:
@@ -1025,6 +1287,18 @@ def init_db() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_audit_logs_clinic_created ON audit_logs(clinic_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS clinic_import_services (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          price_text TEXT,
+          source_url TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_clinic_import_services_clinic_id ON clinic_import_services(clinic_id);
         """
       )
 
@@ -1042,6 +1316,12 @@ def init_db() -> None:
         "subscription_status": "TEXT NOT NULL DEFAULT 'inactive'",
         "stripe_customer_id": "TEXT",
         "stripe_subscription_id": "TEXT",
+        "import_name": "TEXT",
+        "address": "TEXT",
+        "phone": "TEXT",
+        "email": "TEXT",
+        "import_source_url": "TEXT",
+        "imported_at": "TEXT",
       },
     )
 
@@ -4334,6 +4614,1418 @@ def normalize_url(value: str) -> str:
   return f"https://{url}"
 
 
+def clean_import_text(value: object, max_length: int = 220) -> str:
+  text = re.sub(r"\s+", " ", str(value or "").strip())
+  if len(text) > max_length:
+    return text[:max_length].strip()
+  return text
+
+
+def normalize_import_input_url(raw_value: object) -> str:
+  candidate = normalize_url(str(raw_value or "").strip())
+  if not candidate:
+    return ""
+
+  parsed = urlparse(candidate)
+  if parsed.scheme not in {"http", "https"}:
+    return ""
+  if not parsed.netloc:
+    return ""
+
+  path = parsed.path or "/"
+  normalized = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+  if parsed.query:
+    normalized = f"{normalized}?{parsed.query}"
+  return normalized
+
+
+def canonical_domain_from_hostname(hostname: str) -> str:
+  domain = str(hostname or "").strip().lower().strip(".")
+  if domain.startswith("www."):
+    domain = domain[4:]
+  return domain
+
+
+def canonical_domain_from_url(raw_value: object) -> str:
+  normalized = normalize_import_input_url(raw_value)
+  if not normalized:
+    return ""
+  parsed = urlparse(normalized)
+  return canonical_domain_from_hostname(parsed.hostname or "")
+
+
+def normalize_import_visit_url(raw_url: str) -> str:
+  parsed = urlparse(str(raw_url or "").strip())
+  if parsed.scheme not in {"http", "https"}:
+    return ""
+  if not parsed.netloc:
+    return ""
+
+  path = parsed.path or "/"
+  normalized = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+  if normalized.endswith("/") and path != "/":
+    normalized = normalized.rstrip("/")
+  return normalized
+
+
+def normalize_import_media_url(raw_url: object, base_url: str = "") -> str:
+  candidate = str(raw_url or "").strip()
+  if not candidate:
+    return ""
+  if candidate.startswith("data:"):
+    return ""
+  if candidate.startswith("//"):
+    candidate = f"https:{candidate}"
+
+  resolved = urljoin(base_url or "", candidate)
+  parsed = urlparse(resolved)
+  if parsed.scheme not in {"http", "https"}:
+    return ""
+  if not parsed.netloc:
+    return ""
+
+  path = parsed.path or "/"
+  lowered_path = path.lower()
+  if any(keyword in lowered_path for keyword in IMPORT_BLOCKED_IMAGE_KEYWORDS):
+    return ""
+  if lowered_path.endswith(".svg"):
+    return ""
+
+  normalized = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}{path}"
+  if parsed.query:
+    normalized = f"{normalized}?{parsed.query}"
+  return normalized
+
+
+def parse_import_datetime_from_text(raw_value: object) -> datetime | None:
+  text = clean_import_text(raw_value, 200)
+  if not text:
+    return None
+
+  normalized_iso = text.replace("Z", "+00:00")
+  try:
+    parsed = datetime.fromisoformat(normalized_iso)
+    if parsed.tzinfo is None:
+      parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+  except Exception:
+    pass
+
+  iso_match = DATE_ISO_PATTERN.search(text)
+  if iso_match:
+    year = int(iso_match.group(1))
+    month = int(iso_match.group(2))
+    day = int(iso_match.group(3))
+    try:
+      return datetime(year, month, day, tzinfo=timezone.utc)
+    except ValueError:
+      return None
+
+  dmy_match = DATE_DMY_PATTERN.search(text)
+  if dmy_match:
+    day = int(dmy_match.group(1))
+    month = int(dmy_match.group(2))
+    year = int(dmy_match.group(3))
+    try:
+      return datetime(year, month, day, tzinfo=timezone.utc)
+    except ValueError:
+      return None
+
+  return None
+
+
+def parse_import_datetime_from_url(raw_url: object) -> datetime | None:
+  parsed = urlparse(str(raw_url or "").strip())
+  path = parsed.path or ""
+  return parse_import_datetime_from_text(path)
+
+
+def normalize_import_published_at(raw_value: object, source_url: object = "") -> str:
+  parsed = parse_import_datetime_from_text(raw_value)
+  if parsed is None:
+    parsed = parse_import_datetime_from_url(source_url)
+  if parsed is None:
+    return ""
+  return parsed.astimezone(timezone.utc).isoformat()
+
+
+def build_import_website_url(raw_url: str) -> str:
+  parsed = urlparse(raw_url)
+  if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    return ""
+  return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def is_same_import_domain(candidate_url: str, canonical_domain: str) -> bool:
+  parsed = urlparse(candidate_url)
+  return canonical_domain_from_hostname(parsed.hostname or "") == canonical_domain
+
+
+def should_follow_import_link(candidate_url: str) -> bool:
+  parsed = urlparse(candidate_url)
+  path = (parsed.path or "/").lower()
+  return any(keyword in path for keyword in IMPORT_ALLOWED_PATH_KEYWORDS)
+
+
+def is_service_like_import_url(candidate_url: str) -> bool:
+  parsed = urlparse(candidate_url)
+  path = (parsed.path or "/").lower()
+  return any(keyword in path for keyword in IMPORT_SERVICE_PATH_KEYWORDS)
+
+
+def is_content_like_import_url(candidate_url: str) -> bool:
+  parsed = urlparse(candidate_url)
+  path = (parsed.path or "/").lower()
+  return any(keyword in path for keyword in IMPORT_CONTENT_PATH_KEYWORDS)
+
+
+def fetch_import_html(url: str) -> dict:
+  try:
+    response = requests.get(
+      url,
+      headers={"User-Agent": IMPORT_USER_AGENT, "Accept": "text/html,application/xhtml+xml"},
+      timeout=IMPORT_FETCH_TIMEOUT,
+      stream=True,
+      allow_redirects=True,
+    )
+  except Exception as exc:
+    return {"ok": False, "url": url, "error": str(exc), "status_code": None, "html": ""}
+
+  status_code = int(response.status_code)
+  if status_code >= 400:
+    response.close()
+    return {"ok": False, "url": url, "error": f"HTTP {status_code}", "status_code": status_code, "html": ""}
+
+  content_type = str(response.headers.get("Content-Type", "")).lower()
+  if ("text/html" not in content_type) and ("application/xhtml+xml" not in content_type):
+    response.close()
+    return {
+      "ok": False,
+      "url": url,
+      "error": f"Nicht-HTML Content-Type: {content_type or 'unknown'}",
+      "status_code": status_code,
+      "html": "",
+    }
+
+  chunks: list[bytes] = []
+  total_bytes = 0
+  try:
+    for chunk in response.iter_content(chunk_size=16 * 1024):
+      if not chunk:
+        continue
+      remaining = IMPORT_MAX_PAGE_BYTES - total_bytes
+      if remaining <= 0:
+        break
+      if len(chunk) > remaining:
+        chunks.append(chunk[:remaining])
+        total_bytes += remaining
+        break
+      chunks.append(chunk)
+      total_bytes += len(chunk)
+      if total_bytes >= IMPORT_MAX_PAGE_BYTES:
+        break
+  finally:
+    response.close()
+
+  if not chunks:
+    return {"ok": False, "url": url, "error": "Leere Antwort", "status_code": status_code, "html": ""}
+
+  raw_bytes = b"".join(chunks)
+  encoding = response.encoding or response.apparent_encoding or "utf-8"
+  html_text = raw_bytes.decode(encoding, errors="replace")
+  return {
+    "ok": True,
+    "url": str(response.url or url),
+    "error": "",
+    "status_code": status_code,
+    "html": html_text,
+  }
+
+
+def crawl_import_pages(root_url: str, entry_url: str, canonical_domain: str) -> dict:
+  pages: list[dict] = []
+  pages_attempted = 0
+  seen_urls: set[str] = set()
+  queue: deque[str] = deque()
+
+  def push(url: str, force: bool = False) -> None:
+    normalized = normalize_import_visit_url(url)
+    if not normalized:
+      return
+    if normalized in seen_urls:
+      return
+    if not is_same_import_domain(normalized, canonical_domain):
+      return
+    if (not force) and (not should_follow_import_link(normalized)):
+      return
+    seen_urls.add(normalized)
+    queue.append(normalized)
+
+  root_result = fetch_import_html(root_url)
+  pages_attempted += 1
+  if not root_result["ok"]:
+    return {
+      "root_ok": False,
+      "root_error": root_result["error"],
+      "pages": [],
+      "pages_attempted": pages_attempted,
+      "pages_fetched": 0,
+    }
+
+  root_final_url = normalize_import_visit_url(root_result["url"])
+  if not root_final_url or not is_same_import_domain(root_final_url, canonical_domain):
+    return {
+      "root_ok": False,
+      "root_error": "Root-URL liegt nicht auf der erwarteten Domain.",
+      "pages": [],
+      "pages_attempted": pages_attempted,
+      "pages_fetched": 0,
+    }
+
+  root_soup = BeautifulSoup(root_result["html"], "html.parser")
+  pages.append({"url": root_final_url, "soup": root_soup})
+  seen_urls.add(root_final_url)
+
+  push(entry_url, force=True)
+  for link in root_soup.find_all("a", href=True):
+    href = str(link.get("href") or "").strip()
+    if not href:
+      continue
+    push(urljoin(root_final_url, href), force=False)
+
+  while queue and (pages_attempted < IMPORT_MAX_PAGES) and (len(pages) < IMPORT_MAX_PAGES):
+    current_url = queue.popleft()
+    page_result = fetch_import_html(current_url)
+    pages_attempted += 1
+    if not page_result["ok"]:
+      continue
+
+    final_url = normalize_import_visit_url(page_result["url"])
+    if not final_url or not is_same_import_domain(final_url, canonical_domain):
+      continue
+
+    if any(page["url"] == final_url for page in pages):
+      continue
+
+    soup = BeautifulSoup(page_result["html"], "html.parser")
+    pages.append({"url": final_url, "soup": soup})
+
+    for link in soup.find_all("a", href=True):
+      href = str(link.get("href") or "").strip()
+      if not href:
+        continue
+      push(urljoin(final_url, href), force=False)
+
+  return {
+    "root_ok": True,
+    "root_error": "",
+    "pages": pages,
+    "pages_attempted": pages_attempted,
+    "pages_fetched": len(pages),
+  }
+
+
+def extract_name_from_import_soup(soup: BeautifulSoup) -> str | None:
+  def normalize_clinic_name_for_import(raw_value: object) -> str:
+    candidate = clean_import_text(raw_value, 180)
+    if not candidate:
+      return ""
+    if "@" in candidate or "http://" in candidate.lower() or "https://" in candidate.lower():
+      return ""
+    if "," in candidate:
+      return ""
+    if PRICE_PATTERN.search(candidate):
+      return ""
+
+    normalized = normalize_keyword_text(candidate)
+    if not normalized:
+      return ""
+    tokens = normalized.split()
+    if len(tokens) < 1 or len(tokens) > 8:
+      return ""
+    token_set = set(tokens)
+    if token_set & IMPORT_BLOCKED_NAME_KEYWORDS:
+      return ""
+    if any(char.isdigit() for char in candidate):
+      return ""
+    if candidate.startswith(("+", "-", "*")):
+      return ""
+    return candidate
+
+  def split_title_parts_for_import(raw_title: str) -> list[str]:
+    title = clean_import_text(raw_title, 180)
+    if not title:
+      return []
+    chunks = re.split(r"\s+[|•·:]\s+|\s+-\s+", title)
+    values = [clean_import_text(chunk, 180) for chunk in chunks if clean_import_text(chunk, 180)]
+    if values:
+      return values
+    return [title]
+
+  candidates = [
+    soup.find("meta", attrs={"property": "og:site_name"}),
+    soup.find("meta", attrs={"name": "application-name"}),
+  ]
+  for node in candidates:
+    if not node:
+      continue
+    content = normalize_clinic_name_for_import(node.get("content", ""))
+    if content:
+      return content
+
+  h1 = soup.find("h1")
+  if h1:
+    heading = normalize_clinic_name_for_import(h1.get_text(" ", strip=True))
+    if heading:
+      return heading
+
+  title_node = soup.find("title")
+  if title_node:
+    for candidate in split_title_parts_for_import(title_node.get_text(" ", strip=True)):
+      title = normalize_clinic_name_for_import(candidate)
+      if title:
+        return title
+  return None
+
+
+def extract_address_from_import_soup(soup: BeautifulSoup) -> str | None:
+  for node in soup.find_all("address"):
+    text = clean_import_text(node.get_text(" ", strip=True), 220)
+    if text:
+      return text
+
+  direct = soup.find(attrs={"itemprop": "address"})
+  if direct:
+    text = clean_import_text(direct.get_text(" ", strip=True), 220)
+    if text:
+      return text
+
+  street_node = soup.find(attrs={"itemprop": "streetAddress"})
+  locality_node = soup.find(attrs={"itemprop": "addressLocality"})
+  postal_code_node = soup.find(attrs={"itemprop": "postalCode"})
+  country_node = soup.find(attrs={"itemprop": "addressCountry"})
+
+  street = clean_import_text(street_node.get_text(" ", strip=True), 120) if street_node else ""
+  locality = clean_import_text(locality_node.get_text(" ", strip=True), 80) if locality_node else ""
+  postal_code = clean_import_text(postal_code_node.get_text(" ", strip=True), 32) if postal_code_node else ""
+  country = clean_import_text(country_node.get_text(" ", strip=True), 80) if country_node else ""
+  city_block = clean_import_text(f"{postal_code} {locality}", 120)
+  parts = [part for part in [street, city_block, country] if part]
+  if parts:
+    return ", ".join(parts)
+  return None
+
+
+def normalize_phone_for_import(raw_value: object) -> str:
+  candidate = str(raw_value or "").strip()
+  if not candidate:
+    return ""
+  candidate = candidate.replace("tel:", "").replace("TEL:", "")
+  candidate = re.sub(r"[^\d+\s()./-]", "", candidate)
+  candidate = re.sub(r"\s+", " ", candidate).strip(" .;")
+  digits = re.sub(r"\D", "", candidate)
+  if len(digits) < 8 or len(digits) > 18:
+    return ""
+  return candidate
+
+
+def extract_contacts_from_import_soup(soup: BeautifulSoup) -> tuple[list[str], list[str]]:
+  phones: list[str] = []
+  emails: list[str] = []
+  seen_phones: set[str] = set()
+  seen_emails: set[str] = set()
+
+  for link in soup.find_all("a", href=True):
+    href = str(link.get("href") or "").strip()
+    if href.lower().startswith("tel:"):
+      phone = normalize_phone_for_import(href[4:])
+      if phone and phone not in seen_phones:
+        seen_phones.add(phone)
+        phones.append(phone)
+    if href.lower().startswith("mailto:"):
+      email = clean_import_text(href[7:], 180).lower()
+      if EMAIL_PATTERN.fullmatch(email) and email not in seen_emails:
+        seen_emails.add(email)
+        emails.append(email)
+
+  page_text = soup.get_text(" ", strip=True)
+  for match in EMAIL_PATTERN.findall(page_text):
+    email = clean_import_text(match, 180).lower()
+    if email in seen_emails:
+      continue
+    seen_emails.add(email)
+    emails.append(email)
+
+  for match in PHONE_PATTERN.findall(page_text):
+    phone = normalize_phone_for_import(match)
+    if not phone or phone in seen_phones:
+      continue
+    seen_phones.add(phone)
+    phones.append(phone)
+
+  return phones, emails
+
+
+def looks_like_treatment_title_for_import(title: str) -> bool:
+  normalized = normalize_keyword_text(title)
+  if not normalized:
+    return False
+
+  tokens = normalized.split()
+  token_set = set(tokens)
+  if len(tokens) > 8:
+    return False
+  if token_set & IMPORT_BLOCKED_SERVICE_KEYWORDS:
+    return False
+  if not (token_set & IMPORT_TREATMENT_KEYWORDS):
+    return False
+
+  lowered = title.lower()
+  if title.startswith(("+", "-", "*")):
+    return False
+  if any(char.isdigit() for char in title):
+    return False
+  if "%" in title:
+    return False
+  if "," in title and len(tokens) > 5:
+    return False
+  if any(fragment in lowered for fragment in (" app ", " branding", " buchen", " verkaufen")):
+    return False
+  return True
+
+
+def normalize_service_title_for_import(raw_value: object) -> str:
+  title = clean_import_text(raw_value, 120)
+  if not title:
+    return ""
+  if "@" in title or "http://" in title.lower() or "https://" in title.lower():
+    return ""
+  if len(title) < 3 or len(title) > 90:
+    return ""
+  if len(title.split()) > 12:
+    return ""
+
+  stripped = PRICE_PATTERN.sub("", title)
+  stripped = re.sub(r"[-–—|:]+", " ", stripped)
+  stripped = clean_import_text(stripped, 120)
+  if not stripped:
+    return ""
+  normalized = normalize_keyword_text(stripped)
+  if not normalized:
+    return ""
+  if normalized in IMPORT_GENERIC_SERVICE_LABELS:
+    return ""
+  digit_count = len(re.findall(r"\d", stripped))
+  if digit_count > max(3, int(len(stripped) * 0.35)):
+    return ""
+  if not looks_like_treatment_title_for_import(stripped):
+    return ""
+  return stripped
+
+
+def extract_services_from_import_soup(soup: BeautifulSoup, source_url: str) -> list[dict]:
+  candidates: list[dict] = []
+  seen_titles: set[str] = set()
+  nodes = soup.select("h1,h2,h3,h4,li")
+  for node in nodes[:600]:
+    title = normalize_service_title_for_import(node.get_text(" ", strip=True))
+    if not title:
+      continue
+    key = normalize_keyword_text(title)
+    if key in seen_titles:
+      continue
+    seen_titles.add(key)
+    candidates.append({"title": title, "source_url": source_url})
+  return candidates
+
+
+def extract_prices_from_import_soup(soup: BeautifulSoup, source_url: str) -> list[dict]:
+  prices: list[dict] = []
+  seen_pairs: set[tuple[str, str]] = set()
+  nodes = soup.select("li,p,tr,div")
+  for node in nodes[:800]:
+    text = clean_import_text(node.get_text(" ", strip=True), 200)
+    if not text:
+      continue
+    match = PRICE_PATTERN.search(text)
+    if not match:
+      continue
+
+    price_text = clean_import_text(match.group(1), 40)
+    title = normalize_service_title_for_import(PRICE_PATTERN.sub("", text, count=1))
+    if not title:
+      continue
+
+    key = (normalize_keyword_text(title), price_text.lower())
+    if key in seen_pairs:
+      continue
+    seen_pairs.add(key)
+    prices.append({"title": title, "price": price_text, "source_url": source_url})
+  return prices
+
+
+def normalize_article_title_for_import(raw_value: object) -> str:
+  title = clean_import_text(raw_value, 180)
+  if not title:
+    return ""
+  if "@" in title or "http://" in title.lower() or "https://" in title.lower():
+    return ""
+  if PRICE_PATTERN.search(title):
+    return ""
+  if len(title) < 8 or len(title) > 150:
+    return ""
+  if title.startswith(("+", "-", "*")):
+    return ""
+
+  normalized = normalize_keyword_text(title)
+  if not normalized:
+    return ""
+  if normalized in IMPORT_GENERIC_ARTICLE_LABELS:
+    return ""
+  tokens = normalized.split()
+  if len(tokens) < 2 or len(tokens) > 18:
+    return ""
+  token_set = set(tokens)
+  if token_set & IMPORT_BLOCKED_SERVICE_KEYWORDS:
+    return ""
+  digit_count = len(re.findall(r"\d", title))
+  if digit_count > max(4, int(len(title) * 0.25)):
+    return ""
+  return title
+
+
+def normalize_article_body_for_import(raw_value: object) -> str:
+  body = clean_import_text(raw_value, 320)
+  if not body:
+    return ""
+  lowered = normalize_keyword_text(body)
+  if not lowered:
+    return ""
+  if len(lowered.split()) < 4:
+    return ""
+  if any(fragment in lowered for fragment in ("jetzt buchen", "kostenlose demo", "kostenfrei", "call now", "book now")):
+    return ""
+  if "http " in lowered or "https " in lowered or "@" in body:
+    return ""
+  return body
+
+
+def extract_article_body_from_heading(node: BeautifulSoup) -> str:
+  sibling = node
+  for _ in range(4):
+    sibling = sibling.find_next_sibling()
+    if sibling is None:
+      break
+    text = normalize_article_body_for_import(sibling.get_text(" ", strip=True))
+    if text:
+      return text
+
+  container = node.find_parent(["article", "section", "main", "div"])
+  if container is None:
+    return ""
+  for paragraph in container.find_all("p", limit=6):
+    text = normalize_article_body_for_import(paragraph.get_text(" ", strip=True))
+    if text:
+      return text
+  return ""
+
+
+def extract_article_source_url_from_heading(node: BeautifulSoup, source_url: str) -> str:
+  canonical_domain = canonical_domain_from_url(source_url)
+  title_key = normalize_keyword_text(node.get_text(" ", strip=True))
+  candidates: list[str] = []
+
+  heading_link = node.find("a", href=True)
+  if heading_link:
+    candidates.append(str(heading_link.get("href") or "").strip())
+
+  parent_link = node.find_parent("a", href=True)
+  if parent_link:
+    candidates.append(str(parent_link.get("href") or "").strip())
+
+  for container in (node.find_parent("article"), node.find_parent("section"), node.find_parent("div")):
+    if container is None:
+      continue
+    for link in container.find_all("a", href=True, limit=8):
+      link_text_key = normalize_keyword_text(link.get_text(" ", strip=True))
+      if not link_text_key:
+        continue
+      if title_key and (link_text_key == title_key or title_key in link_text_key or link_text_key in title_key):
+        candidates.append(str(link.get("href") or "").strip())
+
+  for raw_candidate in candidates:
+    if not raw_candidate:
+      continue
+    resolved = normalize_import_visit_url(urljoin(source_url, raw_candidate))
+    if not resolved:
+      continue
+    if canonical_domain and not is_same_import_domain(resolved, canonical_domain):
+      continue
+    return resolved
+
+  return normalize_import_visit_url(source_url) or source_url
+
+
+def extract_image_src_from_tag_for_import(img_node, source_url: str) -> str:
+  if not img_node:
+    return ""
+
+  srcset_value = str(img_node.get("srcset") or "").strip()
+  if srcset_value:
+    for entry in srcset_value.split(","):
+      candidate = str(entry.split(" ")[0] or "").strip()
+      normalized = normalize_import_media_url(candidate, source_url)
+      if normalized:
+        return normalized
+
+  for key in ("src", "data-src", "data-lazy-src", "data-original", "data-image"):
+    candidate = normalize_import_media_url(img_node.get(key, ""), source_url)
+    if candidate:
+      return candidate
+  return ""
+
+
+def extract_article_image_from_heading(node: BeautifulSoup, soup: BeautifulSoup, source_url: str) -> str:
+  containers = [
+    node.find_parent("article"),
+    node.find_parent("section"),
+    node.find_parent("div"),
+  ]
+
+  seen_container: set[int] = set()
+  for container in containers:
+    if container is None:
+      continue
+    marker = id(container)
+    if marker in seen_container:
+      continue
+    seen_container.add(marker)
+    for img_node in container.find_all("img", limit=10):
+      image_url = extract_image_src_from_tag_for_import(img_node, source_url)
+      if image_url:
+        return image_url
+
+  sibling = node
+  for _ in range(4):
+    sibling = sibling.find_next_sibling()
+    if sibling is None:
+      break
+    if getattr(sibling, "name", None) == "img":
+      image_url = extract_image_src_from_tag_for_import(sibling, source_url)
+      if image_url:
+        return image_url
+    for img_node in sibling.find_all("img", limit=4):
+      image_url = extract_image_src_from_tag_for_import(img_node, source_url)
+      if image_url:
+        return image_url
+
+  for meta_key in ("og:image", "twitter:image"):
+    meta_node = soup.find("meta", attrs={"property": meta_key}) or soup.find("meta", attrs={"name": meta_key})
+    if not meta_node:
+      continue
+    image_url = normalize_import_media_url(meta_node.get("content", ""), source_url)
+    if image_url:
+      return image_url
+  return ""
+
+
+def extract_article_published_at_from_heading(node: BeautifulSoup, soup: BeautifulSoup, source_url: str) -> str:
+  for container in (node.find_parent("article"), node.find_parent("section"), node.find_parent("div")):
+    if container is None:
+      continue
+    time_node = container.find("time")
+    if time_node:
+      parsed = normalize_import_published_at(time_node.get("datetime", ""), source_url)
+      if parsed:
+        return parsed
+      parsed = normalize_import_published_at(time_node.get_text(" ", strip=True), source_url)
+      if parsed:
+        return parsed
+
+  sibling = node
+  for _ in range(4):
+    sibling = sibling.find_next_sibling()
+    if sibling is None:
+      break
+    if getattr(sibling, "name", None) == "time":
+      parsed = normalize_import_published_at(sibling.get("datetime", ""), source_url)
+      if parsed:
+        return parsed
+      parsed = normalize_import_published_at(sibling.get_text(" ", strip=True), source_url)
+      if parsed:
+        return parsed
+    parsed = normalize_import_published_at(sibling.get_text(" ", strip=True), source_url)
+    if parsed:
+      return parsed
+
+  for meta_key in ("article:published_time", "article:modified_time", "og:updated_time"):
+    meta_node = soup.find("meta", attrs={"property": meta_key}) or soup.find("meta", attrs={"name": meta_key})
+    if not meta_node:
+      continue
+    parsed = normalize_import_published_at(meta_node.get("content", ""), source_url)
+    if parsed:
+      return parsed
+
+  return normalize_import_published_at("", source_url)
+
+
+def extract_articles_from_import_soup(soup: BeautifulSoup, source_url: str) -> list[dict]:
+  articles: list[dict] = []
+  seen_titles: set[str] = set()
+
+  article_nodes = soup.select("article h1,article h2,article h3")
+  if not article_nodes:
+    article_nodes = soup.select("main h1,main h2,main h3")
+  if not article_nodes:
+    article_nodes = soup.select("h1,h2,h3")
+
+  for node in article_nodes[:220]:
+    title = normalize_article_title_for_import(node.get_text(" ", strip=True))
+    if not title:
+      continue
+    key = normalize_keyword_text(title)
+    if key in seen_titles:
+      continue
+    seen_titles.add(key)
+    body = extract_article_body_from_heading(node)
+    article_source_url = extract_article_source_url_from_heading(node, source_url)
+    image_url = extract_article_image_from_heading(node, soup, source_url)
+    published_at = extract_article_published_at_from_heading(node, soup, source_url)
+    articles.append(
+      {
+        "title": title,
+        "body": body,
+        "image_url": image_url,
+        "published_at": published_at,
+        "source_url": article_source_url,
+      }
+    )
+  return articles
+
+
+def extract_import_data_from_pages(pages: list[dict]) -> dict:
+  extracted_name: str | None = None
+  extracted_address: str | None = None
+  phones: list[str] = []
+  emails: list[str] = []
+  services: list[dict] = []
+  prices: list[dict] = []
+  articles: list[dict] = []
+  seen_phone: set[str] = set()
+  seen_email: set[str] = set()
+  seen_service: set[str] = set()
+  seen_price: set[tuple[str, str]] = set()
+  seen_article: dict[str, int] = {}
+  root_page_url = str(pages[0]["url"]) if pages else ""
+  has_service_like_pages = any(is_service_like_import_url(str(page.get("url", ""))) for page in pages)
+  has_content_like_pages = any(is_content_like_import_url(str(page.get("url", ""))) for page in pages)
+
+  for page in pages:
+    soup = page["soup"]
+    page_url = str(page["url"])
+
+    if extracted_name is None and page_url == root_page_url:
+      candidate_name = extract_name_from_import_soup(soup)
+      if candidate_name:
+        extracted_name = candidate_name
+    if extracted_address is None:
+      candidate_address = extract_address_from_import_soup(soup)
+      if candidate_address:
+        extracted_address = candidate_address
+
+    page_phones, page_emails = extract_contacts_from_import_soup(soup)
+    for phone in page_phones:
+      normalized = normalize_phone_for_import(phone)
+      if not normalized or normalized in seen_phone:
+        continue
+      seen_phone.add(normalized)
+      phones.append(normalized)
+    for email in page_emails:
+      normalized = clean_import_text(email, 180).lower()
+      if not EMAIL_PATTERN.fullmatch(normalized) or normalized in seen_email:
+        continue
+      seen_email.add(normalized)
+      emails.append(normalized)
+
+    include_services = is_service_like_import_url(page_url) or (
+      (not has_service_like_pages) and (page_url == root_page_url or len(pages) == 1)
+    )
+    if include_services:
+      for service_item in extract_services_from_import_soup(soup, page_url):
+        service_key = normalize_keyword_text(service_item["title"])
+        if service_key in seen_service:
+          continue
+        seen_service.add(service_key)
+        services.append(service_item)
+
+      for price_item in extract_prices_from_import_soup(soup, page_url):
+        price_key = (normalize_keyword_text(price_item["title"]), str(price_item["price"]).lower())
+        if price_key in seen_price:
+          continue
+        seen_price.add(price_key)
+        prices.append(price_item)
+
+    include_articles = is_content_like_import_url(page_url) or (
+      (not has_content_like_pages) and bool(soup.find("article"))
+    )
+    if include_articles:
+      for article_item in extract_articles_from_import_soup(soup, page_url):
+        article_key = normalize_keyword_text(article_item["title"])
+        if article_key in seen_article:
+          existing_index = seen_article[article_key]
+          existing_item = articles[existing_index]
+          if (not existing_item.get("body")) and article_item.get("body"):
+            existing_item["body"] = article_item.get("body")
+          if (not existing_item.get("image_url")) and article_item.get("image_url"):
+            existing_item["image_url"] = article_item.get("image_url")
+          if (not existing_item.get("published_at")) and article_item.get("published_at"):
+            existing_item["published_at"] = article_item.get("published_at")
+          existing_source = normalize_import_visit_url(existing_item.get("source_url", ""))
+          incoming_source = normalize_import_visit_url(article_item.get("source_url", ""))
+          if incoming_source and (
+            (not existing_source) or existing_source in {page_url, root_page_url}
+          ):
+            existing_item["source_url"] = incoming_source
+          continue
+        seen_article[article_key] = len(articles)
+        articles.append(article_item)
+
+  first_phone = phones[0] if phones else None
+  first_email = emails[0] if emails else None
+
+  return {
+    "name": extracted_name,
+    "address": extracted_address,
+    "phone": first_phone,
+    "email": first_email,
+    "services": services,
+    "prices": prices,
+    "articles": articles,
+  }
+
+
+def find_existing_clinic_by_import_domain(conn: DBConnectionAdapter, canonical_domain: str):
+  rows = conn.execute(
+    """
+    SELECT
+      id,
+      name,
+      website,
+      import_source_url
+    FROM clinics
+    ORDER BY id ASC
+    """
+  ).fetchall()
+
+  for row in rows:
+    website_domain = canonical_domain_from_url(row["website"] or "")
+    import_source_domain = canonical_domain_from_url(row["import_source_url"] or "")
+    if canonical_domain in {website_domain, import_source_domain}:
+      return row
+  return None
+
+
+def replace_clinic_import_services(conn: DBConnectionAdapter, clinic_id: int, services: list[dict], prices: list[dict]) -> None:
+  price_by_title: dict[str, str] = {}
+  for item in prices:
+    title = normalize_service_title_for_import(item.get("title"))
+    price_text = clean_import_text(item.get("price"), 40)
+    if not title or not price_text:
+      continue
+    title_key = normalize_keyword_text(title)
+    if title_key and title_key not in price_by_title:
+      price_by_title[title_key] = price_text
+
+  conn.execute("DELETE FROM clinic_import_services WHERE clinic_id = ?", (clinic_id,))
+  for service in services[:400]:
+    title = normalize_service_title_for_import(service.get("title"))
+    if not title:
+      continue
+    source_url = normalize_import_visit_url(service.get("source_url", "")) or ""
+    title_key = normalize_keyword_text(title)
+    price_text = price_by_title.get(title_key)
+    conn.execute(
+      """
+      INSERT INTO clinic_import_services (
+        clinic_id,
+        title,
+        price_text,
+        source_url
+      )
+      VALUES (?, ?, ?, ?)
+      """,
+      (clinic_id, title, price_text, source_url),
+    )
+
+
+def parse_price_text_to_cents_for_import(price_text: object) -> int:
+  raw = str(price_text or "").strip()
+  if not raw:
+    return 0
+  match = re.search(r"(\d{1,4}(?:[.,]\d{1,2})?)", raw)
+  if not match:
+    return 0
+  number_text = match.group(1).replace(",", ".")
+  try:
+    value_eur = float(number_text)
+  except Exception:
+    return 0
+  cents = int(round(value_eur * 100))
+  if cents < 0:
+    return 0
+  return cents
+
+
+def infer_import_treatment_category(title: str) -> str:
+  normalized = normalize_keyword_text(title)
+  tokens = set(normalized.split())
+  if not tokens:
+    return "gesicht"
+
+  hair_keywords = IMPORT_TREATMENT_CATEGORY_KEYWORDS["haare"]
+  if tokens & hair_keywords:
+    return "haare"
+
+  injectable_keywords = IMPORT_TREATMENT_CATEGORY_KEYWORDS["injectables"]
+  if tokens & injectable_keywords:
+    return "injectables"
+
+  body_keywords = IMPORT_TREATMENT_CATEGORY_KEYWORDS["koerper"]
+  if tokens & body_keywords:
+    return "koerper"
+
+  premium_keywords = IMPORT_TREATMENT_CATEGORY_KEYWORDS["premium"]
+  if tokens & premium_keywords:
+    return "premium"
+
+  return "gesicht"
+
+
+def build_catalog_treatments_from_import(services: list[dict], prices: list[dict]) -> list[dict]:
+  price_by_title: dict[str, int] = {}
+  for item in prices:
+    title = normalize_service_title_for_import(item.get("title"))
+    if not title:
+      continue
+    cents = parse_price_text_to_cents_for_import(item.get("price"))
+    if cents <= 0:
+      continue
+    key = normalize_keyword_text(title)
+    if key and key not in price_by_title:
+      price_by_title[key] = cents
+
+  output: list[dict] = []
+  seen_titles: set[str] = set()
+  for item in services[:300]:
+    title = normalize_service_title_for_import(item.get("title"))
+    if not title:
+      continue
+    key = normalize_keyword_text(title)
+    if not key or key in seen_titles:
+      continue
+    seen_titles.add(key)
+
+    price_cents = int(price_by_title.get(key, 0))
+    output.append(
+      {
+        "id": f"imp-t-{len(output) + 1}",
+        "name": title,
+        "category": infer_import_treatment_category(title),
+        "priceCents": price_cents,
+        "memberPriceCents": price_cents,
+        "durationMinutes": 45,
+        "description": "",
+        "sourceUrl": normalize_import_visit_url(item.get("source_url", "")) or "",
+      }
+    )
+    if len(output) >= 200:
+      break
+  return output
+
+
+def replace_clinic_import_catalog_treatments(
+  conn: DBConnectionAdapter,
+  clinic_id: int,
+  clinic_name: str,
+  services: list[dict],
+  prices: list[dict],
+) -> None:
+  imported_treatments = build_catalog_treatments_from_import(services, prices)
+  if not imported_treatments:
+    return
+
+  ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+  row = conn.execute(
+    """
+    SELECT
+      categories_json,
+      memberships_json,
+      reward_actions_json,
+      reward_redeems_json,
+      home_articles_json
+    FROM clinic_catalogs
+    WHERE clinic_id = ?
+    LIMIT 1
+    """,
+    (clinic_id,),
+  ).fetchone()
+  if not row:
+    return
+
+  conn.execute(
+    """
+    UPDATE clinic_catalogs
+    SET
+      categories_json = ?,
+      treatments_json = ?,
+      memberships_json = ?,
+      reward_actions_json = ?,
+      reward_redeems_json = ?,
+      home_articles_json = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE clinic_id = ?
+    """,
+    (
+      row["categories_json"],
+      serialize_json_list(imported_treatments),
+      row["memberships_json"],
+      row["reward_actions_json"],
+      row["reward_redeems_json"],
+      row["home_articles_json"],
+      clinic_id,
+    ),
+  )
+
+
+def infer_article_tag_for_import(source_url: str) -> str:
+  path = (urlparse(str(source_url or "")).path or "").lower()
+  if any(keyword in path for keyword in ("/news", "/neuigkeiten")):
+    return "News"
+  if any(keyword in path for keyword in ("/blog", "/insights", "/magazin", "/artikel", "/article", "/ratgeber")):
+    return "Blog"
+  return "Wissen"
+
+
+def build_home_articles_from_import(articles: list[dict]) -> list[dict]:
+  prepared: list[dict] = []
+  seen_titles: set[str] = set()
+  for index, item in enumerate(articles[:120]):
+    title = normalize_article_title_for_import(item.get("title"))
+    if not title:
+      continue
+    title_key = normalize_keyword_text(title)
+    if title_key in seen_titles:
+      continue
+    seen_titles.add(title_key)
+
+    body = normalize_article_body_for_import(item.get("body"))
+    source_url = normalize_import_visit_url(item.get("source_url", "")) or ""
+    image_url = normalize_import_media_url(item.get("image_url", ""), source_url)
+    published_at = normalize_import_published_at(item.get("published_at", ""), source_url)
+    published_dt = parse_import_datetime_from_text(published_at) if published_at else None
+
+    prepared.append(
+      {
+        "_order": index,
+        "_timestamp": int(published_dt.timestamp()) if published_dt else None,
+        "tag": infer_article_tag_for_import(source_url),
+        "title": title,
+        "body": body,
+        "sourceUrl": source_url,
+        "imageUrl": image_url,
+        "publishedAt": published_at,
+      }
+    )
+
+  prepared.sort(
+    key=lambda item: (
+      0 if item["_timestamp"] is not None else 1,
+      -(item["_timestamp"] or 0),
+      item["_order"],
+    )
+  )
+
+  output: list[dict] = []
+  for item in prepared[:IMPORT_MAX_HOME_ARTICLES]:
+    output.append(
+      {
+        "id": f"imp-{len(output) + 1}",
+        "tag": item.get("tag", ""),
+        "title": item.get("title", ""),
+        "body": item.get("body", ""),
+        "sourceUrl": item.get("sourceUrl", ""),
+        "imageUrl": item.get("imageUrl", ""),
+        "publishedAt": item.get("publishedAt", ""),
+      }
+    )
+  return output
+
+
+def replace_clinic_import_home_articles(
+  conn: DBConnectionAdapter,
+  clinic_id: int,
+  clinic_name: str,
+  articles: list[dict],
+) -> None:
+  imported_home_articles = build_home_articles_from_import(articles)
+  if not imported_home_articles:
+    return
+
+  ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+  conn.execute(
+    """
+    UPDATE clinic_catalogs
+    SET
+      home_articles_json = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE clinic_id = ?
+    """,
+    (serialize_json_list(imported_home_articles), clinic_id),
+  )
+
+
+def apply_import_to_existing_clinic(
+  conn: DBConnectionAdapter,
+  clinic_id: int,
+  source_url: str,
+  website_url: str,
+  canonical_domain: str,
+  extracted: dict,
+  preserve_existing_name: bool = False,
+) -> dict:
+  clinic_row = conn.execute(
+    """
+    SELECT id, name
+    FROM clinics
+    WHERE id = ?
+    LIMIT 1
+    """,
+    (clinic_id,),
+  ).fetchone()
+  if not clinic_row:
+    raise ValueError("Klinik nicht gefunden.")
+
+  existing_name = clean_import_text(clinic_row["name"], 180) or canonical_domain
+  extracted_name = clean_import_text(extracted.get("name"), 180) or None
+  extracted_address = clean_import_text(extracted.get("address"), 220) or None
+  extracted_phone = normalize_phone_for_import(extracted.get("phone")) or None
+  extracted_email_raw = clean_import_text(extracted.get("email"), 180).lower()
+  extracted_email = extracted_email_raw if EMAIL_PATTERN.fullmatch(extracted_email_raw) else None
+  services = extracted.get("services") if isinstance(extracted.get("services"), list) else []
+  prices = extracted.get("prices") if isinstance(extracted.get("prices"), list) else []
+  articles = extracted.get("articles") if isinstance(extracted.get("articles"), list) else []
+  imported_at = utc_now_iso()
+
+  db_name = existing_name if preserve_existing_name else (extracted_name or existing_name)
+  if not db_name:
+    db_name = canonical_domain
+
+  conn.execute(
+    """
+    UPDATE clinics
+    SET
+      name = ?,
+      website = ?,
+      import_name = ?,
+      address = ?,
+      phone = ?,
+      email = ?,
+      import_source_url = ?,
+      imported_at = ?
+    WHERE id = ?
+    """,
+    (
+      db_name,
+      website_url,
+      extracted_name,
+      extracted_address,
+      extracted_phone,
+      extracted_email,
+      source_url,
+      imported_at,
+      clinic_id,
+    ),
+  )
+  conn.execute(
+    """
+    UPDATE users
+    SET
+      clinic_name = ?,
+      website = ?
+    WHERE clinic_id = ?
+    """,
+    (db_name, website_url, clinic_id),
+  )
+  ensure_clinic_catalog_row(conn, clinic_id, db_name)
+  replace_clinic_import_services(conn, clinic_id, services, prices)
+  replace_clinic_import_catalog_treatments(conn, clinic_id, db_name, services, prices)
+  replace_clinic_import_home_articles(conn, clinic_id, db_name, articles)
+
+  return {
+    "clinicId": clinic_id,
+    "clinicName": db_name,
+    "importedAt": imported_at,
+  }
+
+
+def auto_import_website_for_existing_clinic(
+  clinic_id: int,
+  raw_url: str,
+  preserve_existing_name: bool = True,
+) -> dict:
+  normalized_url = normalize_import_input_url(raw_url)
+  if not normalized_url:
+    return {
+      "triggered": False,
+      "success": False,
+      "error": "Ungültige Website-URL.",
+      "clinicId": clinic_id,
+    }
+
+  canonical_domain = canonical_domain_from_url(normalized_url)
+  website_url = build_import_website_url(normalized_url)
+  if not canonical_domain or not website_url:
+    return {
+      "triggered": False,
+      "success": False,
+      "error": "Domain oder Website-URL konnte nicht ermittelt werden.",
+      "clinicId": clinic_id,
+    }
+
+  crawl_result = crawl_import_pages(website_url, normalized_url, canonical_domain)
+  if not crawl_result["root_ok"]:
+    return {
+      "triggered": True,
+      "success": False,
+      "error": f"Root-Seite konnte nicht geladen werden: {crawl_result['root_error']}",
+      "clinicId": clinic_id,
+      "website": website_url,
+      "domain": canonical_domain,
+      "pagesAttempted": int(crawl_result["pages_attempted"]),
+      "pagesFetched": int(crawl_result["pages_fetched"]),
+    }
+
+  extracted = extract_import_data_from_pages(crawl_result["pages"])
+  with get_db() as conn:
+    applied = apply_import_to_existing_clinic(
+      conn=conn,
+      clinic_id=clinic_id,
+      source_url=normalized_url,
+      website_url=website_url,
+      canonical_domain=canonical_domain,
+      extracted=extracted,
+      preserve_existing_name=preserve_existing_name,
+    )
+
+  services_payload = [
+    item
+    for item in extracted.get("services", [])
+    if isinstance(item, dict) and str(item.get("title", "")).strip()
+  ]
+  prices_payload = [
+    item
+    for item in extracted.get("prices", [])
+    if isinstance(item, dict)
+    and str(item.get("title", "")).strip()
+    and str(item.get("price", "")).strip()
+  ]
+  articles_payload = [
+    item
+    for item in extracted.get("articles", [])
+    if isinstance(item, dict) and str(item.get("title", "")).strip()
+  ]
+  missing_fields = [
+    field_name
+    for field_name in ("name", "address", "phone", "email")
+    if not extracted.get(field_name)
+  ]
+
+  return {
+    "triggered": True,
+    "success": True,
+    "error": "",
+    "clinicId": int(applied["clinicId"]),
+    "clinicName": applied["clinicName"],
+    "importedAt": applied["importedAt"],
+    "website": website_url,
+    "domain": canonical_domain,
+    "pagesAttempted": int(crawl_result["pages_attempted"]),
+    "pagesFetched": int(crawl_result["pages_fetched"]),
+    "servicesFound": len(services_payload),
+    "pricesFound": len(prices_payload),
+    "articlesFound": len(articles_payload),
+    "missingFields": missing_fields,
+  }
+
+
+def upsert_imported_clinic_record(
+  source_url: str,
+  website_url: str,
+  canonical_domain: str,
+  extracted: dict,
+) -> tuple[int, bool]:
+  extracted_name = clean_import_text(extracted.get("name"), 180) or None
+  services = extracted.get("services") if isinstance(extracted.get("services"), list) else []
+  prices = extracted.get("prices") if isinstance(extracted.get("prices"), list) else []
+  articles = extracted.get("articles") if isinstance(extracted.get("articles"), list) else []
+
+  with get_db() as conn:
+    existing = find_existing_clinic_by_import_domain(conn, canonical_domain)
+    if existing:
+      clinic_id = int(existing["id"])
+      apply_import_to_existing_clinic(
+        conn=conn,
+        clinic_id=clinic_id,
+        source_url=source_url,
+        website_url=website_url,
+        canonical_domain=canonical_domain,
+        extracted=extracted,
+        preserve_existing_name=False,
+      )
+      return clinic_id, False
+
+    fallback_name = extracted_name or canonical_domain
+    clinic_id = insert_and_get_id(
+      conn,
+      """
+      INSERT INTO clinics (
+        name,
+        logo_url,
+        website,
+        brand_color,
+        accent_color,
+        font_family,
+        design_preset,
+        calendly_url,
+        subscription_status,
+        import_name,
+        address,
+        phone,
+        email,
+        import_source_url,
+        imported_at
+      )
+      VALUES (?, '', ?, '#16A34A', '#EB6C13', 'Gabarito, DM Sans, sans-serif', 'clean', ?, 'inactive', ?, ?, ?, ?, ?, ?)
+      """,
+      (
+        fallback_name,
+        website_url,
+        resolved_calendly_url(),
+        extracted_name,
+        extracted_address,
+        extracted_phone,
+        extracted_email,
+        source_url,
+        imported_at,
+      ),
+    )
+    ensure_clinic_catalog_row(conn, int(clinic_id), fallback_name)
+    replace_clinic_import_services(conn, int(clinic_id), services, prices)
+    replace_clinic_import_catalog_treatments(conn, int(clinic_id), fallback_name, services, prices)
+    replace_clinic_import_home_articles(conn, int(clinic_id), fallback_name, articles)
+    return int(clinic_id), True
+
+
 def is_placeholder_calendly_url(value: str) -> bool:
   normalized = normalize_url(value).lower()
   if not normalized:
@@ -4806,6 +6498,104 @@ def admin_me():
   if not admin:
     return auth_error
   return jsonify({"admin": admin})
+
+
+@app.post("/api/import-clinic")
+def import_clinic():
+  admin, auth_error = require_superadmin()
+  if not admin:
+    return auth_error
+
+  payload = request.get_json(silent=True) or {}
+  raw_url = str(payload.get("url", "")).strip()
+  normalized_url = normalize_import_input_url(raw_url)
+  if not normalized_url:
+    return jsonify({"error": "Bitte eine gültige Website-URL mit http:// oder https:// angeben."}), 400
+
+  canonical_domain = canonical_domain_from_url(normalized_url)
+  if not canonical_domain:
+    return jsonify({"error": "Domain konnte aus der URL nicht ermittelt werden."}), 400
+
+  website_url = build_import_website_url(normalized_url)
+  if not website_url:
+    return jsonify({"error": "Website-URL ist ungültig."}), 400
+
+  crawl_result = crawl_import_pages(website_url, normalized_url, canonical_domain)
+  if not crawl_result["root_ok"]:
+    return jsonify({"error": f"Root-Seite konnte nicht geladen werden: {crawl_result['root_error']}"}), 502
+
+  extracted = extract_import_data_from_pages(crawl_result["pages"])
+  clinic_id, created = upsert_imported_clinic_record(
+    source_url=normalized_url,
+    website_url=website_url,
+    canonical_domain=canonical_domain,
+    extracted=extracted,
+  )
+
+  with get_db() as conn:
+    clinic_row = conn.execute(
+      """
+      SELECT imported_at
+      FROM clinics
+      WHERE id = ?
+      LIMIT 1
+      """,
+      (clinic_id,),
+    ).fetchone()
+
+  services_payload = [
+    str(item["title"])
+    for item in extracted.get("services", [])
+    if isinstance(item, dict) and str(item.get("title", "")).strip()
+  ]
+  prices_payload = [
+    {
+      "title": str(item["title"]),
+      "price": str(item["price"]),
+    }
+    for item in extracted.get("prices", [])
+    if isinstance(item, dict)
+    and str(item.get("title", "")).strip()
+    and str(item.get("price", "")).strip()
+  ]
+  articles_payload = [
+    str(item["title"])
+    for item in extracted.get("articles", [])
+    if isinstance(item, dict) and str(item.get("title", "")).strip()
+  ]
+
+  missing_fields = [
+    field_name
+    for field_name in ("name", "address", "phone", "email")
+    if not extracted.get(field_name)
+  ]
+
+  return jsonify(
+    {
+      "clinic": {
+        "id": clinic_id,
+        "domain": canonical_domain,
+        "website": website_url,
+        "name": extracted.get("name"),
+        "address": extracted.get("address"),
+        "phone": extracted.get("phone"),
+        "email": extracted.get("email"),
+        "services": services_payload,
+        "prices": prices_payload,
+        "articles": articles_payload,
+        "imported_at": clinic_row["imported_at"] if clinic_row else utc_now_iso(),
+      },
+      "import_summary": {
+        "created": created,
+        "pages_fetched": int(crawl_result["pages_fetched"]),
+        "pages_attempted": int(crawl_result["pages_attempted"]),
+        "services_found": len(services_payload),
+        "prices_found": len(prices_payload),
+        "articles_found": len(articles_payload),
+        "missing_fields": missing_fields,
+      },
+    }
+  ), (201 if created else 200)
 
 
 @app.get("/api/admin/overview")
@@ -5914,6 +7704,10 @@ def mobile_cart_add():
     membership_row = synchronize_patient_membership_row(clinic_row, membership_row)
 
   pricing = membership_pricing_for_treatment(clinic_row, treatment, membership_row)
+  standard_price_cents = parse_amount_cents(treatment.get("priceCents")) or 0
+  member_price_cents = parse_amount_cents(treatment.get("memberPriceCents")) or 0
+  if pricing["priceSource"] != "included" and standard_price_cents <= 0 and member_price_cents <= 0:
+    return jsonify({"error": "Für dieses Treatment ist noch kein Preis hinterlegt."}), 422
   unit_price_cents = int(pricing["unitPriceCents"] or 0)
   total_cents = max(0, unit_price_cents * units)
 
@@ -6003,6 +7797,10 @@ def mobile_checkout_complete():
       units = 1
     units = max(1, min(units, 20))
     pricing = membership_pricing_for_treatment(clinic_row, treatment, membership_row)
+    standard_price_cents = parse_amount_cents(treatment.get("priceCents")) or 0
+    member_price_cents = parse_amount_cents(treatment.get("memberPriceCents")) or 0
+    if pricing["priceSource"] != "included" and standard_price_cents <= 0 and member_price_cents <= 0:
+      continue
     unit_price_cents = int(pricing["unitPriceCents"] or 0)
     line_total_cents = max(0, unit_price_cents * units)
     total_cents += line_total_cents
@@ -7135,6 +8933,9 @@ def update_clinic_settings():
   if len(font_family) > 120:
     return jsonify({"error": "Schriftart ist zu lang."}), 400
 
+  previous_website = normalize_import_input_url(clinic_row["website"] or "")
+  next_website = normalize_import_input_url(website)
+
   with get_db() as conn:
     conn.execute(
       """
@@ -7191,6 +8992,64 @@ def update_clinic_settings():
       ),
     )
 
+  website_import = {
+    "triggered": False,
+    "success": False,
+    "error": "",
+    "clinicId": clinic_id,
+  }
+  if next_website and next_website != previous_website:
+    website_import = auto_import_website_for_existing_clinic(
+      clinic_id=clinic_id,
+      raw_url=website,
+      preserve_existing_name=True,
+    )
+    if not website_import.get("success"):
+      create_audit_log(
+        clinic_id=clinic_id,
+        actor_user_id=int(user_row["id"]),
+        action="clinic.website_import_failed",
+        entity_type="clinic",
+        entity_id=str(clinic_id),
+        metadata={
+          "website": website,
+          "error": website_import.get("error", ""),
+        },
+      )
+    else:
+      create_audit_log(
+        clinic_id=clinic_id,
+        actor_user_id=int(user_row["id"]),
+        action="clinic.website_import_completed",
+        entity_type="clinic",
+        entity_id=str(clinic_id),
+        metadata={
+          "website": website_import.get("website", website),
+          "servicesFound": website_import.get("servicesFound", 0),
+          "pricesFound": website_import.get("pricesFound", 0),
+          "articlesFound": website_import.get("articlesFound", 0),
+        },
+      )
+
+  refreshed_clinic_row = get_clinic_row_by_id(clinic_id)
+  response_clinic_name = clinic_name
+  response_website = website
+  response_logo_url = logo_url
+  response_brand_color = brand_color
+  response_accent_color = accent_color
+  response_font_family = font_family
+  response_design_preset = design_preset
+  response_calendly_url = calendly_url
+  if refreshed_clinic_row:
+    response_clinic_name = refreshed_clinic_row["name"]
+    response_website = refreshed_clinic_row["website"]
+    response_logo_url = refreshed_clinic_row["logo_url"]
+    response_brand_color = refreshed_clinic_row["brand_color"]
+    response_accent_color = refreshed_clinic_row["accent_color"]
+    response_font_family = refreshed_clinic_row["font_family"]
+    response_design_preset = refreshed_clinic_row["design_preset"]
+    response_calendly_url = refreshed_clinic_row["calendly_url"]
+
   create_audit_log(
     clinic_id=clinic_id,
     actor_user_id=int(user_row["id"]),
@@ -7208,15 +9067,16 @@ def update_clinic_settings():
   return jsonify(
     {
       "settings": {
-        "clinicName": clinic_name,
-        "website": website,
-        "logoUrl": logo_url,
-        "brandColor": brand_color,
-        "accentColor": accent_color,
-        "fontFamily": font_family,
-        "designPreset": design_preset,
-        "calendlyUrl": calendly_url,
-      }
+        "clinicName": response_clinic_name,
+        "website": response_website,
+        "logoUrl": response_logo_url,
+        "brandColor": response_brand_color,
+        "accentColor": response_accent_color,
+        "fontFamily": response_font_family,
+        "designPreset": response_design_preset,
+        "calendlyUrl": response_calendly_url,
+      },
+      "websiteImport": website_import,
     }
   )
 

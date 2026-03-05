@@ -271,6 +271,12 @@ function homeArticleCard(item = {}) {
       <label>Text
         <textarea data-field="body" placeholder="Kurztext">${escapeAttr(item.body)}</textarea>
       </label>
+      <label>Bild URL
+        <input data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="https://.../titelbild.jpg">
+      </label>
+      <label>Quelle URL
+        <input data-field="sourceUrl" value="${escapeAttr(item.sourceUrl)}" placeholder="https://.../beitrag">
+      </label>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
@@ -392,6 +398,8 @@ function collectCatalogFromDom() {
       tag: card.querySelector('[data-field="tag"]')?.value.trim() || "",
       title: card.querySelector('[data-field="title"]')?.value.trim() || "",
       body: card.querySelector('[data-field="body"]')?.value.trim() || "",
+      imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+      sourceUrl: card.querySelector('[data-field="sourceUrl"]')?.value.trim() || "",
     }))
     .filter((item) => item.id && item.title);
 

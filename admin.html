@@ -30,7 +30,21 @@
           <input name="email" type="email" required>
         </label>
         <label>Passwort
-          <input name="password" type="password" required>
+          <div class="password-field-wrap">
+            <input id="adminPasswordInput" name="password" type="password" required>
+            <button id="toggleAdminPasswordBtn" class="password-toggle" type="button" aria-label="Passwort anzeigen" aria-pressed="false">
+              <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M1.5 12s3.8-7 10.5-7 10.5 7 10.5 7-3.8 7-10.5 7S1.5 12 1.5 12z"></path>
+                <circle cx="12" cy="12" r="3.4"></circle>
+              </svg>
+              <svg class="eye-closed hidden" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 3l18 18"></path>
+                <path d="M10.7 6.2A11.6 11.6 0 0 1 12 6c6.7 0 10.5 6 10.5 6a19 19 0 0 1-4 4.8"></path>
+                <path d="M6.5 7.4A18.7 18.7 0 0 0 1.5 12s3.8 7 10.5 7a11 11 0 0 0 4.2-.8"></path>
+                <path d="M9.9 10a3.5 3.5 0 0 0 4.1 4.1"></path>
+              </svg>
+            </button>
+          </div>
         </label>
         <button class="btn primary" type="submit">Einloggen</button>
       </form>

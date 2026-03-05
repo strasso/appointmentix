@@ -90,7 +90,7 @@ const LOCAL_MEDSPA_DIRECTORY = [
 // White-label defaults for patient app (optional):
 // If set, the app loads clinic bundle automatically on first launch.
 const APP_PRODUCTION_BACKEND_URL = 'https://www.curabo.app';
-const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || APP_PRODUCTION_BACKEND_URL;
+const APP_DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || (__DEV__ ? '' : APP_PRODUCTION_BACKEND_URL);
 const APP_FALLBACK_BACKEND_URLS = [
   process.env.EXPO_PUBLIC_API_BASE_URL_FALLBACK || '',
   process.env.EXPO_PUBLIC_API_BASE_URL_ALT || '',
@@ -569,6 +569,7 @@ function absolutizeMediaUrl(baseUrl, rawUrl) {
   const value = String(rawUrl || '').trim();
   if (!value) return '';
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  if (value.startsWith('//')) return `https:${value}`;
   if (!safeBase) return value;
   if (value.startsWith('/')) return `${safeBase}${value}`;
   return `${safeBase}/${value}`;
@@ -653,6 +654,34 @@ function formatPrice(cents) {
     currency: 'EUR',
     minimumFractionDigits: 2,
   }).format(amount);
+}
+
+function parsePriceCents(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.round(parsed);
+}
+
+function hasKnownPrice(value) {
+  const cents = parsePriceCents(value);
+  return cents !== null && cents > 0;
+}
+
+function treatmentPriceLabel(value, { withPrefix = true } = {}) {
+  const cents = parsePriceCents(value);
+  if (cents === null || cents <= 0) {
+    return 'Preis auf Anfrage';
+  }
+  return withPrefix ? `ab ${formatPrice(cents)}` : formatPrice(cents);
+}
+
+function treatmentTotalPriceLabel(value, units = 1) {
+  const cents = parsePriceCents(value);
+  if (cents === null || cents <= 0) {
+    return 'Preis auf Anfrage';
+  }
+  const multiplier = Math.max(1, Number(units || 1));
+  return formatPrice(cents * multiplier);
 }
 
 function formatDate(ts) {
@@ -1212,7 +1241,7 @@ function TreatmentCard({ treatment, onPress }) {
         <Text style={styles.treatmentDescription} numberOfLines={2}>
           {treatment.description}
         </Text>
-        <Text style={styles.treatmentPrice}>ab {formatPrice(treatment.priceCents)}</Text>
+        <Text style={styles.treatmentPrice}>{treatmentPriceLabel(treatment.priceCents, { withPrefix: true })}</Text>
       </View>
     </Pressable>
   );
@@ -1331,7 +1360,7 @@ export default function App() {
         type: 'treatment',
         id: item.id,
         title: item.name,
-        subtitle: `${byCategoryId[item.category] || item.category || 'Treatment'} • ab ${formatPrice(item.priceCents || 0)}`,
+        subtitle: `${byCategoryId[item.category] || item.category || 'Treatment'} • ${treatmentPriceLabel(item.priceCents, { withPrefix: true })}`,
         payload: item,
       }));
 
@@ -1590,7 +1619,7 @@ export default function App() {
     }
   }
 
-  function onGlobalSearchSelect(result) {
+  async function onGlobalSearchSelect(result) {
     if (!result) return;
 
     if (result.type === 'treatment' && result.payload) {
@@ -1609,8 +1638,11 @@ export default function App() {
     }
 
     if (result.type === 'article') {
-      switchMainTab('home');
       closeHeaderSearch();
+      const opened = await openHomeArticle(result.payload);
+      if (!opened) {
+        switchMainTab('home');
+      }
       return;
     }
   }
@@ -1694,7 +1726,13 @@ export default function App() {
       setRewardRedeems(catalog.rewardRedeems);
     }
     if (Array.isArray(catalog.homeArticles) && catalog.homeArticles.length > 0) {
-      setHomeArticles(catalog.homeArticles);
+      const clinicWebsiteBase = normalizeUrl(String(clinic.website || '').trim());
+      const normalizedArticles = catalog.homeArticles.map((item) => ({
+        ...item,
+        sourceUrl: absolutizeMediaUrl(clinicWebsiteBase || '', item.sourceUrl),
+        imageUrl: absolutizeMediaUrl(normalized, item.imageUrl),
+      }));
+      setHomeArticles(normalizedArticles);
     }
 
     if (clinic && typeof clinic === 'object') {
@@ -2175,6 +2213,35 @@ function continueToAccessStep() {
   setOnboardingStep('access');
 }
 
+  async function openHomeArticle(article) {
+    const clinicWebsite = normalizeUrl(String(clinicProfile?.website || '').trim());
+    const articleSource = absolutizeMediaUrl(clinicWebsite || '', article?.sourceUrl || '');
+    const targetUrl = normalizeUrl(articleSource || clinicWebsite);
+    if (!targetUrl) {
+      Alert.alert('Link fehlt', 'Für diesen Beitrag ist noch kein Website-Link hinterlegt.');
+      return false;
+    }
+
+    try {
+      const supported = await Linking.canOpenURL(targetUrl);
+      if (!supported) {
+        Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte auf dem Gerät nicht geöffnet werden.');
+        return false;
+      }
+      await Linking.openURL(targetUrl);
+      track(`Artikel geöffnet: ${String(article?.title || '').trim() || 'Beitrag'}`, 'article_open', {
+        metadata: {
+          sourceUrl: targetUrl,
+          clinicName: clinicProfile?.name || '',
+        },
+      });
+      return true;
+    } catch {
+      Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte nicht geöffnet werden.');
+      return false;
+    }
+  }
+
   async function openClinicInMaps() {
     const clinicName = String(clinicProfile?.name || clinicLookupName || '').trim() || 'MedSpa';
     const addressCandidate = [clinicProfile?.address, clinicProfile?.city].filter(Boolean).join(', ');
@@ -2500,8 +2567,13 @@ function continueToAccessStep() {
   async function disconnectClinicSession() {
     setShowOnboarding(true);
     setOnboardingStep('clinic');
+    setBackendCheckMessage('');
     setClinicSearchResults([]);
+    setClinicLookupName('');
     setClinicLookupId('');
+    setClinicSearchQuery('');
+    setAnalyticsBaseUrl('');
+    setOnboardingBaseUrl('');
     setSelectedTreatment(null);
     setCartItems([]);
     setMembershipStatus(null);
@@ -2509,6 +2581,7 @@ function continueToAccessStep() {
     setPatientPhone('');
     setPatientGuestMode(false);
     resetOtpFlow();
+    await writeSecureValue(STORAGE_KEYS.analyticsBaseUrl, '');
     await writeSecureValue(STORAGE_KEYS.clinicName, '');
     await writeSecureValue(STORAGE_KEYS.clinicId, '');
     await writeSecureValue(STORAGE_KEYS.patientPhone, '');
@@ -2528,10 +2601,26 @@ function continueToAccessStep() {
 
     const membershipApplies = hasActiveMembership;
     const isIncluded = membershipApplies && includedTreatmentIds.includes(selectedTreatment.id);
-    const fallbackPrice = Number(selectedTreatment.priceCents || 0);
-    const parsedMemberPrice = Number(selectedTreatment.memberPriceCents);
-    const memberPrice = Number.isFinite(parsedMemberPrice) && parsedMemberPrice >= 0 ? parsedMemberPrice : fallbackPrice;
-    const localUnitPrice = membershipApplies ? (isIncluded ? 0 : memberPrice) : fallbackPrice;
+    const standardPrice = parsePriceCents(selectedTreatment.priceCents);
+    const memberFallback = selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents;
+    const memberPrice = parsePriceCents(memberFallback);
+    const hasStandardPrice = Number.isFinite(standardPrice) && Number(standardPrice) > 0;
+    const hasMemberPrice = Number.isFinite(memberPrice) && Number(memberPrice) > 0;
+
+    if (!isIncluded) {
+      if (!membershipApplies && !hasStandardPrice) {
+        Alert.alert('Preis fehlt', 'Für diese Behandlung ist noch kein Preis hinterlegt.');
+        return;
+      }
+      if (membershipApplies && !hasMemberPrice && !hasStandardPrice) {
+        Alert.alert('Preis fehlt', 'Für diese Behandlung ist noch kein Preis hinterlegt.');
+        return;
+      }
+    }
+
+    const resolvedStandardPrice = hasStandardPrice ? Number(standardPrice) : 0;
+    const resolvedMemberPrice = hasMemberPrice ? Number(memberPrice) : resolvedStandardPrice;
+    const localUnitPrice = membershipApplies ? (isIncluded ? 0 : resolvedMemberPrice) : resolvedStandardPrice;
     const localTotal = localUnitPrice * units;
 
     if (analyticsConnected) {
@@ -3005,8 +3094,22 @@ function continueToAccessStep() {
     return () => clearTimeout(timeoutId);
   }, [showOnboarding, onboardingStep, clinicSearchQuery, clinicDropdownOpen]);
 
+  const selectedTreatmentIncluded = Boolean(
+    selectedTreatment
+    && hasActiveMembership
+    && includedTreatmentIds.includes(String(selectedTreatment.id || ''))
+  );
+  const selectedTreatmentHasStandardPrice = hasKnownPrice(selectedTreatment?.priceCents);
+  const selectedTreatmentHasMemberPrice = hasKnownPrice(selectedTreatment?.memberPriceCents ?? selectedTreatment?.priceCents);
+  const selectedTreatmentCanBePurchased = selectedTreatmentIncluded
+    || (hasActiveMembership ? selectedTreatmentHasMemberPrice || selectedTreatmentHasStandardPrice : selectedTreatmentHasStandardPrice);
+
   const hasCart = cartItems.length > 0;
-  const cartCtaLabel = cartSyncing ? 'Wird hinzugefügt ...' : 'In den Warenkorb';
+  const cartCtaLabel = cartSyncing
+    ? 'Wird hinzugefügt ...'
+    : selectedTreatmentCanBePurchased
+      ? 'In den Warenkorb'
+      : 'Preis anfragen';
   const checkoutCtaLabel = checkoutLoading ? 'Wird verarbeitet ...' : 'Jetzt bezahlen';
   const normalizedPhoneInput = normalizePhone(patientPhone);
   const otpReadyToVerify = Boolean(otpRequestId) && normalizedPhoneInput === otpRequestedPhone;
@@ -3369,12 +3472,22 @@ function continueToAccessStep() {
               </View>
 
               <Text style={styles.sectionTitle}>Wissen & Tipps</Text>
-              {homeArticles.map((article) => (
-                <View key={article.id} style={styles.articleCard}>
+              {homeArticles.slice(0, 3).map((article) => (
+                <Pressable
+                  key={article.id}
+                  style={styles.articleCard}
+                  onPress={() => {
+                    void openHomeArticle(article);
+                  }}
+                >
+                  {article.imageUrl ? (
+                    <Image source={{ uri: article.imageUrl }} style={styles.articleImage} />
+                  ) : null}
                   <Text style={styles.articleTag}>{article.tag}</Text>
                   <Text style={styles.articleTitle}>{article.title}</Text>
                   <Text style={styles.articleBody}>{article.body}</Text>
-                </View>
+                  <Text style={styles.articleLinkHint}>Zum Beitrag</Text>
+                </Pressable>
               ))}
 
               <Text style={styles.sectionTitle}>MedSpa</Text>
@@ -3546,27 +3659,32 @@ function continueToAccessStep() {
 
                   <View style={styles.detailPlanSummaryRow}>
                     <Text style={styles.detailPlanSummaryMain}>
-                      {formatPrice((selectedTreatment.priceCents || 0) * units)}
+                      {treatmentTotalPriceLabel(selectedTreatment.priceCents, units)}
                     </Text>
                     <Text style={styles.detailPlanSummaryDivider}>|</Text>
                     <Text style={styles.detailPlanSummaryMember}>
                       {hasActiveMembership
-                        ? `Member: ${formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}`
-                        : `Member: ${formatPrice((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0)}`}
+                        ? `Member: ${treatmentTotalPriceLabel(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents, units)}`
+                        : `Member: ${treatmentPriceLabel(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents, { withPrefix: false })}`}
                     </Text>
                   </View>
 
-                  <Text style={styles.priceLine}>Standard: {formatPrice(selectedTreatment.priceCents)}</Text>
-                  <Text style={styles.priceLine}>Mitglied: {formatPrice(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents)}</Text>
+                  <Text style={styles.priceLine}>Standard: {treatmentPriceLabel(selectedTreatment.priceCents, { withPrefix: false })}</Text>
+                  <Text style={styles.priceLine}>Mitglied: {treatmentPriceLabel(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents, { withPrefix: false })}</Text>
                   {!hasActiveMembership && (
                     <Text style={styles.priceHint}>
                       Aktiviere eine Membership, um Member-Preise und inkludierte Treatments freizuschalten.
                     </Text>
                   )}
+                  {!selectedTreatmentCanBePurchased && (
+                    <Text style={styles.priceHint}>
+                      Für diese Behandlung ist aktuell kein fixer Preis hinterlegt.
+                    </Text>
+                  )}
 
                   <Pressable
-                    style={[styles.primaryCta, (cartSyncing || checkoutLoading) && styles.ctaDisabled]}
-                    disabled={cartSyncing || checkoutLoading}
+                    style={[styles.primaryCta, (cartSyncing || checkoutLoading || !selectedTreatmentCanBePurchased) && styles.ctaDisabled]}
+                    disabled={cartSyncing || checkoutLoading || !selectedTreatmentCanBePurchased}
                     onPress={() => {
                       void addToCart();
                     }}
@@ -3700,7 +3818,7 @@ function continueToAccessStep() {
                       <Text style={styles.treatmentListTitle}>{item.name}</Text>
                       <Text style={styles.treatmentListBody}>{item.description}</Text>
                       <Text style={styles.treatmentListMeta}>
-                        ab {formatPrice(item.priceCents)} • {item.durationMinutes} Min
+                        {treatmentPriceLabel(item.priceCents, { withPrefix: true })} • {item.durationMinutes} Min
                       </Text>
                     </View>
                   ))}
@@ -4728,6 +4846,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...SOFT_CARD_SHADOW,
   },
+  articleImage: {
+    width: '100%',
+    height: 150,
+    borderRadius: 14,
+    marginBottom: 10,
+    backgroundColor: '#EEF2F8',
+  },
   articleTag: {
     color: THEME.brand,
     fontWeight: '700',
@@ -4742,6 +4867,11 @@ const styles = StyleSheet.create({
   articleBody: {
     color: THEME.muted,
     lineHeight: 20,
+  },
+  articleLinkHint: {
+    marginTop: 8,
+    color: THEME.accent,
+    fontWeight: '700',
   },
   clinicCard: {
     backgroundColor: THEME.surface,

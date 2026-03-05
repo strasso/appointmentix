@@ -997,12 +997,14 @@ function renderCatalog() {
           <td><input data-list="homeArticles" data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education"></td>
           <td><input data-list="homeArticles" data-field="title" value="${escapeAttr(item.title)}" placeholder="Titel"></td>
           <td><input data-list="homeArticles" data-field="body" value="${escapeAttr(item.body)}" placeholder="Kurztext"></td>
+          <td><input data-list="homeArticles" data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="https://.../titelbild.jpg"></td>
+          <td><input data-list="homeArticles" data-field="sourceUrl" value="${escapeAttr(item.sourceUrl)}" placeholder="https://.../beitrag"></td>
           <td><button class="row-remove" type="button" data-remove-list="homeArticles" data-index="${index}">Entfernen</button></td>
         </tr>`
     )
     .join("");
   if (!catalog.homeArticles.length) {
-    homeArticlesBody.innerHTML = '<tr><td colspan="5">Noch keine Home Artikel.</td></tr>';
+    homeArticlesBody.innerHTML = '<tr><td colspan="7">Noch keine Home Artikel.</td></tr>';
   }
 
   setCatalogDisabled(!state.isOwner);
@@ -1083,6 +1085,8 @@ function syncCatalogStateFromDom() {
         tag: row.querySelector('input[data-field="tag"]')?.value.trim() || "",
         title,
         body: row.querySelector('input[data-field="body"]')?.value.trim() || "",
+        imageUrl: row.querySelector('input[data-field="imageUrl"]')?.value.trim() || "",
+        sourceUrl: row.querySelector('input[data-field="sourceUrl"]')?.value.trim() || "",
       };
     })
     .filter((item) => item.id && item.title);
@@ -1524,7 +1528,7 @@ function addCatalogRow(listName) {
   } else if (listName === "rewardRedeems") {
     state.catalog.rewardRedeems.push({ id: "", label: "", requiredPoints: 0, valueCents: 0 });
   } else if (listName === "homeArticles") {
-    state.catalog.homeArticles.push({ id: "", tag: "", title: "", body: "" });
+    state.catalog.homeArticles.push({ id: "", tag: "", title: "", body: "", imageUrl: "", sourceUrl: "" });
   } else {
     return;
   }
@@ -1612,9 +1616,23 @@ async function handleSettingsSave(event) {
 
   try {
     saveSettingsBtn.disabled = true;
-    await apiRequest("/clinic/settings", { method: "PUT", body: payload });
-    await Promise.all([loadSettings(), loadAuditLogs()]);
-    showToast("Einstellungen gespeichert");
+    const response = await apiRequest("/clinic/settings", { method: "PUT", body: payload });
+    await Promise.all([loadSettings(), loadAuditLogs(), loadCatalog()]);
+
+    const websiteImport = response.websiteImport && typeof response.websiteImport === "object"
+      ? response.websiteImport
+      : null;
+    if (websiteImport?.triggered) {
+      if (websiteImport.success) {
+        showToast(
+          `Einstellungen gespeichert • Website importiert (${websiteImport.servicesFound || 0} Treatments, ${websiteImport.articlesFound || 0} Beiträge)`
+        );
+      } else {
+        showToast(`Einstellungen gespeichert • Website-Import fehlgeschlagen: ${websiteImport.error || "Unbekannter Fehler"}`);
+      }
+    } else {
+      showToast("Einstellungen gespeichert");
+    }
   } catch (error) {
     showToast(error.message);
   } finally {

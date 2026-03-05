@@ -14,6 +14,8 @@ const adminAppSection = document.getElementById("adminAppSection");
 const adminLoginForm = document.getElementById("adminLoginForm");
 const adminLoginMessage = document.getElementById("adminLoginMessage");
 const adminConfigHint = document.getElementById("adminConfigHint");
+const adminPasswordInput = document.getElementById("adminPasswordInput");
+const toggleAdminPasswordBtn = document.getElementById("toggleAdminPasswordBtn");
 
 const kpiGrid = document.getElementById("kpiGrid");
 const clinicSearchInput = document.getElementById("clinicSearchInput");
@@ -48,6 +50,18 @@ function showToast(message) {
 function setLoginMessage(text, success = false) {
   adminLoginMessage.textContent = text;
   adminLoginMessage.classList.toggle("success", success);
+}
+
+function setAdminPasswordVisibility(visible) {
+  if (!adminPasswordInput || !toggleAdminPasswordBtn) return;
+  const isVisible = Boolean(visible);
+  adminPasswordInput.type = isVisible ? "text" : "password";
+  toggleAdminPasswordBtn.setAttribute("aria-label", isVisible ? "Passwort verbergen" : "Passwort anzeigen");
+  toggleAdminPasswordBtn.setAttribute("aria-pressed", isVisible ? "true" : "false");
+  const openIcon = toggleAdminPasswordBtn.querySelector(".eye-open");
+  const closedIcon = toggleAdminPasswordBtn.querySelector(".eye-closed");
+  if (openIcon) openIcon.classList.toggle("hidden", !isVisible);
+  if (closedIcon) closedIcon.classList.toggle("hidden", isVisible);
 }
 
 function setAdminSession(admin) {
@@ -360,6 +374,16 @@ async function bootstrap() {
 
 function bindEvents() {
   adminLoginForm.addEventListener("submit", handleLogin);
+  if (toggleAdminPasswordBtn) {
+    toggleAdminPasswordBtn.addEventListener("click", () => {
+      setAdminPasswordVisibility(adminPasswordInput?.type !== "text");
+    });
+  }
+  if (adminLoginForm) {
+    adminLoginForm.addEventListener("reset", () => {
+      setAdminPasswordVisibility(false);
+    });
+  }
   adminLogoutBtn.addEventListener("click", handleLogout);
   clinicsBody.addEventListener("click", handleClinicTableClick);
   clinicSubscriptionForm.addEventListener("submit", handleSubscriptionSave);
@@ -374,6 +398,7 @@ function bindEvents() {
 }
 
 async function init() {
+  setAdminPasswordVisibility(false);
   bindEvents();
   await bootstrap();
 }
