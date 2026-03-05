@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
   Alert,
@@ -2223,12 +2224,10 @@ function continueToAccessStep() {
     }
 
     try {
-      const supported = await Linking.canOpenURL(targetUrl);
-      if (!supported) {
-        Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte auf dem Gerät nicht geöffnet werden.');
-        return false;
-      }
-      await Linking.openURL(targetUrl);
+      await WebBrowser.openBrowserAsync(targetUrl, {
+        showTitle: true,
+        enableBarCollapsing: true,
+      });
       track(`Artikel geöffnet: ${String(article?.title || '').trim() || 'Beitrag'}`, 'article_open', {
         metadata: {
           sourceUrl: targetUrl,
@@ -2237,8 +2236,25 @@ function continueToAccessStep() {
       });
       return true;
     } catch {
-      Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte nicht geöffnet werden.');
-      return false;
+      try {
+        const supported = await Linking.canOpenURL(targetUrl);
+        if (!supported) {
+          Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte auf dem Gerät nicht geöffnet werden.');
+          return false;
+        }
+        await Linking.openURL(targetUrl);
+        track(`Artikel geöffnet: ${String(article?.title || '').trim() || 'Beitrag'}`, 'article_open', {
+          metadata: {
+            sourceUrl: targetUrl,
+            clinicName: clinicProfile?.name || '',
+            fallback: 'external_browser',
+          },
+        });
+        return true;
+      } catch {
+        Alert.alert('Link nicht verfügbar', 'Dieser Beitrag konnte nicht geöffnet werden.');
+        return false;
+      }
     }
   }
 
