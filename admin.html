@@ -23,6 +23,7 @@
 
   <main class="shell">
     <section id="adminLoginSection" class="card login-card">
+      <p class="eyebrow">Curabo Intern</p>
       <h1>Super-Admin Login</h1>
       <p class="subline">Nur für Curabo-internen Zugriff.</p>
       <form id="adminLoginForm" class="form">
@@ -39,12 +40,28 @@
     </section>
 
     <section id="adminAppSection" class="hidden">
+      <section class="card admin-stage">
+        <div class="stage-copy">
+          <p class="eyebrow">Control Center</p>
+          <h1>Superadmin Übersicht</h1>
+          <p class="subline">Verwalte Kliniken, Subscriptions und Leads in einer zentralen Arbeitsfläche.</p>
+        </div>
+        <div class="stage-pills" aria-hidden="true">
+          <span class="stage-pill">Multi-Tenant</span>
+          <span class="stage-pill">Branding</span>
+          <span class="stage-pill">Subscriptions</span>
+        </div>
+      </section>
+
       <div class="kpi-grid" id="kpiGrid"></div>
 
       <section class="grid-2">
-        <article class="card">
+        <article class="card clinic-list-card">
           <div class="section-head">
-            <h2>Kliniken</h2>
+            <div class="section-copy">
+              <h2>Kliniken</h2>
+              <p class="section-note">Suche Kliniken, prüfe Accounts und öffne Details mit einem Klick.</p>
+            </div>
             <div class="inline-actions">
               <input id="clinicSearchInput" type="search" placeholder="Suche Klinik, Website, Owner-Mail">
               <button id="clinicSearchBtn" class="btn ghost" type="button">Suchen</button>
@@ -67,9 +84,11 @@
           </div>
         </article>
 
-        <article class="card">
-          <h2>Klinik-Detail</h2>
-          <p class="subline">Wähle links eine Klinik aus.</p>
+        <article class="card clinic-detail-card">
+          <div class="section-copy">
+            <h2>Klinik-Detail</h2>
+            <p class="subline">Wähle links eine Klinik aus.</p>
+          </div>
 
           <div id="clinicDetailEmpty" class="empty">Noch keine Klinik ausgewählt.</div>
 
@@ -123,9 +142,12 @@
         </article>
       </section>
 
-      <section class="card">
+      <section class="card leads-card">
         <div class="section-head">
-          <h2>Leads</h2>
+          <div class="section-copy">
+            <h2>Leads</h2>
+            <p class="section-note">Inbound-Anfragen aus Website und Kampagnen im Überblick.</p>
+          </div>
           <button id="leadsRefreshBtn" class="btn ghost" type="button">Leads aktualisieren</button>
         </div>
 
