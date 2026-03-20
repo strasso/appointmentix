@@ -83,7 +83,7 @@ export default function OnboardingScreen({
             </Text>
             <Text style={styles.onboardingHeroBody}>
               {onboardingStep === 'clinic'
-                ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code. Danach bleibt alles an einem Ort: Treatments, Rewards und Membership.'
+                ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code. Danach bleibt alles an einem Ort: Behandlungen, Vorteile und Mitgliedschaft.'
                 : 'Bestätige deine Telefonnummer oder fahre als Gast fort. Alle weiteren Funktionen bleiben unverändert.'}
             </Text>
           </View>

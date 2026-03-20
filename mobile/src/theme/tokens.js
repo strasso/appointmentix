@@ -1,34 +1,34 @@
 import { Platform } from 'react-native';
 
 export const THEME = {
-  background: '#FFFFFF',
-  backgroundSoft: '#FFFFFF',
+  background: '#FBFDFF',
+  backgroundSoft: '#F8FBFE',
   surface: '#FFFFFF',
-  surfaceSoft: '#F1FAFF',
-  surfaceMuted: '#DDEFFC',
-  ink: '#0E2146',
-  inkSoft: '#2D4E77',
-  muted: '#5B789A',
-  mutedSoft: '#89A8C8',
-  brand: '#F18BCF',
-  brandStrong: '#D152AE',
+  surfaceSoft: '#F4FAFF',
+  surfaceMuted: '#DDEAF5',
+  ink: '#0A1B35',
+  inkSoft: '#32506F',
+  muted: '#617D99',
+  mutedSoft: '#8DA8C2',
+  brand: '#F17CC7',
+  brandStrong: '#BB438E',
   brandSoft: '#FDEAF8',
-  accent: '#47C4EA',
-  accentSoft: '#E3FAFF',
-  good: '#28B97D',
-  border: '#CEE0F0',
-  borderStrong: '#BBD6EA',
-  overlay: 'rgba(27, 49, 83, 0.26)',
-  rewardsA: '#84E3F5',
-  rewardsB: '#377EE0',
+  accent: '#1497E8',
+  accentSoft: '#EAF8FF',
+  good: '#21A76E',
+  border: '#D6E4EE',
+  borderStrong: '#C2D7E6',
+  overlay: 'rgba(15, 28, 51, 0.24)',
+  rewardsA: '#8DE5F5',
+  rewardsB: '#2A72DA',
 };
 
 export const SOFT_CARD_SHADOW = {
-  shadowColor: '#275189',
-  shadowOpacity: 0.12,
-  shadowRadius: 26,
-  shadowOffset: { width: 0, height: 14 },
-  elevation: 7,
+  shadowColor: '#2D5A90',
+  shadowOpacity: 0.11,
+  shadowRadius: 28,
+  shadowOffset: { width: 0, height: 16 },
+  elevation: 8,
 };
 
 export const UI_FONT_FAMILY = Platform.select({
@@ -37,9 +37,9 @@ export const UI_FONT_FAMILY = Platform.select({
   default: 'System',
 });
 
-export const SURFACE_RAISED = 'rgba(255,255,255,0.98)';
-export const SURFACE_PANEL = 'rgba(255,255,255,0.94)';
-export const SURFACE_SOFT = 'rgba(255,255,255,0.90)';
-export const SURFACE_TINT = 'rgba(247,252,255,0.95)';
-export const BORDER_TINT = 'rgba(208,225,240,0.98)';
-export const BORDER_LIGHT = 'rgba(223,233,244,0.98)';
+export const SURFACE_RAISED = 'rgba(255,255,255,0.99)';
+export const SURFACE_PANEL = 'rgba(255,255,255,0.97)';
+export const SURFACE_SOFT = 'rgba(250,252,255,0.94)';
+export const SURFACE_TINT = 'rgba(244,249,255,0.98)';
+export const BORDER_TINT = 'rgba(206,223,236,0.98)';
+export const BORDER_LIGHT = 'rgba(220,232,242,0.96)';

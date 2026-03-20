@@ -45,7 +45,10 @@ export default function ProfileScreen({
       <TopHeader
         styles={styles}
         title="Konto"
+        sectionLabel="Konto & Mitgliedschaft"
+        subtitle="Daten, Status und Verbindung"
         clinicShortName={clinicProfile.shortName}
+        clinicName={clinicProfile.name}
         onSearchPress={onSearchPress}
         onCartPress={onCartPress}
         cartCount={cartCount}
@@ -60,7 +63,7 @@ export default function ProfileScreen({
         />
         <TabButton
           styles={styles}
-          label="Membership"
+          label="Mitgliedschaft"
           active={profileTab === 'membership'}
           onPress={() => setProfileTab('membership')}
         />
@@ -111,7 +114,7 @@ export default function ProfileScreen({
         <View style={styles.membershipCardActive}>
           <View pointerEvents="none" style={styles.cardChrome} />
           <Text style={styles.membershipName}>
-            {hasActiveMembership ? currentMembership.name : 'Keine aktive Membership'}
+            {hasActiveMembership ? currentMembership.name : 'Keine aktive Mitgliedschaft'}
           </Text>
           <Text style={styles.membershipPrice}>
             Status: {membershipStatusText}
@@ -119,7 +122,7 @@ export default function ProfileScreen({
           </Text>
           {hasActiveMembership ? (
             <View>
-              <Text style={styles.membershipPerk}>Inklusive Treatments:</Text>
+              <Text style={styles.membershipPerk}>Inklusive Behandlungen:</Text>
               {includedTreatmentIds.map((id) => {
                 const treatment = treatments.find((item) => item.id === id);
                 if (!treatment) return null;
@@ -141,9 +144,9 @@ export default function ProfileScreen({
             </View>
           ) : (
             <View style={styles.profileEmptyMembershipWrap}>
-              <Text style={styles.profileEmptyMembershipText}>Keine aktive Membership</Text>
+              <Text style={styles.profileEmptyMembershipText}>Keine aktive Mitgliedschaft</Text>
               <Pressable style={styles.profileEmptyCta} onPress={openMembershipTab}>
-                <Text style={styles.profileEmptyCtaText}>Memberships ansehen</Text>
+                <Text style={styles.profileEmptyCtaText}>Mitgliedschaften ansehen</Text>
               </Pressable>
             </View>
           )}
@@ -189,7 +192,7 @@ export default function ProfileScreen({
           </Text>
           {!!backendCheckMessage && <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>}
           <Text style={styles.analyticsStatus}>
-            Membership-Konto: {String(settingsEmail || '').trim() || 'nicht gesetzt'}
+            Mitgliedschafts-Konto: {String(settingsEmail || '').trim() || 'nicht gesetzt'}
           </Text>
           <Text style={styles.analyticsStatus}>
             Modus: {patientGuestMode ? 'Gast' : patientPhone ? `Telefon ${patientPhone}` : 'Unbekannt'}

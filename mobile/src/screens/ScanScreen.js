@@ -16,7 +16,10 @@ export default function ScanScreen({
       <TopHeader
         styles={styles}
         title="Scan"
+        sectionLabel="Check-in & Besuch"
+        subtitle="Schnell erfassen und Punkte sammeln"
         clinicShortName={clinicProfile.shortName}
+        clinicName={clinicProfile.name}
         onSearchPress={onSearchPress}
         onCartPress={onCartPress}
         cartCount={cartCount}
@@ -28,7 +31,7 @@ export default function ScanScreen({
         <View pointerEvents="none" style={styles.cardChrome} />
         <Text style={styles.scanTitle}>Check-in QR</Text>
         <Text style={styles.scanBody}>
-          Scanne beim Empfang deinen App-Code. So werden Besuche sauber erfasst und Rewards automatisch gutgeschrieben.
+          Scanne beim Empfang deinen App-Code. So werden Besuche sauber erfasst und Punkte automatisch gutgeschrieben.
         </Text>
         <View style={styles.scanQrMock}>
           <View pointerEvents="none" style={styles.scanQrGloss} />

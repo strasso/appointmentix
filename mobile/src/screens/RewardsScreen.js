@@ -30,8 +30,11 @@ export default function RewardsScreen({
     <View>
       <TopHeader
         styles={styles}
-        title="Rewards"
+        title="Vorteile"
+        sectionLabel="Punkte & Wallet"
+        subtitle="Treueprogramm deiner Klinik"
         clinicShortName={clinicProfile.shortName}
+        clinicName={clinicProfile.name}
         onSearchPress={onSearchPress}
         onCartPress={onCartPress}
         cartCount={cartCount}
@@ -76,9 +79,16 @@ export default function RewardsScreen({
         <View pointerEvents="none" style={styles.rewardsBalancePearl} />
         <View pointerEvents="none" style={styles.rewardsBalanceGlow} />
         <View pointerEvents="none" style={styles.rewardsBalanceGlowSecondary} />
-        <Text style={styles.rewardsBalanceEyebrow}>LOYALTY</Text>
+        <View style={styles.rewardsBalanceTopRow}>
+          <View>
+            <Text style={styles.rewardsBalanceEyebrow}>KLINIK WALLET</Text>
+            <Text style={styles.rewardsBalanceLabel}>Treuepunkte & Guthaben</Text>
+          </View>
+          <View style={styles.rewardsBalanceStatusPill}>
+            <Text style={styles.rewardsBalanceStatusText}>{patientGuestMode ? 'Gast' : 'Mitglied'}</Text>
+          </View>
+        </View>
         <Text style={styles.rewardsBalanceLogo}>O</Text>
-        <Text style={styles.rewardsBalanceLabel}>Loyalty Points</Text>
         <View style={styles.rewardsCardStatsRow}>
           <View style={styles.rewardsCardStatItem}>
             <Text style={styles.rewardsCardStatValue}>{points}</Text>
@@ -91,23 +101,23 @@ export default function RewardsScreen({
         </View>
         <View style={styles.rewardsBalanceFooter}>
           <View>
-            <Text style={styles.rewardsBalanceMember}>{patientGuestMode ? 'Guest' : 'Member'}</Text>
-            <Text style={styles.rewardsBalanceJoined}>Joined now</Text>
+            <Text style={styles.rewardsBalanceMember}>{patientGuestMode ? 'Gastzugang' : 'Mitgliedschaft aktiv'}</Text>
+            <Text style={styles.rewardsBalanceJoined}>Seit heute verbunden</Text>
           </View>
           <View style={styles.rewardsBalanceRight}>
             <Text style={styles.rewardsBalanceWallet}>{formatPrice(walletCents)}</Text>
-            <Text style={styles.rewardsBalanceCash}>{clinicProfile.shortName || 'APP'} Cash</Text>
+            <Text style={styles.rewardsBalanceCash}>{clinicProfile.shortName || 'APP'} Guthaben</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.rewardsHeaderRow}>
         <View>
-          <Text style={styles.sectionEyebrow}>REWARDS HUB</Text>
-          <Text style={styles.rewardsHeaderTitle}>Punkte, Aktionen und Benefits</Text>
+          <Text style={styles.sectionEyebrow}>VORTEILE</Text>
+          <Text style={styles.rewardsHeaderTitle}>Punkte, Aktionen und Vorteile</Text>
         </View>
         <Pressable onPress={() => setRewardsView('past')}>
-          <Text style={styles.rewardsHeaderLink}>Mehr sehen ›</Text>
+          <Text style={styles.rewardsHeaderLink}>Verlauf öffnen ›</Text>
         </Pressable>
       </View>
 
@@ -143,7 +153,7 @@ export default function RewardsScreen({
       {rewardsView === 'active' && (
         <View>
           <Text style={styles.sectionLead}>
-            Sammle Punkte durch Besuche und kleine Aktionen. Loese sie spaeter direkt in Guthaben oder Extras ein.
+            Sammle Punkte durch Besuche und kleine Aktionen. Löse sie später direkt in Guthaben oder Extras ein.
           </Text>
           <Text style={styles.rewardsSectionTitle}>Mehr Punkte sammeln?</Text>
           {rewardActions.map((action) => (
@@ -187,10 +197,10 @@ export default function RewardsScreen({
       {rewardsView === 'past' && (
         <View style={styles.rewardsPastList}>
           <Text style={styles.sectionLead}>
-            Hier siehst du abgeschlossene Rewards und Einloesungen deiner letzten Besuche.
+            Hier siehst du abgeschlossene Vorteile und Einlösungen deiner letzten Besuche.
           </Text>
           {rewardHistoryItems.length === 0 && (
-            <Text style={styles.rewardsPastEmpty}>Keine Rewards in diesem Bereich.</Text>
+            <Text style={styles.rewardsPastEmpty}>Keine Vorteile in diesem Bereich.</Text>
           )}
           {rewardHistoryItems.map((entry) => (
             <View key={entry.id} style={styles.rewardsPastItem}>
