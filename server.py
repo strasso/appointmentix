@@ -45,7 +45,8 @@ STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES = os.getenv(
   "card,paypal,klarna",
 ).strip()
 CALENDLY_URL = os.getenv("CALENDLY_URL", "https://calendly.com/").strip()
-APPOINTMENTIX_PLAN_NAME = os.getenv("APPOINTMENTIX_PLAN_NAME", "Appointmentix White-Label Zugang").strip()
+PLATFORM_BRAND_NAME = os.getenv("PLATFORM_BRAND_NAME", "Curabo").strip() or "Curabo"
+APPOINTMENTIX_PLAN_NAME = os.getenv("APPOINTMENTIX_PLAN_NAME", f"{PLATFORM_BRAND_NAME} White-Label Zugang").strip()
 SUPERADMIN_EMAIL = os.getenv("SUPERADMIN_EMAIL", "").strip().lower()
 SUPERADMIN_PASSWORD = os.getenv("SUPERADMIN_PASSWORD", "")
 SUPERADMIN_PASSWORD_HASH = os.getenv("SUPERADMIN_PASSWORD_HASH", "").strip()
@@ -182,7 +183,7 @@ except ValueError:
   MOBILE_OTP_RESEND_COOLDOWN_SECONDS = 30
 
 MOBILE_OTP_DEBUG = os.getenv("MOBILE_OTP_DEBUG", "true").lower() in {"1", "true", "yes"}
-MOBILE_OTP_BRAND_NAME = str(os.getenv("MOBILE_OTP_BRAND_NAME", "Appointmentix")).strip() or "Appointmentix"
+MOBILE_OTP_BRAND_NAME = str(os.getenv("MOBILE_OTP_BRAND_NAME", PLATFORM_BRAND_NAME)).strip() or PLATFORM_BRAND_NAME
 MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE = os.getenv(
   "MOBILE_OTP_ALLOW_DEBUG_FALLBACK_ON_DELIVERY_FAILURE",
   "false",
@@ -206,7 +207,7 @@ MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
 IMPORT_MAX_PAGES = 10
 IMPORT_MAX_PAGE_BYTES = 1_000_000
 IMPORT_FETCH_TIMEOUT = (4, 10)
-IMPORT_USER_AGENT = "Appointmentix-ClinicImportV1/1.0 (+https://appointmentix.de; support@appointmentix.de)"
+IMPORT_USER_AGENT = "Curabo-ClinicImportV1/1.0 (+https://www.curabo.app)"
 IMPORT_ALLOWED_PATH_KEYWORDS = (
   "/services",
   "/treatments",
@@ -1668,11 +1669,42 @@ def get_clinic_row_by_name(clinic_name: str):
     return fuzzy
 
 
-def serialize_public_clinic(row) -> dict:
-  name = str(row["name"] or "")
-  profile = resolve_public_clinic_profile(name)
+def safe_public_text(value: object, fallback: str = "") -> str:
+  text = str(value or "").strip()
+  if text.lower() in {"none", "null"}:
+    text = ""
+  return text or fallback
+
+
+def safe_row_value(row, key: str, fallback: object = "") -> object:
+  try:
+    return row[key]
+  except (KeyError, IndexError, TypeError):
+    return fallback
+
+
+def serialize_public_clinic_branding(row) -> dict:
+  brand_color = safe_public_text(safe_row_value(row, "brand_color"), "#8A5A2F")
+  accent_color = safe_public_text(safe_row_value(row, "accent_color"), "#EB6C13")
+  font_family = safe_public_text(safe_row_value(row, "font_family"), "Inter, system-ui, sans-serif")
+  design_preset = safe_public_text(safe_row_value(row, "design_preset"), "clean").lower()
+  calendly_url = normalize_url(safe_public_text(safe_row_value(row, "calendly_url"), CALENDLY_URL))
   return {
-    "id": row["id"],
+    "logoUrl": safe_public_text(safe_row_value(row, "logo_url")),
+    "brandColor": brand_color,
+    "accentColor": accent_color,
+    "fontFamily": font_family,
+    "designPreset": design_preset,
+    "calendlyUrl": calendly_url,
+  }
+
+
+def serialize_public_clinic(row) -> dict:
+  name = safe_public_text(safe_row_value(row, "name"))
+  profile = resolve_public_clinic_profile(name)
+  branding = serialize_public_clinic_branding(row)
+  return {
+    "id": safe_row_value(row, "id", 0),
     "name": name,
     "shortName": build_clinic_short_name(name),
     "city": profile["city"],
@@ -1681,16 +1713,18 @@ def serialize_public_clinic(row) -> dict:
     "openingHours": profile["openingHours"],
     "latitude": profile["latitude"],
     "longitude": profile["longitude"],
-    "website": row["website"],
-    "logoUrl": row["logo_url"],
-    "brandColor": row["brand_color"],
-    "accentColor": row["accent_color"],
+    "website": normalize_url(safe_public_text(safe_row_value(row, "website"))),
+    **branding,
+    "branding": branding,
   }
 
 
 def search_clinics_for_mobile(query: str, limit: int = 10) -> list[dict]:
   normalized_query = normalize_keyword_text(query)
-  safe_limit = max(1, min(int(limit), 25))
+  try:
+    safe_limit = max(1, min(int(limit), 25))
+  except (TypeError, ValueError):
+    safe_limit = 10
   with get_db() as conn:
     if normalized_query:
       like_pattern = f"%{normalized_query}%"
@@ -1759,6 +1793,8 @@ def extract_clinic_code_candidates(raw_code: str) -> list[str]:
   lower_code = code.lower()
   if lower_code.startswith("clinic:"):
     push(code[7:])
+  if lower_code.startswith("curabo://clinic/"):
+    push(code[len("curabo://clinic/"):])
   if lower_code.startswith("appointmentix://clinic/"):
     push(code[len("appointmentix://clinic/"):])
 
@@ -1936,7 +1972,7 @@ def apply_auto_gallery_to_catalog(catalog: dict, overwrite_existing: bool = Fals
 
 
 def build_default_mobile_catalog(clinic_name: str) -> dict:
-  normalized_name = clinic_name.strip() or "Appointmentix Clinic"
+  normalized_name = clinic_name.strip() or f"{PLATFORM_BRAND_NAME} Clinic"
   lower_name = normalized_name.lower()
 
   if any(keyword in lower_name for keyword in ("milani", "momi", "moser")):
@@ -2208,32 +2244,14 @@ def ensure_clinic_catalog_rows(conn: DBConnectionAdapter) -> None:
     """
   ).fetchall()
   for clinic_row in clinic_rows:
-    ensure_clinic_catalog_row(conn, int(clinic_row["id"]), str(clinic_row["name"]))
+    ensure_clinic_catalog_row(conn, int(clinic_row["id"]), safe_public_text(clinic_row["name"]))
 
 
 def load_clinic_catalog_bundle(clinic_row) -> dict:
   clinic_id = int(clinic_row["id"])
-  clinic_name = str(clinic_row["name"])
+  clinic_name = safe_public_text(clinic_row["name"])
 
-  with get_db() as conn:
-    ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
-    catalog_row = conn.execute(
-      """
-      SELECT
-        categories_json,
-        treatments_json,
-        memberships_json,
-        reward_actions_json,
-        reward_redeems_json,
-        home_articles_json
-      FROM clinic_catalogs
-      WHERE clinic_id = ?
-      LIMIT 1
-      """,
-      (clinic_id,),
-    ).fetchone()
-
-  if not catalog_row:
+  def default_bundle() -> dict:
     default_catalog = build_default_mobile_catalog(clinic_name)
     return apply_auto_gallery_to_catalog(
       {
@@ -2247,17 +2265,55 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
       overwrite_existing=False,
     )
 
-  return apply_auto_gallery_to_catalog(
-    {
-      "categories": parse_json_list(catalog_row["categories_json"]),
-      "treatments": parse_json_list(catalog_row["treatments_json"]),
-      "memberships": parse_json_list(catalog_row["memberships_json"]),
-      "rewardActions": parse_json_list(catalog_row["reward_actions_json"]),
-      "rewardRedeems": parse_json_list(catalog_row["reward_redeems_json"]),
-      "homeArticles": parse_json_list(catalog_row["home_articles_json"]),
-    },
-    overwrite_existing=False,
-  )
+  try:
+    with get_db() as conn:
+      ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+      catalog_row = conn.execute(
+        """
+        SELECT
+          categories_json,
+          treatments_json,
+          memberships_json,
+          reward_actions_json,
+          reward_redeems_json,
+          home_articles_json
+        FROM clinic_catalogs
+        WHERE clinic_id = ?
+        LIMIT 1
+        """,
+        (clinic_id,),
+      ).fetchone()
+
+    if not catalog_row:
+      return default_bundle()
+
+    default_catalog = build_default_mobile_catalog(clinic_name)
+    categories = parse_json_list(catalog_row["categories_json"])
+    treatments = parse_json_list(catalog_row["treatments_json"])
+    memberships = parse_json_list(catalog_row["memberships_json"])
+    reward_actions = parse_json_list(catalog_row["reward_actions_json"])
+    reward_redeems = parse_json_list(catalog_row["reward_redeems_json"])
+    home_articles = parse_json_list(catalog_row["home_articles_json"])
+
+    return apply_auto_gallery_to_catalog(
+      {
+        "categories": categories or default_catalog["categories"],
+        "treatments": treatments or default_catalog["treatments"],
+        "memberships": memberships or default_catalog["memberships"],
+        "rewardActions": reward_actions or default_catalog["rewardActions"],
+        "rewardRedeems": reward_redeems or default_catalog["rewardRedeems"],
+        "homeArticles": home_articles or default_catalog["homeArticles"],
+      },
+      overwrite_existing=False,
+    )
+  except Exception:
+    app.logger.warning(
+      "Falling back to default mobile catalog for clinic_id=%s clinic_name=%s",
+      clinic_id,
+      clinic_name,
+      exc_info=True,
+    )
+    return default_bundle()
 
 
 def build_clinic_short_name(clinic_name: str) -> str:
@@ -3552,7 +3608,7 @@ def send_email_via_resend(to_email: str, subject: str, body_text: str) -> dict:
   payload = {
     "from": RESEND_FROM_EMAIL,
     "to": [to_email],
-    "subject": subject or "Update von Appointmentix",
+    "subject": subject or f"Update von {PLATFORM_BRAND_NAME}",
     "html": f"<p>{body_text}</p>",
   }
   try:
@@ -3637,7 +3693,7 @@ def send_push_via_onesignal(external_user_id: str, title: str, body_text: str) -
     "app_id": ONESIGNAL_APP_ID,
     "include_aliases": {"external_id": [external_user_id]},
     "target_channel": "push",
-    "headings": {"en": title or "Appointmentix"},
+    "headings": {"en": title or PLATFORM_BRAND_NAME},
     "contents": {"en": body_text},
   }
   try:
@@ -6033,6 +6089,9 @@ def public_config():
   calendly_url = resolved_calendly_url()
   return jsonify(
     {
+      "brandName": PLATFORM_BRAND_NAME,
+      "platformPlanName": APPOINTMENTIX_PLAN_NAME,
+      "platformMonthlyAmountEur": APPOINTMENTIX_MONTHLY_AMOUNT_CENTS / 100,
       "stripePublishableKey": STRIPE_PUBLISHABLE_KEY if stripe_enabled else "",
       "stripeEnabled": stripe_enabled,
       "stripeConfigured": stripe_enabled,
@@ -7993,14 +8052,21 @@ def update_clinic_settings():
 
   payload = request.get_json(silent=True) or {}
 
-  clinic_name = str(payload.get("clinicName", clinic_row["name"])).strip()
-  website = normalize_url(str(payload.get("website", clinic_row["website"])))
-  logo_url = normalize_url(str(payload.get("logoUrl", clinic_row["logo_url"])))
-  brand_color = to_hex_color(str(payload.get("brandColor", clinic_row["brand_color"])), clinic_row["brand_color"])
-  accent_color = to_hex_color(str(payload.get("accentColor", clinic_row["accent_color"])), clinic_row["accent_color"])
-  font_family = str(payload.get("fontFamily", clinic_row["font_family"])).strip()
-  design_preset = str(payload.get("designPreset", clinic_row["design_preset"])).strip().lower()
-  calendly_url = normalize_url(str(payload.get("calendlyUrl", clinic_row["calendly_url"] or CALENDLY_URL)))
+  clinic_name = safe_public_text(payload.get("clinicName"), safe_public_text(clinic_row["name"]))
+  website = normalize_url(safe_public_text(payload.get("website"), safe_public_text(clinic_row["website"])))
+  logo_url = safe_public_text(payload.get("logoUrl"), safe_public_text(clinic_row["logo_url"]))
+  current_brand_color = safe_public_text(clinic_row["brand_color"], "#8A5A2F")
+  current_accent_color = safe_public_text(clinic_row["accent_color"], "#EB6C13")
+  brand_color = to_hex_color(safe_public_text(payload.get("brandColor"), current_brand_color), current_brand_color)
+  accent_color = to_hex_color(safe_public_text(payload.get("accentColor"), current_accent_color), current_accent_color)
+  font_family = safe_public_text(payload.get("fontFamily"), safe_public_text(clinic_row["font_family"], "Inter, system-ui, sans-serif"))
+  design_preset = safe_public_text(payload.get("designPreset"), safe_public_text(clinic_row["design_preset"], "clean")).lower()
+  calendly_url = normalize_url(
+    safe_public_text(
+      payload.get("calendlyUrl"),
+      safe_public_text(clinic_row["calendly_url"], CALENDLY_URL),
+    )
+  )
 
   if not clinic_name:
     return jsonify({"error": "Klinikname ist erforderlich."}), 400

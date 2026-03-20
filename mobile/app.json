@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "Appointmentix",
+    "name": "Curabo",
     "slug": "appointmentix",
+    "scheme": "curabo",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",

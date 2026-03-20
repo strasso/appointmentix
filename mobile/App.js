@@ -23,26 +23,48 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 
 const THEME = {
-  background: '#F4F6FB',
+  background: '#FFFFFF',
+  backgroundSoft: '#FFFFFF',
   surface: '#FFFFFF',
-  ink: '#121826',
-  muted: '#667189',
-  brand: '#C75D9A',
-  brandSoft: '#F9E8F2',
-  accent: '#4AA3B3',
-  good: '#1F8E52',
-  border: '#E6EAF3',
-  rewardsA: '#79C6CD',
-  rewardsB: '#458F97',
+  surfaceSoft: '#F1FAFF',
+  surfaceMuted: '#DDEFFC',
+  ink: '#0E2146',
+  inkSoft: '#2D4E77',
+  muted: '#5B789A',
+  mutedSoft: '#89A8C8',
+  brand: '#F18BCF',
+  brandStrong: '#D152AE',
+  brandSoft: '#FDEAF8',
+  accent: '#47C4EA',
+  accentSoft: '#E3FAFF',
+  good: '#28B97D',
+  border: '#CEE0F0',
+  borderStrong: '#BBD6EA',
+  overlay: 'rgba(27, 49, 83, 0.26)',
+  rewardsA: '#84E3F5',
+  rewardsB: '#377EE0',
 };
 
 const SOFT_CARD_SHADOW = {
-  shadowColor: '#111A2A',
-  shadowOpacity: 0.08,
-  shadowRadius: 20,
-  shadowOffset: { width: 0, height: 8 },
-  elevation: 3,
+  shadowColor: '#275189',
+  shadowOpacity: 0.12,
+  shadowRadius: 26,
+  shadowOffset: { width: 0, height: 14 },
+  elevation: 7,
 };
+
+const UI_FONT_FAMILY = Platform.select({
+  ios: 'Avenir Next',
+  android: 'sans-serif',
+  default: 'System',
+});
+
+const SURFACE_RAISED = 'rgba(255,255,255,0.98)';
+const SURFACE_PANEL = 'rgba(255,255,255,0.94)';
+const SURFACE_SOFT = 'rgba(255,255,255,0.90)';
+const SURFACE_TINT = 'rgba(247,252,255,0.95)';
+const BORDER_TINT = 'rgba(208,225,240,0.98)';
+const BORDER_LIGHT = 'rgba(223,233,244,0.98)';
 
 const CLINIC = {
   name: 'Moser Milani Medical Spa',
@@ -472,6 +494,9 @@ function resolveClinicNameFromQrOrCode(rawValue) {
   if (!raw) return '';
   const lower = raw.toLowerCase();
   if (lower.startsWith('clinic:')) return raw.slice(7).trim();
+  if (lower.startsWith('curabo://clinic/')) {
+    return decodeURIComponent(raw.slice('curabo://clinic/'.length)).trim();
+  }
   if (lower.startsWith('appointmentix://clinic/')) {
     return decodeURIComponent(raw.slice('appointmentix://clinic/'.length)).trim();
   }
@@ -1111,7 +1136,7 @@ function TopHeader({
           onPress={onSearchPress}
           hitSlop={8}
         >
-          <Ionicons name="search-outline" size={22} color="#5E6676" />
+          <Ionicons name="search-outline" size={22} color={THEME.inkSoft} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [
@@ -1121,7 +1146,7 @@ function TopHeader({
           onPress={onCartPress}
           hitSlop={8}
         >
-          <Ionicons name="bag-handle-outline" size={21} color="#5E6676" />
+          <Ionicons name="bag-handle-outline" size={21} color={THEME.inkSoft} />
           {safeCartCount > 0 && (
             <View style={styles.headerCartBadge}>
               <Text style={styles.headerCartBadgeText}>{cartBadgeText}</Text>
@@ -1182,10 +1207,12 @@ function BottomTab({ label, active, onPress }) {
       ]}
       onPress={onPress}
     >
+      {active && <View pointerEvents="none" style={styles.bottomTabActiveGlow} />}
+      {active && <View pointerEvents="none" style={styles.bottomTabActiveBeam} />}
       <Ionicons
         name={active ? iconSpec.active : iconSpec.inactive}
         size={18}
-        color={active ? THEME.brand : '#8B93A2'}
+        color={active ? THEME.ink : THEME.mutedSoft}
       />
       <Text style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}>{label}</Text>
     </Pressable>
@@ -1202,6 +1229,9 @@ function TreatmentCard({ treatment, onPress }) {
       ]}
       onPress={() => onPress(treatment)}
     >
+      <View pointerEvents="none" style={styles.treatmentCardGloss} />
+      <View pointerEvents="none" style={styles.treatmentCardGlow} />
+      <View pointerEvents="none" style={styles.treatmentCardPearl} />
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.treatmentImageReal} />
       ) : (
@@ -1283,6 +1313,8 @@ export default function App() {
   const [cartSyncing, setCartSyncing] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const tabFadeAnim = useRef(new Animated.Value(1)).current;
+  const liquidShineAnim = useRef(new Animated.Value(-220)).current;
+  const floatingAuraAnim = useRef(new Animated.Value(0)).current;
   const clinicSearchRequestRef = useRef(0);
   const appSessionId = useMemo(
     () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -1664,44 +1696,45 @@ export default function App() {
     const catalog = payload.catalog || {};
     const clinic = payload.clinic || {};
 
-    if (Array.isArray(catalog.categories) && catalog.categories.length > 0) {
-      setTreatmentCategories(catalog.categories);
-      setCategoryId(catalog.categories[0].id || 'gesicht');
-    }
-    if (Array.isArray(catalog.treatments) && catalog.treatments.length > 0) {
-      const normalizedTreatments = catalog.treatments.map((item) => ({
+    const nextCategories = Array.isArray(catalog.categories) ? catalog.categories : [];
+    const nextTreatments = Array.isArray(catalog.treatments) ? catalog.treatments : [];
+    const nextMemberships = Array.isArray(catalog.memberships) ? catalog.memberships : [];
+    const nextRewardActions = Array.isArray(catalog.rewardActions) ? catalog.rewardActions : [];
+    const nextRewardRedeems = Array.isArray(catalog.rewardRedeems) ? catalog.rewardRedeems : [];
+    const nextHomeArticles = Array.isArray(catalog.homeArticles) ? catalog.homeArticles : [];
+
+    setTreatmentCategories(nextCategories);
+    setCategoryId(nextCategories[0]?.id || 'gesicht');
+
+    const normalizedTreatments = nextTreatments.map((item) => ({
         ...item,
         imageUrl: absolutizeMediaUrl(normalized, item.imageUrl),
         galleryUrls: Array.isArray(item.galleryUrls)
           ? item.galleryUrls.map((entry) => absolutizeMediaUrl(normalized, entry)).filter(Boolean)
           : [],
       }));
-      setTreatments(normalizedTreatments);
-      setSelectedTreatment(null);
+    setTreatments(normalizedTreatments);
+    setSelectedTreatment(null);
+
+    setMemberships(nextMemberships);
+    const fallbackMembership = nextMemberships[0];
+    const keepCurrent = nextMemberships.some((item) => item.id === activeMembership);
+    if (!keepCurrent && fallbackMembership) {
+      setActiveMembership(fallbackMembership.id);
     }
-    if (Array.isArray(catalog.memberships) && catalog.memberships.length > 0) {
-      setMemberships(catalog.memberships);
-      const fallbackMembership = catalog.memberships[0];
-      const keepCurrent = catalog.memberships.some((item) => item.id === activeMembership);
-      if (!keepCurrent && fallbackMembership) {
-        setActiveMembership(fallbackMembership.id);
-      }
-    }
-    if (Array.isArray(catalog.rewardActions) && catalog.rewardActions.length > 0) {
-      setRewardActions(catalog.rewardActions);
-    }
-    if (Array.isArray(catalog.rewardRedeems) && catalog.rewardRedeems.length > 0) {
-      setRewardRedeems(catalog.rewardRedeems);
-    }
-    if (Array.isArray(catalog.homeArticles) && catalog.homeArticles.length > 0) {
-      setHomeArticles(catalog.homeArticles);
+    if (!fallbackMembership) {
+      setActiveMembership('guest');
     }
 
+    setRewardActions(nextRewardActions);
+    setRewardRedeems(nextRewardRedeems);
+    setHomeArticles(nextHomeArticles);
+
     if (clinic && typeof clinic === 'object') {
-      setClinicProfile((prev) => ({
-        ...prev,
+      setClinicProfile({
+        ...CLINIC,
         ...clinic,
-      }));
+      });
       if (clinic.name) {
         setClinicLookupName(clinic.name);
         setClinicSearchQuery(clinic.name);
@@ -2957,6 +2990,11 @@ function continueToAccessStep() {
   }, []);
 
   useEffect(() => {
+    liquidShineAnim.setValue(-34);
+    floatingAuraAnim.setValue(0.16);
+  }, [floatingAuraAnim, liquidShineAnim]);
+
+  useEffect(() => {
     if (!memberships.some((item) => item.id === activeMembership) && memberships[0]?.id) {
       setActiveMembership(memberships[0].id);
     }
@@ -3027,7 +3065,7 @@ function continueToAccessStep() {
         <StatusBar style="dark" />
         <View style={styles.bootWrap}>
           <ActivityIndicator size="large" color={THEME.brand} />
-          <Text style={styles.bootTitle}>Appointmentix wird geladen ...</Text>
+          <Text style={styles.bootTitle}>Curabo wird geladen ...</Text>
           <Text style={styles.bootBody}>Die App wird gestartet.</Text>
         </View>
       </SafeAreaView>
@@ -3038,276 +3076,315 @@ function continueToAccessStep() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <StatusBar style="dark" />
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.onboardingCard}>
-            <Text style={styles.onboardingEyebrow}>APPOINTMENTIX</Text>
-            <Text style={styles.onboardingTitle}>
-              {onboardingStep === 'clinic' ? 'Finde deine MedSpa' : 'Telefonnummer bestätigen'}
-            </Text>
-            <Text style={styles.onboardingBody}>
-              {onboardingStep === 'clinic'
-                ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code.'
-                : 'Melde dich mit Telefonnummer an oder fahre als Gast fort.'}
-            </Text>
-
-            {ALLOW_TECHNICAL_SETUP && (
-              <Pressable
-                style={[styles.secondaryCta, styles.techToggleCta]}
-                onPress={() => setShowTechnicalSetup((prev) => !prev)}
-              >
-                <Text style={styles.secondaryCtaText}>
-                  {showTechnicalSetup ? 'Technik ausblenden' : 'Technik / Backend (optional)'}
-                </Text>
-              </Pressable>
-            )}
-
-            {ALLOW_TECHNICAL_SETUP && showTechnicalSetup && (
-              <View style={styles.inlineInfoBox}>
-                <Text style={styles.inlineInfoTitle}>
-                  {needsBackendProvisioning ? 'Technische Einrichtung (intern)' : 'Backend-URL (bei Netzwerkwechsel)'}
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  value={onboardingBaseUrl}
-                  onChangeText={setOnboardingBaseUrl}
-                  placeholder="http://192.168.x.x:4173"
-                  placeholderTextColor={THEME.muted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-                <Pressable
-                  style={[styles.secondaryCta, backendCheckLoading && styles.ctaDisabled]}
-                  disabled={backendCheckLoading}
-                  onPress={() => {
-                    void runBackendHealthCheck();
-                  }}
-                >
-                  <Text style={styles.secondaryCtaText}>
-                    {backendCheckLoading ? 'Teste Backend ...' : 'Backend testen'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-
-            {onboardingStep === 'clinic' && (
-              <View>
-                <Text style={styles.sectionSubTitle}>MedSpa suchen</Text>
-                <TextInput
-                  style={styles.input}
-                  value={clinicSearchQuery}
-                  onChangeText={(value) => {
-                    const next = String(value || '');
-                    setClinicSearchQuery(next);
-                    setClinicDropdownOpen(true);
-                    setBackendCheckMessage('');
-                    if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
-                      setClinicLookupName('');
-                      setClinicLookupId('');
-                    }
-                    if (!next.trim()) {
-                      setClinicSearchResults([]);
-                    }
-                  }}
-                  onFocus={() => {
-                    setClinicDropdownOpen(true);
-                    void runClinicSearch({ query: clinicSearchQuery, silent: true, allowEmpty: true });
-                  }}
-                  placeholder="MedSpa Name eingeben"
-                  placeholderTextColor={THEME.muted}
-                  autoCorrect={false}
-                  returnKeyType="search"
-                  onSubmitEditing={() => {
-                    setClinicDropdownOpen(true);
-                    void runClinicSearch();
-                  }}
-                />
-                <Pressable
-                  style={[styles.secondaryCta, clinicSearchLoading && styles.ctaDisabled]}
-                  disabled={clinicSearchLoading}
-                  onPress={() => {
-                    setClinicDropdownOpen(true);
-                    void runClinicSearch();
-                  }}
-                >
-                  <Text style={styles.secondaryCtaText}>
-                    {clinicSearchLoading ? 'Suche läuft ...' : 'MedSpa suchen'}
-                  </Text>
-                </Pressable>
-
-                {clinicDropdownOpen && clinicSuggestionResults.length > 0 && (
-                  <View style={styles.searchResultsCard}>
-                    <ScrollView
-                      style={styles.searchResultsScroll}
-                      contentContainerStyle={styles.searchResultsScrollContent}
-                      nestedScrollEnabled
-                      showsVerticalScrollIndicator
-                    >
-                      {clinicSuggestionResults.map((clinic, index) => {
-                        const clinicName = String(clinic?.name || '').trim();
-                        const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
-                        const isLast = index === clinicSuggestionResults.length - 1;
-                        return (
-                          <Pressable
-                            key={clinicName || `clinic-${index}`}
-                            style={[styles.searchResultRow, isLast && styles.searchResultRowLast]}
-                            onPress={() => selectClinicFromSearch(clinic)}
-                          >
-                            <View style={styles.searchResultMain}>
-                              <Text style={styles.searchResultName}>{clinicName || 'MedSpa'}</Text>
-                              <Text style={styles.searchResultMeta}>
-                                {[clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'MedSpa-Profil'}
-                              </Text>
-                            </View>
-                            <Text style={styles.searchSelectLabel}>{isSelected ? 'Ausgewählt' : 'Wählen'}</Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-                {clinicDropdownOpen && String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSuggestionResults.length === 0 && (
-                  <View style={styles.searchResultsCard}>
-                    <Text style={styles.searchEmptyText}>Keine MedSpa-Treffer. Bitte Eingabe anpassen.</Text>
-                  </View>
-                )}
-
-                <Text style={styles.sectionSubTitle}>QR-/Referral-Code</Text>
-                <TextInput
-                  style={styles.input}
-                  value={scanCodeValue}
-                  onChangeText={setScanCodeValue}
-                  placeholder="Code eingeben oder aus QR übernehmen"
-                  placeholderTextColor={THEME.muted}
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                />
-                <Pressable
-                  style={styles.secondaryCta}
-                  onPress={() => {
-                    void useQrOrReferralCode();
-                  }}
-                >
-                  <Text style={styles.secondaryCtaText}>Code verwenden</Text>
-                </Pressable>
-
-                <Text style={styles.analyticsStatus}>
-                  Ausgewählte MedSpa: {clinicLookupName || 'Noch nicht ausgewählt'}
-                </Text>
-
-                <Pressable
-                  style={styles.primaryCta}
-                  onPress={continueToAccessStep}
-                >
-                  <Text style={styles.primaryCtaText}>Weiter</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {onboardingStep === 'access' && (
-              <View>
-                <Text style={styles.sectionSubTitle}>Telefonnummer</Text>
-                <TextInput
-                  style={styles.input}
-                  value={patientPhone}
-                  onChangeText={setPatientPhone}
-                  placeholder="+43 660 1234567"
-                  placeholderTextColor={THEME.muted}
-                  keyboardType="phone-pad"
-                  autoCorrect={false}
-                />
-                <Pressable
-                  style={[styles.primaryCta, (connectLoading || otpLoading || otpResendLoading) && styles.ctaDisabled]}
-                  disabled={connectLoading || otpLoading || otpResendLoading}
-                  onPress={() => {
-                    void continueWithPhone();
-                  }}
-                >
-                  <Text style={styles.primaryCtaText}>{otpCtaLabel}</Text>
-                </Pressable>
-
-                {!!otpUiMessage && (
-                  <Text
-                    style={[
-                      styles.otpUiMessage,
-                      otpUiType === 'error' && styles.otpUiError,
-                      otpUiType === 'warning' && styles.otpUiWarning,
-                      otpUiType === 'success' && styles.otpUiSuccess,
-                    ]}
-                  >
-                    {otpUiMessage}
-                  </Text>
-                )}
-
-                {otpReadyToVerify && (
-                  <View style={styles.otpCard}>
-                    <Text style={styles.otpTitle}>SMS-Code</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={otpCode}
-                      onChangeText={setOtpCode}
-                      placeholder="6-stelligen Code eingeben"
-                      placeholderTextColor={THEME.muted}
-                      keyboardType="number-pad"
-                      autoCorrect={false}
-                      autoCapitalize="none"
-                    />
-                    {!!otpExpiresAt && (
-                      <Text style={styles.otpHint}>
-                        Code gültig bis {formatClock(otpExpiresAt)}.
-                      </Text>
-                    )}
-                    <Pressable
-                      style={[styles.secondaryCta, (otpLoading || otpResendLoading || otpCountdown > 0) && styles.ctaDisabled]}
-                      disabled={otpLoading || otpResendLoading || otpCountdown > 0}
-                      onPress={() => {
-                        void resendOtpCode();
-                      }}
-                    >
-                      <Text style={styles.secondaryCtaText}>{otpResendLabel}</Text>
-                    </Pressable>
-                  </View>
-                )}
-
-                <Pressable
-                  style={styles.secondaryCta}
-                  onPress={() => {
-                    void continueAsGuest();
-                  }}
-                >
-                  <Text style={styles.secondaryCtaText}>Als Gast fortfahren</Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.secondaryCta}
-                  onPress={() => {
-                    resetOtpFlow();
-                    setOnboardingStep('clinic');
-                  }}
-                >
-                  <Text style={styles.secondaryCtaText}>Zurück zur MedSpa-Suche</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {!!backendCheckMessage && onboardingStep === 'clinic' && (
-              <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>
-            )}
-
-            <Pressable
-              style={styles.secondaryCta}
-              onPress={() => {
-                void continueOfflineDemo();
-              }}
-            >
-              <Text style={styles.secondaryCtaText}>Offline-Demo ohne Backend</Text>
-            </Pressable>
+        <View style={styles.container}>
+          <View pointerEvents="none" style={styles.ambientLayer}>
+            <View style={styles.ambientWash} />
+            <View style={styles.ambientBeam} />
+            <View style={styles.ambientLensTop} />
+            <View style={styles.ambientLensBottom} />
+            <View style={styles.ambientOrbA} />
+            <View style={styles.ambientOrbB} />
+            <View style={styles.ambientOrbC} />
           </View>
-        </ScrollView>
+          <ScrollView
+            contentContainerStyle={styles.onboardingScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.onboardingHero}>
+              <View pointerEvents="none" style={styles.onboardingHeroVisual}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.onboardingLiquidShine,
+                    {
+                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
+                    },
+                  ]}
+                />
+                <View style={styles.onboardingHeroGlass} />
+                <View style={styles.onboardingHeroBubbleLarge} />
+                <View style={styles.onboardingHeroBubbleSmall} />
+              </View>
+              <Text style={styles.onboardingHeroChip}>Curabo Patient App</Text>
+              <Text style={styles.onboardingHeroTitle}>
+                {onboardingStep === 'clinic' ? 'Finde deine MedSpa' : 'Ein ruhiger Zugang zu deiner Behandlung'}
+              </Text>
+              <Text style={styles.onboardingHeroBody}>
+                {onboardingStep === 'clinic'
+                  ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code. Danach bleibt alles an einem Ort: Treatments, Rewards und Membership.'
+                  : 'Bestätige deine Telefonnummer oder fahre als Gast fort. Alle weiteren Funktionen bleiben unverändert.'}
+              </Text>
+            </View>
+
+            <View style={styles.onboardingCard}>
+              <View pointerEvents="none" style={styles.cardChrome} />
+              <View pointerEvents="none" style={styles.cardChromeSecondary} />
+              <Text style={styles.onboardingEyebrow}>CURABO</Text>
+              <Text style={styles.onboardingTitle}>
+                {onboardingStep === 'clinic' ? 'Verbinde deine App' : 'Telefonnummer bestätigen'}
+              </Text>
+              <Text style={styles.onboardingBody}>
+                {onboardingStep === 'clinic'
+                  ? 'Starte mit deiner Klinikverbindung und gehe dann direkt in die App.'
+                  : 'Melde dich mit Telefonnummer an oder fahre als Gast fort.'}
+              </Text>
+
+              {ALLOW_TECHNICAL_SETUP && (
+                <Pressable
+                  style={[styles.secondaryCta, styles.techToggleCta]}
+                  onPress={() => setShowTechnicalSetup((prev) => !prev)}
+                >
+                  <Text style={styles.secondaryCtaText}>
+                    {showTechnicalSetup ? 'Technik ausblenden' : 'Technik / Backend (optional)'}
+                  </Text>
+                </Pressable>
+              )}
+
+              {ALLOW_TECHNICAL_SETUP && showTechnicalSetup && (
+                <View style={styles.inlineInfoBox}>
+                  <Text style={styles.inlineInfoTitle}>
+                    {needsBackendProvisioning ? 'Technische Einrichtung (intern)' : 'Backend-URL (bei Netzwerkwechsel)'}
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={onboardingBaseUrl}
+                    onChangeText={setOnboardingBaseUrl}
+                    placeholder="http://192.168.x.x:4173"
+                    placeholderTextColor={THEME.muted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                  />
+                  <Pressable
+                    style={[styles.secondaryCta, backendCheckLoading && styles.ctaDisabled]}
+                    disabled={backendCheckLoading}
+                    onPress={() => {
+                      void runBackendHealthCheck();
+                    }}
+                  >
+                    <Text style={styles.secondaryCtaText}>
+                      {backendCheckLoading ? 'Teste Backend ...' : 'Backend testen'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {onboardingStep === 'clinic' && (
+                <View>
+                  <Text style={styles.sectionSubTitle}>MedSpa suchen</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={clinicSearchQuery}
+                    onChangeText={(value) => {
+                      const next = String(value || '');
+                      setClinicSearchQuery(next);
+                      setClinicDropdownOpen(true);
+                      setBackendCheckMessage('');
+                      if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
+                        setClinicLookupName('');
+                        setClinicLookupId('');
+                      }
+                      if (!next.trim()) {
+                        setClinicSearchResults([]);
+                      }
+                    }}
+                    onFocus={() => {
+                      setClinicDropdownOpen(true);
+                      void runClinicSearch({ query: clinicSearchQuery, silent: true, allowEmpty: true });
+                    }}
+                    placeholder="MedSpa Name eingeben"
+                    placeholderTextColor={THEME.muted}
+                    autoCorrect={false}
+                    returnKeyType="search"
+                    onSubmitEditing={() => {
+                      setClinicDropdownOpen(true);
+                      void runClinicSearch();
+                    }}
+                  />
+                  <Pressable
+                    style={[styles.secondaryCta, clinicSearchLoading && styles.ctaDisabled]}
+                    disabled={clinicSearchLoading}
+                    onPress={() => {
+                      setClinicDropdownOpen(true);
+                      void runClinicSearch();
+                    }}
+                  >
+                    <Text style={styles.secondaryCtaText}>
+                      {clinicSearchLoading ? 'Suche läuft ...' : 'MedSpa suchen'}
+                    </Text>
+                  </Pressable>
+
+                  {clinicDropdownOpen && clinicSuggestionResults.length > 0 && (
+                    <View style={styles.searchResultsCard}>
+                      <ScrollView
+                        style={styles.searchResultsScroll}
+                        contentContainerStyle={styles.searchResultsScrollContent}
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator
+                      >
+                        {clinicSuggestionResults.map((clinic, index) => {
+                          const clinicName = String(clinic?.name || '').trim();
+                          const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
+                          const isLast = index === clinicSuggestionResults.length - 1;
+                          return (
+                            <Pressable
+                              key={clinicName || `clinic-${index}`}
+                              style={[styles.searchResultRow, isLast && styles.searchResultRowLast]}
+                              onPress={() => selectClinicFromSearch(clinic)}
+                            >
+                              <View style={styles.searchResultMain}>
+                                <Text style={styles.searchResultName}>{clinicName || 'MedSpa'}</Text>
+                                <Text style={styles.searchResultMeta}>
+                                  {[clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'MedSpa-Profil'}
+                                </Text>
+                              </View>
+                              <Text style={styles.searchSelectLabel}>{isSelected ? 'Ausgewählt' : 'Wählen'}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+                  {clinicDropdownOpen && String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSuggestionResults.length === 0 && (
+                    <View style={styles.searchResultsCard}>
+                      <Text style={styles.searchEmptyText}>Keine MedSpa-Treffer. Bitte Eingabe anpassen.</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.sectionSubTitle}>QR-/Referral-Code</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={scanCodeValue}
+                    onChangeText={setScanCodeValue}
+                    placeholder="Code eingeben oder aus QR übernehmen"
+                    placeholderTextColor={THEME.muted}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                  <Pressable
+                    style={styles.secondaryCta}
+                    onPress={() => {
+                      void useQrOrReferralCode();
+                    }}
+                  >
+                    <Text style={styles.secondaryCtaText}>Code verwenden</Text>
+                  </Pressable>
+
+                  <Text style={styles.analyticsStatus}>
+                    Ausgewählte MedSpa: {clinicLookupName || 'Noch nicht ausgewählt'}
+                  </Text>
+
+                  <Pressable
+                    style={styles.primaryCta}
+                    onPress={continueToAccessStep}
+                  >
+                    <Text style={styles.primaryCtaText}>Weiter</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {onboardingStep === 'access' && (
+                <View>
+                  <Text style={styles.sectionSubTitle}>Telefonnummer</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={patientPhone}
+                    onChangeText={setPatientPhone}
+                    placeholder="+43 660 1234567"
+                    placeholderTextColor={THEME.muted}
+                    keyboardType="phone-pad"
+                    autoCorrect={false}
+                  />
+                  <Pressable
+                    style={[styles.primaryCta, (connectLoading || otpLoading || otpResendLoading) && styles.ctaDisabled]}
+                    disabled={connectLoading || otpLoading || otpResendLoading}
+                    onPress={() => {
+                      void continueWithPhone();
+                    }}
+                  >
+                    <Text style={styles.primaryCtaText}>{otpCtaLabel}</Text>
+                  </Pressable>
+
+                  {!!otpUiMessage && (
+                    <Text
+                      style={[
+                        styles.otpUiMessage,
+                        otpUiType === 'error' && styles.otpUiError,
+                        otpUiType === 'warning' && styles.otpUiWarning,
+                        otpUiType === 'success' && styles.otpUiSuccess,
+                      ]}
+                    >
+                      {otpUiMessage}
+                    </Text>
+                  )}
+
+                  {otpReadyToVerify && (
+                    <View style={styles.otpCard}>
+                      <Text style={styles.otpTitle}>SMS-Code</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={otpCode}
+                        onChangeText={setOtpCode}
+                        placeholder="6-stelligen Code eingeben"
+                        placeholderTextColor={THEME.muted}
+                        keyboardType="number-pad"
+                        autoCorrect={false}
+                        autoCapitalize="none"
+                      />
+                      {!!otpExpiresAt && (
+                        <Text style={styles.otpHint}>
+                          Code gültig bis {formatClock(otpExpiresAt)}.
+                        </Text>
+                      )}
+                      <Pressable
+                        style={[styles.secondaryCta, (otpLoading || otpResendLoading || otpCountdown > 0) && styles.ctaDisabled]}
+                        disabled={otpLoading || otpResendLoading || otpCountdown > 0}
+                        onPress={() => {
+                          void resendOtpCode();
+                        }}
+                      >
+                        <Text style={styles.secondaryCtaText}>{otpResendLabel}</Text>
+                      </Pressable>
+                    </View>
+                  )}
+
+                  <Pressable
+                    style={styles.secondaryCta}
+                    onPress={() => {
+                      void continueAsGuest();
+                    }}
+                  >
+                    <Text style={styles.secondaryCtaText}>Als Gast fortfahren</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.secondaryCta}
+                    onPress={() => {
+                      resetOtpFlow();
+                      setOnboardingStep('clinic');
+                    }}
+                  >
+                    <Text style={styles.secondaryCtaText}>Zurück zur MedSpa-Suche</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {!!backendCheckMessage && onboardingStep === 'clinic' && (
+                <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>
+              )}
+
+              <Pressable
+                style={styles.secondaryCta}
+                onPress={() => {
+                  void continueOfflineDemo();
+                }}
+              >
+                <Text style={styles.secondaryCtaText}>Offline-Demo ohne Backend</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
       </SafeAreaView>
     );
   }
@@ -3317,6 +3394,15 @@ function continueToAccessStep() {
       <StatusBar style="dark" />
 
       <View style={styles.container}>
+        <View pointerEvents="none" style={styles.ambientLayer}>
+          <View style={styles.ambientWash} />
+          <View style={styles.ambientBeam} />
+          <View style={styles.ambientLensTop} />
+          <View style={styles.ambientLensBottom} />
+          <View style={styles.ambientOrbA} />
+          <View style={styles.ambientOrbB} />
+          <View style={styles.ambientOrbC} />
+        </View>
         <Animated.View
           style={[
             styles.mainAnimatedPanel,
@@ -3345,6 +3431,47 @@ function continueToAccessStep() {
               />
 
               <View style={styles.heroCard}>
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.heroLiquidShine,
+                    {
+                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.heroAeroCluster,
+                    {
+                      transform: [
+                        {
+                          translateY: floatingAuraAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, -14],
+                          }),
+                        },
+                        {
+                          translateX: floatingAuraAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 8],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View style={styles.heroAeroHalo} />
+                  <View style={styles.heroAeroCore} />
+                  <View style={styles.heroAeroRing} />
+                  <View style={styles.heroAeroDot} />
+                </Animated.View>
+                <View pointerEvents="none" style={styles.heroGlossArc} />
+                <View pointerEvents="none" style={styles.heroGlassPill} />
+                <View pointerEvents="none" style={styles.heroPearl} />
+                <View pointerEvents="none" style={styles.heroGlowPrimary} />
+                <View pointerEvents="none" style={styles.heroGlowSecondary} />
                 <Text style={styles.heroEyebrow}>PERSONALISIERT FÜR DICH</Text>
                 <Text style={styles.heroTitle}>Mehr Ergebnisse mit deinem {activeMembershipName}</Text>
                 <Text style={styles.heroBody}>
@@ -3364,6 +3491,9 @@ function continueToAccessStep() {
               </View>
 
               <View style={styles.financeBanner}>
+                <View pointerEvents="none" style={styles.surfaceRim} />
+                <View pointerEvents="none" style={styles.surfaceBlueAura} />
+                <View pointerEvents="none" style={styles.financeGlow} />
                 <Text style={styles.financeTitle}>Heute behandeln. Später zahlen. Punkte sammeln.</Text>
                 <Text style={styles.financeBody}>Flexible Monatsraten und Rewards für wiederkehrende Besuche.</Text>
               </View>
@@ -3371,6 +3501,8 @@ function continueToAccessStep() {
               <Text style={styles.sectionTitle}>Wissen & Tipps</Text>
               {homeArticles.map((article) => (
                 <View key={article.id} style={styles.articleCard}>
+                  <View pointerEvents="none" style={styles.surfaceRim} />
+                  <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                   <Text style={styles.articleTag}>{article.tag}</Text>
                   <Text style={styles.articleTitle}>{article.title}</Text>
                   <Text style={styles.articleBody}>{article.body}</Text>
@@ -3379,6 +3511,9 @@ function continueToAccessStep() {
 
               <Text style={styles.sectionTitle}>MedSpa</Text>
               <View style={styles.clinicCard}>
+                <View pointerEvents="none" style={styles.surfaceRim} />
+                <View pointerEvents="none" style={styles.surfaceBlueAura} />
+                <View pointerEvents="none" style={styles.cardChrome} />
                 <Pressable style={styles.mapWrap} onPress={() => { void openClinicInMaps(); }}>
                   <MapView style={styles.mapView} initialRegion={clinicMapRegion}>
                     <Marker
@@ -3394,11 +3529,11 @@ function continueToAccessStep() {
                 </Pressable>
                 <Text style={styles.clinicName}>{clinicProfile.name}</Text>
                 <View style={styles.clinicMetaRow}>
-                  <Ionicons name="location-outline" size={14} color="#8E95A1" />
+                  <Ionicons name="location-outline" size={14} color={THEME.mutedSoft} />
                   <Text style={styles.clinicMeta}>{clinicProfile.address || clinicProfile.city || 'Standortdaten folgen'}</Text>
                 </View>
                 <View style={styles.clinicMetaRow}>
-                  <Ionicons name="time-outline" size={14} color="#8E95A1" />
+                  <Ionicons name="time-outline" size={14} color={THEME.mutedSoft} />
                   <Text style={styles.clinicMeta}>{clinicProfile.openingHours || 'Mo - Sa, 09:00 - 17:00'}</Text>
                 </View>
                 <Pressable
@@ -3441,6 +3576,18 @@ function continueToAccessStep() {
               {shopTab === 'browse' && !selectedTreatment && (
                 <View>
                   <View style={styles.shopPinkHeroCard}>
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.shopPinkLiquidShine,
+                        {
+                          transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
+                        },
+                      ]}
+                    />
+                    <View pointerEvents="none" style={styles.shopPinkHeroGloss} />
+                    <View pointerEvents="none" style={styles.shopPinkHeroPearl} />
+                    <View pointerEvents="none" style={styles.shopPinkHeroGlow} />
                     <Text style={styles.shopPinkHeroTitle}>Treat today. Pay later. Earn rewards.</Text>
                     <Text style={styles.shopPinkHeroBody}>Kostenlose Treatments und exklusive Member-Vorteile.</Text>
                     <Pressable
@@ -3460,6 +3607,8 @@ function continueToAccessStep() {
                         style={[styles.categoryTile, categoryId === cat.id && styles.categoryTileActive]}
                         onPress={() => setCategoryId(cat.id)}
                       >
+                        <View pointerEvents="none" style={styles.categoryTileGloss} />
+                        {categoryId === cat.id && <View pointerEvents="none" style={styles.categoryTileGlow} />}
                         <View
                           style={[
                             styles.categoryTileIconWrap,
@@ -3469,7 +3618,7 @@ function continueToAccessStep() {
                           <Ionicons
                             name={categoryIconName(cat.id)}
                             size={20}
-                            color={categoryId === cat.id ? THEME.brand : '#7E8695'}
+                            color={categoryId === cat.id ? THEME.ink : THEME.muted}
                           />
                         </View>
                         <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
@@ -3497,6 +3646,7 @@ function continueToAccessStep() {
 
               {shopTab === 'browse' && selectedTreatment && (
                 <View style={styles.detailCard}>
+                  <View pointerEvents="none" style={styles.cardChrome} />
                   <Pressable onPress={() => setSelectedTreatment(null)}>
                     <Text style={styles.backLink}>← Zurück</Text>
                   </Pressable>
@@ -3597,7 +3747,20 @@ function continueToAccessStep() {
                         key={plan.id}
                         style={[styles.shopMembershipBlock, active && styles.shopMembershipBlockActive]}
                       >
+                        <View pointerEvents="none" style={styles.surfaceRim} />
+                        <View pointerEvents="none" style={styles.surfacePinkAura} />
                         <View style={styles.shopMembershipHero}>
+                          <Animated.View
+                            pointerEvents="none"
+                            style={[
+                              styles.shopMembershipLiquidShine,
+                              {
+                                transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
+                              },
+                            ]}
+                          />
+                          <View pointerEvents="none" style={styles.shopMembershipHeroGloss} />
+                          <View pointerEvents="none" style={styles.shopMembershipHeroPearl} />
                           <Text style={styles.shopMembershipHeroEyebrow}>MEMBERSHIP</Text>
                           <Text style={styles.shopMembershipHeroTitle}>{plan.name}</Text>
                           <Text style={styles.shopMembershipHeroBody}>
@@ -3638,6 +3801,7 @@ function continueToAccessStep() {
                               openTreatment(item);
                             }}
                           >
+                            <View pointerEvents="none" style={styles.surfaceRimSoft} />
                             {preferredTreatmentImage(item) ? (
                               <Image source={{ uri: preferredTreatmentImage(item) }} style={styles.shopMembershipIncludedImage} />
                             ) : (
@@ -3697,6 +3861,8 @@ function continueToAccessStep() {
                 <View>
                   {treatments.map((item) => (
                     <View key={item.id} style={styles.treatmentListCard}>
+                      <View pointerEvents="none" style={styles.surfaceRimSoft} />
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <Text style={styles.treatmentListTitle}>{item.name}</Text>
                       <Text style={styles.treatmentListBody}>{item.description}</Text>
                       <Text style={styles.treatmentListMeta}>
@@ -3709,6 +3875,9 @@ function continueToAccessStep() {
 
               {hasCart && (
                 <View style={styles.cartBox}>
+                  <View pointerEvents="none" style={styles.surfaceRim} />
+                  <View pointerEvents="none" style={styles.surfaceGlossStrip} />
+                  <View pointerEvents="none" style={styles.cartBoxGlow} />
                   <Text style={styles.cartTitle}>Warenkorb ({cartItems.length})</Text>
                   {cartItems.slice(0, 3).map((item) => (
                     <Text key={item.id} style={styles.cartItem}>
@@ -3760,11 +3929,16 @@ function continueToAccessStep() {
               />
 
               <View style={styles.scanCard}>
+                <View pointerEvents="none" style={styles.surfaceRim} />
+                <View pointerEvents="none" style={styles.surfaceBlueAura} />
+                <View pointerEvents="none" style={styles.cardChrome} />
                 <Text style={styles.scanTitle}>Check-in QR</Text>
                 <Text style={styles.scanBody}>
                   Scanne beim Empfang deinen App-Code. So werden Besuche sauber erfasst und Rewards automatisch gutgeschrieben.
                 </Text>
                 <View style={styles.scanQrMock}>
+                  <View pointerEvents="none" style={styles.scanQrGloss} />
+                  <View pointerEvents="none" style={styles.scanQrGlow} />
                   <Text style={styles.scanQrText}>{clinicProfile.shortName || 'APP'}-{String(points).slice(0, 4)}</Text>
                 </View>
                 <Pressable style={styles.primaryCta} onPress={checkInViaScan}>
@@ -3792,7 +3966,44 @@ function continueToAccessStep() {
               />
 
               <View style={styles.rewardsBalanceCard}>
-                <View style={styles.rewardsBalanceGlow} />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.rewardsLiquidShine,
+                    {
+                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.rewardsOrbit,
+                    {
+                      transform: [
+                        {
+                          translateY: floatingAuraAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, -10],
+                          }),
+                        },
+                        {
+                          translateX: floatingAuraAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 6],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View style={styles.rewardsOrbitCore} />
+                  <View style={styles.rewardsOrbitRing} />
+                </Animated.View>
+                <View pointerEvents="none" style={styles.rewardsBalanceGloss} />
+                <View pointerEvents="none" style={styles.rewardsBalancePearl} />
+                <View pointerEvents="none" style={styles.rewardsBalanceGlow} />
+                <View pointerEvents="none" style={styles.rewardsBalanceGlowSecondary} />
                 <Text style={styles.rewardsBalanceLogo}>O</Text>
                 <Text style={styles.rewardsBalanceLabel}>Loyalty Points</Text>
                 <View style={styles.rewardsCardStatsRow}>
@@ -3858,9 +4069,10 @@ function continueToAccessStep() {
                   <Text style={styles.rewardsSectionTitle}>Mehr Punkte sammeln?</Text>
                   {rewardActions.map((action) => (
                     <View key={action.id} style={styles.rewardsActionRow}>
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <View style={styles.rewardsActionLeft}>
                         <View style={styles.rewardsActionIconWrap}>
-                          <Ionicons name={rewardActionIcon(action.id)} size={17} color="#D45C94" />
+                          <Ionicons name={rewardActionIcon(action.id)} size={17} color={THEME.brandStrong} />
                         </View>
                         <Text style={styles.rewardsActionLabel}>{action.label}</Text>
                       </View>
@@ -3873,6 +4085,7 @@ function continueToAccessStep() {
                   <Text style={styles.rewardsSectionTitle}>Punkte einlösen</Text>
                   {rewardRedeems.map((item) => (
                     <View key={item.id} style={styles.rewardsRedeemRow}>
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <View>
                         <Text style={styles.rewardsRedeemLabel}>{item.label}</Text>
                         <Text style={styles.rewardsRedeemHint}>{item.requiredPoints} Punkte</Text>
@@ -3899,6 +4112,7 @@ function continueToAccessStep() {
                   )}
                   {rewardHistoryItems.map((entry) => (
                     <View key={entry.id} style={styles.rewardsPastItem}>
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <Text style={styles.rewardsPastTitle}>{entry.title}</Text>
                       <Text style={styles.rewardsPastMeta}>{formatDate(entry.createdAt)}</Text>
                       {'points' in entry && (
@@ -3946,6 +4160,7 @@ function continueToAccessStep() {
                 <View>
                   {history.length === 0 && (
                     <View style={styles.profileEmptyCard}>
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <View style={styles.profileGhostList}>
                         {[1, 2, 3].map((row) => (
                           <View key={`ghost-${row}`} style={styles.profileGhostRow}>
@@ -3972,6 +4187,7 @@ function continueToAccessStep() {
 
                   {history.map((entry) => (
                     <View key={entry.id} style={styles.historyItem}>
+                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
                       <Text style={styles.historyTitle}>{entry.title}</Text>
                       <Text style={styles.historyMeta}>{formatDate(entry.createdAt)}</Text>
                       {'amount' in entry && <Text style={styles.historyMeta}>{formatPrice(entry.amount)}</Text>}
@@ -3983,6 +4199,7 @@ function continueToAccessStep() {
 
               {profileTab === 'membership' && (
                 <View style={styles.membershipCardActive}>
+                  <View pointerEvents="none" style={styles.cardChrome} />
                   <Text style={styles.membershipName}>
                     {hasActiveMembership ? currentMembership.name : 'Keine aktive Membership'}
                   </Text>
@@ -4031,6 +4248,7 @@ function continueToAccessStep() {
 
               {profileTab === 'settings' && (
                 <View style={styles.settingsCard}>
+                  <View pointerEvents="none" style={styles.cardChrome} />
                   <Text style={styles.sectionSubTitle}>Profil</Text>
                   <TextInput
                     style={styles.input}
@@ -4122,10 +4340,12 @@ function continueToAccessStep() {
           <View style={styles.overlayLayer} pointerEvents="box-none">
             <Pressable style={styles.overlayBackdrop} onPress={closeHeaderSearch} />
             <View style={styles.searchOverlayCard}>
+              <View pointerEvents="none" style={styles.surfaceRim} />
+              <View pointerEvents="none" style={styles.overlayCardGloss} />
               <View style={styles.searchOverlayHeader}>
                 <Text style={styles.searchOverlayTitle}>Suchen</Text>
                 <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderSearch}>
-                  <Ionicons name="close" size={20} color="#5E6676" />
+                  <Ionicons name="close" size={20} color={THEME.inkSoft} />
                 </Pressable>
               </View>
               <TextInput
@@ -4161,13 +4381,13 @@ function continueToAccessStep() {
                       onPress={() => onGlobalSearchSelect(item)}
                     >
                       <View style={styles.searchOverlayIconWrap}>
-                        <Ionicons name={searchResultIcon(item.type)} size={16} color={THEME.brand} />
+                        <Ionicons name={searchResultIcon(item.type)} size={16} color={THEME.accent} />
                       </View>
                       <View style={styles.searchOverlayMain}>
                         <Text style={styles.searchOverlayRowTitle}>{item.title}</Text>
                         <Text style={styles.searchOverlayRowMeta}>{item.subtitle}</Text>
                       </View>
-                      <Ionicons name="chevron-forward" size={16} color="#8C93A2" />
+                      <Ionicons name="chevron-forward" size={16} color={THEME.mutedSoft} />
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -4180,10 +4400,12 @@ function continueToAccessStep() {
           <View style={styles.overlayLayer} pointerEvents="box-none">
             <Pressable style={styles.overlayBackdrop} onPress={closeHeaderCart} />
             <View style={styles.cartOverlayCard}>
+              <View pointerEvents="none" style={styles.surfaceRim} />
+              <View pointerEvents="none" style={styles.overlayCardGloss} />
               <View style={styles.searchOverlayHeader}>
                 <Text style={styles.searchOverlayTitle}>Warenkorb</Text>
                 <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderCart}>
-                  <Ionicons name="close" size={20} color="#5E6676" />
+                  <Ionicons name="close" size={20} color={THEME.inkSoft} />
                 </Pressable>
               </View>
 
@@ -4214,7 +4436,7 @@ function continueToAccessStep() {
                             <Text style={styles.cartOverlayStepBtnText}>+</Text>
                           </Pressable>
                           <Pressable style={styles.cartOverlayRemoveBtn} onPress={() => removeCartItem(item.id)}>
-                            <Ionicons name="trash-outline" size={14} color="#8A4C21" />
+                            <Ionicons name="trash-outline" size={14} color={THEME.brandStrong} />
                             <Text style={styles.cartOverlayRemoveText}>Entfernen</Text>
                           </Pressable>
                         </View>
@@ -4264,6 +4486,8 @@ function continueToAccessStep() {
         )}
 
         <View style={styles.bottomBar}>
+          <View pointerEvents="none" style={styles.bottomBarGlow} />
+          <View pointerEvents="none" style={styles.bottomBarGloss} />
           <BottomTab label="Home" active={mainTab === 'home'} onPress={() => switchMainTab('home')} />
           <BottomTab label="Shop" active={mainTab === 'shop'} onPress={() => switchMainTab('shop')} />
           <BottomTab label="Scan" active={mainTab === 'scan'} onPress={() => switchMainTab('scan')} />
@@ -4278,119 +4502,327 @@ function continueToAccessStep() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: THEME.backgroundSoft,
   },
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: THEME.backgroundSoft,
+    overflow: 'hidden',
+  },
+  ambientLayer: {
+    ...StyleSheet.absoluteFillObject,
+    pointerEvents: 'none',
+  },
+  ambientWash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  ambientBeam: {
+    position: 'absolute',
+    top: -56,
+    left: -44,
+    right: -44,
+    height: 220,
+    borderRadius: 80,
+    backgroundColor: 'transparent',
+    transform: [{ rotate: '-8deg' }],
+  },
+  ambientLensTop: {
+    position: 'absolute',
+    top: -110,
+    left: -72,
+    width: 300,
+    height: 300,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  ambientLensBottom: {
+    position: 'absolute',
+    bottom: -140,
+    right: -90,
+    width: 340,
+    height: 340,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  ambientOrbA: {
+    position: 'absolute',
+    top: -16,
+    right: -78,
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  ambientOrbB: {
+    position: 'absolute',
+    top: 192,
+    left: -82,
+    width: 220,
+    height: 220,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  ambientOrbC: {
+    position: 'absolute',
+    bottom: 82,
+    right: -24,
+    width: 196,
+    height: 196,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
   },
   bootWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
   },
   bootTitle: {
-    marginTop: 14,
-    fontSize: 20,
-    fontWeight: '700',
+    marginTop: 16,
+    fontSize: 24,
+    fontWeight: '800',
     color: THEME.ink,
+    letterSpacing: -0.6,
+    fontFamily: UI_FONT_FAMILY,
   },
   bootBody: {
-    marginTop: 6,
-    color: THEME.muted,
+    marginTop: 8,
+    color: THEME.inkSoft,
     textAlign: 'center',
+    lineHeight: 22,
+    fontFamily: UI_FONT_FAMILY,
   },
   onboardingCard: {
-    backgroundColor: THEME.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 22,
-    padding: 18,
-    marginTop: 14,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 34,
+    padding: 24,
+    marginTop: 4,
+    shadowOpacity: 0.28,
     ...SOFT_CARD_SHADOW,
   },
+  cardChrome: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 90,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    backgroundColor: 'rgba(255,255,255,0.52)',
+  },
+  cardChromeSecondary: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 120,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.46)',
+    transform: [{ rotate: '8deg' }],
+  },
   onboardingEyebrow: {
-    color: THEME.muted,
+    color: THEME.brandStrong,
     fontWeight: '700',
-    letterSpacing: 1.2,
-    marginBottom: 4,
+    letterSpacing: 1.6,
+    marginBottom: 10,
+    fontSize: 11,
+    fontFamily: UI_FONT_FAMILY,
   },
   onboardingTitle: {
-    fontSize: 32,
-    lineHeight: 36,
+    fontSize: 36,
+    lineHeight: 40,
     fontWeight: '800',
-    letterSpacing: -0.4,
+    letterSpacing: -1,
     color: THEME.ink,
-    marginBottom: 6,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   onboardingBody: {
-    color: THEME.muted,
-    lineHeight: 20,
-    marginBottom: 10,
+    color: THEME.inkSoft,
+    lineHeight: 23,
+    marginBottom: 14,
+    fontFamily: UI_FONT_FAMILY,
   },
   mainAnimatedPanel: {
     flex: 1,
   },
+  onboardingScrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 28,
+    paddingBottom: 56,
+  },
+  onboardingHero: {
+    position: 'relative',
+    minHeight: 168,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+    paddingTop: 8,
+    paddingRight: 130,
+  },
+  onboardingHeroVisual: {
+    position: 'absolute',
+    top: 0,
+    right: -8,
+    width: 154,
+    height: 154,
+  },
+  onboardingLiquidShine: {
+    position: 'absolute',
+    top: -18,
+    left: -180,
+    width: 88,
+    height: 208,
+    borderRadius: 56,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+  },
+  onboardingHeroGlass: {
+    position: 'absolute',
+    top: 18,
+    right: 0,
+    width: 128,
+    height: 128,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.52)',
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    shadowColor: '#70D9FF',
+    shadowOpacity: 0.34,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 14 },
+  },
+  onboardingHeroBubbleLarge: {
+    position: 'absolute',
+    top: 4,
+    right: 42,
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: 'rgba(75,203,255,0.46)',
+  },
+  onboardingHeroBubbleSmall: {
+    position: 'absolute',
+    bottom: 4,
+    left: 10,
+    width: 46,
+    height: 46,
+    borderRadius: 999,
+    backgroundColor: 'rgba(241,139,207,0.44)',
+  },
+  onboardingHeroChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: SURFACE_PANEL,
+    color: THEME.brandStrong,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 14,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  onboardingHeroTitle: {
+    color: THEME.ink,
+    fontSize: 42,
+    lineHeight: 44,
+    fontWeight: '800',
+    letterSpacing: -1.2,
+    marginBottom: 12,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  onboardingHeroBody: {
+    color: THEME.inkSoft,
+    lineHeight: 23,
+    fontSize: 15,
+    maxWidth: 480,
+    fontFamily: UI_FONT_FAMILY,
+  },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 128,
-    paddingTop: 10,
+    paddingHorizontal: 18,
+    paddingBottom: 136,
+    paddingTop: 16,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 24,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 14,
   },
   headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 999,
-    backgroundColor: '#FBEAF3',
+    width: 50,
+    height: 50,
+    borderRadius: 20,
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#F3D1E4',
+    borderColor: BORDER_LIGHT,
     alignItems: 'center',
     justifyContent: 'center',
+    ...SOFT_CARD_SHADOW,
   },
   headerAvatarText: {
-    color: '#AC3A80',
+    color: '#1B6CB8',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   headerClinic: {
-    fontSize: 12,
-    letterSpacing: 1.2,
-    color: THEME.muted,
-    marginTop: 1,
+    alignSelf: 'flex-start',
+    fontSize: 11,
+    letterSpacing: 1,
+    color: THEME.brandStrong,
+    marginTop: 6,
+    backgroundColor: SURFACE_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
     color: THEME.ink,
-    lineHeight: 36,
-    letterSpacing: -0.4,
+    lineHeight: 38,
+    letterSpacing: -1,
+    fontFamily: UI_FONT_FAMILY,
   },
   headerIcons: {
     flexDirection: 'row',
     gap: 12,
   },
   iconButtonWrap: {
-    backgroundColor: '#FBFCFF',
-    borderColor: '#E3E8F3',
+    backgroundColor: SURFACE_RAISED,
+    borderColor: BORDER_TINT,
     borderWidth: 1,
     width: 48,
     height: 48,
-    borderRadius: 999,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    ...SOFT_CARD_SHADOW,
+    shadowColor: '#86DFFF',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
   },
   headerCartBadge: {
     position: 'absolute',
@@ -4400,7 +4832,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     paddingHorizontal: 4,
-    backgroundColor: THEME.brand,
+    backgroundColor: THEME.brandStrong,
     borderWidth: 1,
     borderColor: '#FFFFFF',
     alignItems: 'center',
@@ -4418,29 +4850,89 @@ const styles = StyleSheet.create({
   },
   overlayBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(31,36,48,0.30)',
+    backgroundColor: THEME.overlay,
   },
   searchOverlayCard: {
-    marginTop: 72,
-    marginHorizontal: 14,
-    backgroundColor: '#FBFCFF',
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 78,
+    marginHorizontal: 12,
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: '#E9ECF2',
-    borderRadius: 24,
-    padding: 14,
+    borderColor: BORDER_TINT,
+    borderRadius: 30,
+    padding: 18,
     maxHeight: 430,
-    ...SOFT_CARD_SHADOW,
+    shadowColor: '#3C7CC8',
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 8,
   },
   cartOverlayCard: {
-    marginTop: 72,
-    marginHorizontal: 14,
-    backgroundColor: '#FBFCFF',
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 78,
+    marginHorizontal: 12,
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: '#E9ECF2',
-    borderRadius: 24,
-    padding: 14,
+    borderColor: BORDER_TINT,
+    borderRadius: 30,
+    padding: 18,
     maxHeight: 500,
-    ...SOFT_CARD_SHADOW,
+    shadowColor: '#3C7CC8',
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 8,
+  },
+  surfaceRim: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    bottom: 1,
+    left: 1,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.72)',
+  },
+  surfaceRimSoft: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    bottom: 1,
+    left: 1,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.66)',
+  },
+  surfaceBlueAura: {
+    position: 'absolute',
+    top: -26,
+    right: -22,
+    width: 122,
+    height: 122,
+    borderRadius: 999,
+    backgroundColor: 'rgba(102, 221, 255, 0.16)',
+  },
+  surfacePinkAura: {
+    position: 'absolute',
+    bottom: -28,
+    left: -16,
+    width: 112,
+    height: 112,
+    borderRadius: 999,
+    backgroundColor: 'rgba(241, 139, 207, 0.12)',
+  },
+  overlayCardGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 86,
+    backgroundColor: 'rgba(255,255,255,0.50)',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
   },
   searchOverlayHeader: {
     flexDirection: 'row',
@@ -4449,60 +4941,64 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchOverlayTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: THEME.ink,
+    fontFamily: UI_FONT_FAMILY,
   },
   overlayCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: THEME.border,
+    borderColor: BORDER_LIGHT,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACE_PANEL,
   },
   searchOverlayInput: {
-    minHeight: 42,
+    minHeight: 46,
     borderWidth: 1,
-    borderColor: THEME.border,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: SURFACE_TINT,
+    borderRadius: 18,
+    paddingHorizontal: 14,
     color: THEME.ink,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   searchOverlayHint: {
     color: THEME.muted,
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: 4,
-    lineHeight: 20,
+    lineHeight: 21,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchOverlayResults: {
     maxHeight: 280,
   },
   searchOverlayResultsContent: {
     paddingTop: 4,
-    paddingBottom: 6,
-    gap: 6,
+    paddingBottom: 8,
+    gap: 8,
   },
   searchOverlayRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    backgroundColor: '#FFFFFF',
+    borderColor: BORDER_LIGHT,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: SURFACE_PANEL,
   },
   searchOverlayIconWrap: {
-    width: 28,
-    height: 28,
+    width: 34,
+    height: 34,
     borderRadius: 14,
-    backgroundColor: THEME.brandSoft,
+    backgroundColor: 'rgba(71,196,234,0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.74)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4513,21 +5009,25 @@ const styles = StyleSheet.create({
   searchOverlayRowTitle: {
     color: THEME.ink,
     fontWeight: '700',
+    fontSize: 14,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchOverlayRowMeta: {
     color: THEME.muted,
     fontSize: 12,
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    backgroundColor: '#FFFFFF',
+    borderColor: BORDER_LIGHT,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: SURFACE_PANEL,
   },
   cartOverlayMain: {
     flex: 1,
@@ -4537,14 +5037,18 @@ const styles = StyleSheet.create({
     color: THEME.ink,
     fontWeight: '700',
     marginBottom: 1,
+    fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayMeta: {
     color: THEME.muted,
     fontSize: 12,
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayPrice: {
     color: THEME.ink,
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayControlsRow: {
     marginTop: 7,
@@ -4554,12 +5058,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   cartOverlayStepBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: THEME.border,
-    backgroundColor: '#FFFFFF',
+    borderColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(255,255,255,0.97)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4580,15 +5084,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    minHeight: 26,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    minHeight: 30,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E9D8C7',
-    backgroundColor: '#FFF6EE',
+    borderColor: '#E6D8D8',
+    backgroundColor: '#FBF2F3',
   },
   cartOverlayRemoveText: {
-    color: '#8A4C21',
+    color: THEME.brandStrong,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -4600,7 +5104,8 @@ const styles = StyleSheet.create({
     color: THEME.muted,
     fontWeight: '700',
     fontSize: 12,
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: 0.4,
   },
   checkoutMethodRow: {
     flexDirection: 'row',
@@ -4608,18 +5113,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   checkoutMethodChip: {
-    minHeight: 32,
-    borderRadius: 10,
+    minHeight: 34,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: THEME.border,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
+    backgroundColor: THEME.surface,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkoutMethodChipActive: {
-    borderColor: '#E8C9A7',
-    backgroundColor: '#FFF3E3',
+    borderColor: '#D7E2F0',
+    backgroundColor: THEME.accentSoft,
   },
   checkoutMethodChipText: {
     color: THEME.muted,
@@ -4627,17 +5132,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   checkoutMethodChipTextActive: {
-    color: THEME.brand,
+    color: THEME.accent,
   },
   cartOverlayFooter: {
-    marginTop: 8,
-    marginBottom: 8,
+    marginTop: 10,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
     borderTopColor: THEME.border,
-    paddingTop: 10,
+    paddingTop: 12,
   },
   cartOverlayTotalLabel: {
     color: THEME.muted,
@@ -4646,116 +5151,280 @@ const styles = StyleSheet.create({
   cartOverlayTotalValue: {
     color: THEME.ink,
     fontWeight: '800',
-    fontSize: 18,
+    fontSize: 20,
   },
   heroCard: {
-    backgroundColor: '#F7F9FE',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: '#1087FF',
     borderWidth: 1,
-    borderColor: '#E6EAF3',
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 12,
+    borderColor: 'rgba(255,255,255,0.64)',
+    borderRadius: 34,
+    padding: 24,
+    paddingRight: 126,
+    marginBottom: 18,
     ...SOFT_CARD_SHADOW,
+  },
+  heroLiquidShine: {
+    position: 'absolute',
+    top: -26,
+    left: -200,
+    width: 108,
+    height: 286,
+    borderRadius: 80,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  heroAeroCluster: {
+    position: 'absolute',
+    top: 58,
+    right: 14,
+    width: 114,
+    height: 114,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroAeroHalo: {
+    position: 'absolute',
+    width: 114,
+    height: 114,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  heroAeroCore: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.26)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.58)',
+  },
+  heroAeroRing: {
+    position: 'absolute',
+    width: 66,
+    height: 66,
+    borderRadius: 999,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.46)',
+  },
+  heroAeroDot: {
+    position: 'absolute',
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  heroGlossArc: {
+    position: 'absolute',
+    top: -12,
+    left: -14,
+    right: 36,
+    height: 92,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    transform: [{ rotate: '-5deg' }],
+  },
+  heroGlassPill: {
+    position: 'absolute',
+    top: 18,
+    right: 22,
+    width: 108,
+    height: 30,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.36)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.56)',
+  },
+  heroPearl: {
+    position: 'absolute',
+    top: 56,
+    right: 14,
+    width: 108,
+    height: 108,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+  },
+  heroGlowPrimary: {
+    position: 'absolute',
+    top: -22,
+    right: -18,
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: 'rgba(241,139,207,0.48)',
+  },
+  heroGlowSecondary: {
+    position: 'absolute',
+    bottom: -50,
+    left: -20,
+    width: 156,
+    height: 156,
+    borderRadius: 999,
+    backgroundColor: 'rgba(106,241,222,0.44)',
   },
   heroEyebrow: {
     fontSize: 11,
-    letterSpacing: 1,
-    color: THEME.muted,
-    marginBottom: 5,
+    letterSpacing: 1.2,
+    color: '#D7DEEA',
+    marginBottom: 10,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   heroTitle: {
-    fontSize: 26,
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: '#F7FBFF',
+    marginBottom: 10,
+    letterSpacing: -0.9,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  heroBody: {
+    color: '#C7D0DC',
+    lineHeight: 22,
+    marginBottom: 16,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  heroCta: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FDFEFF',
+    borderColor: 'rgba(193,224,247,0.92)',
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    shadowColor: '#61E8FF',
+    shadowOpacity: 0.34,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  heroCtaText: {
+    color: THEME.ink,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  financeBanner: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderColor: 'rgba(212,226,240,0.98)',
+    borderWidth: 1,
+    borderRadius: 26,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 6,
+  },
+  financeGlow: {
+    position: 'absolute',
+    top: -26,
+    right: -16,
+    width: 116,
+    height: 116,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.32)',
+  },
+  financeTitle: {
+    color: THEME.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  financeBody: {
+    color: THEME.muted,
+    lineHeight: 22,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  sectionTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: THEME.ink,
+    marginTop: 12,
+    marginBottom: 14,
+    letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  sectionSubTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: THEME.ink,
+    marginTop: 18,
+    marginBottom: 10,
+    letterSpacing: -0.4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  articleCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_RAISED,
+    borderColor: BORDER_TINT,
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 5,
+  },
+  articleTag: {
+    alignSelf: 'flex-start',
+    color: THEME.brandStrong,
+    fontWeight: '700',
+    marginBottom: 10,
+    backgroundColor: THEME.brandSoft,
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  articleTitle: {
+    fontSize: 20,
     fontWeight: '800',
     color: THEME.ink,
     marginBottom: 6,
     letterSpacing: -0.3,
-  },
-  heroBody: {
-    color: THEME.muted,
-    lineHeight: 21,
-    marginBottom: 12,
-  },
-  heroCta: {
-    alignSelf: 'flex-start',
-    backgroundColor: THEME.brand,
-    borderRadius: 13,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-  },
-  heroCtaText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  financeBanner: {
-    backgroundColor: THEME.surface,
-    borderColor: THEME.border,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 12,
-    ...SOFT_CARD_SHADOW,
-  },
-  financeTitle: {
-    color: THEME.ink,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  financeBody: {
-    color: THEME.muted,
-    lineHeight: 20,
-  },
-  sectionTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: THEME.ink,
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  sectionSubTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: THEME.ink,
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  articleCard: {
-    backgroundColor: THEME.surface,
-    borderColor: THEME.border,
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 12,
-    ...SOFT_CARD_SHADOW,
-  },
-  articleTag: {
-    color: THEME.brand,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  articleTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: THEME.ink,
-    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
   },
   articleBody: {
     color: THEME.muted,
-    lineHeight: 20,
+    lineHeight: 22,
+    fontFamily: UI_FONT_FAMILY,
   },
   clinicCard: {
-    backgroundColor: THEME.surface,
-    borderColor: THEME.border,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_RAISED,
+    borderColor: BORDER_TINT,
     borderWidth: 1,
-    borderRadius: 20,
-    padding: 14,
-    marginBottom: 14,
-    ...SOFT_CARD_SHADOW,
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.13,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 6,
   },
   mapWrap: {
-    height: 168,
-    borderRadius: 16,
-    marginBottom: 10,
+    height: 190,
+    borderRadius: 20,
+    marginBottom: 14,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: THEME.border,
@@ -4766,9 +5435,9 @@ const styles = StyleSheet.create({
   },
   mapOpenHint: {
     position: 'absolute',
-    right: 10,
-    bottom: 10,
-    backgroundColor: 'rgba(21, 25, 35, 0.78)',
+    right: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(20, 29, 43, 0.82)',
     borderColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
     borderRadius: 999,
@@ -4784,93 +5453,113 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   clinicName: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: THEME.ink,
-    marginBottom: 4,
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   clinicMeta: {
     color: THEME.muted,
-    marginBottom: 2,
+    marginBottom: 4,
     flex: 1,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
   },
   clinicMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: 8,
+    marginBottom: 4,
   },
   callNowCta: {
-    marginTop: 10,
-    backgroundColor: THEME.brand,
-    borderRadius: 14,
-    paddingVertical: 12,
+    marginTop: 12,
+    backgroundColor: '#2C87E4',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.44)',
+    paddingVertical: 14,
     alignItems: 'center',
+    shadowColor: '#59DDF8',
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
   },
   callNowCtaText: {
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   segmentRow: {
-    backgroundColor: THEME.surface,
+    backgroundColor: SURFACE_SOFT,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 20,
-    padding: 5,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 24,
+    padding: 6,
     flexDirection: 'row',
-    gap: 4,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 16,
     ...SOFT_CARD_SHADOW,
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
     alignItems: 'center',
   },
   segmentBtnActive: {
-    backgroundColor: '#EEDCCA',
+    backgroundColor: SURFACE_RAISED,
+    borderWidth: 1,
+    borderColor: BORDER_TINT,
+    shadowColor: '#5DCBEE',
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   segmentText: {
     color: THEME.muted,
     fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
   },
   segmentTextActive: {
     color: THEME.ink,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   shopTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 18,
-    backgroundColor: '#F8FAFD',
-    padding: 5,
-    marginBottom: 14,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 24,
+    backgroundColor: SURFACE_SOFT,
+    padding: 6,
+    marginBottom: 16,
     ...SOFT_CARD_SHADOW,
   },
   shopTabBtn: {
     flex: 1,
     alignItems: 'center',
-    borderRadius: 12,
-    paddingVertical: 10,
+    borderRadius: 14,
+    paddingVertical: 12,
   },
   shopTabBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: '#E4E9F3',
+    borderColor: BORDER_TINT,
   },
   shopTabText: {
-    color: '#7D8595',
+    color: THEME.muted,
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 0,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopTabTextActive: {
-    color: THEME.brand,
-    fontWeight: '700',
+    color: THEME.ink,
+    fontWeight: '800',
   },
   shopTabUnderline: {
     height: 0,
@@ -4880,252 +5569,376 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   shopPinkHeroCard: {
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    backgroundColor: '#FBEAF3',
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 32,
+    paddingHorizontal: 20,
+    paddingVertical: 22,
+    backgroundColor: '#FFF0FA',
     borderWidth: 1,
-    borderColor: '#F2D2E4',
-    marginBottom: 16,
+    borderColor: 'rgba(255,255,255,0.82)',
+    marginBottom: 18,
     ...SOFT_CARD_SHADOW,
   },
+  shopPinkLiquidShine: {
+    position: 'absolute',
+    top: -24,
+    left: -190,
+    width: 96,
+    height: 230,
+    borderRadius: 64,
+    backgroundColor: 'rgba(255,255,255,0.30)',
+  },
+  shopPinkHeroGloss: {
+    position: 'absolute',
+    top: -14,
+    left: -10,
+    right: 48,
+    height: 84,
+    borderRadius: 52,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  shopPinkHeroPearl: {
+    position: 'absolute',
+    bottom: -24,
+    right: -10,
+    width: 122,
+    height: 122,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  shopPinkHeroGlow: {
+    position: 'absolute',
+    top: -14,
+    right: -10,
+    width: 148,
+    height: 148,
+    borderRadius: 999,
+    backgroundColor: 'rgba(241,139,207,0.22)',
+  },
   shopPinkHeroTitle: {
-    color: '#2B2336',
-    fontSize: 28,
-    lineHeight: 32,
+    color: THEME.ink,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '800',
-    textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
+    letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopPinkHeroBody: {
-    color: '#6A607A',
-    textAlign: 'center',
-    marginBottom: 12,
+    color: THEME.muted,
+    marginBottom: 14,
+    lineHeight: 21,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopPinkHeroCta: {
-    alignSelf: 'center',
-    backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start',
+    backgroundColor: '#2E90E8',
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#EADCE9',
-    borderRadius: 12,
+    borderColor: 'rgba(255,255,255,0.48)',
     paddingHorizontal: 18,
-    paddingVertical: 9,
+    paddingVertical: 12,
+    shadowColor: '#65DEFF',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+    overflow: 'hidden',
   },
   shopPinkHeroCtaText: {
-    color: THEME.brand,
+    color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4,
-    marginBottom: 14,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
   categoryTile: {
-    width: '25%',
-    paddingHorizontal: 4,
-    marginBottom: 8,
+    position: 'relative',
+    overflow: 'hidden',
+    width: '31.5%',
+    marginBottom: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 92,
-    backgroundColor: '#FFFFFF',
+    minHeight: 102,
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
-    borderRadius: 14,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
+    ...SOFT_CARD_SHADOW,
   },
   categoryTileActive: {
-    borderColor: '#DAB3CB',
-    backgroundColor: '#FFF6FB',
+    borderColor: BORDER_TINT,
+    backgroundColor: 'rgba(195,246,255,0.98)',
+    shadowColor: '#59DDF8',
+    shadowOpacity: 0.3,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 7,
+  },
+  categoryTileGloss: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: 22,
+    height: 44,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  categoryTileGlow: {
+    position: 'absolute',
+    top: -10,
+    right: -8,
+    width: 72,
+    height: 72,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.22)',
   },
   categoryTileIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ECEFF6',
-    backgroundColor: '#FFFFFF',
-    marginBottom: 6,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: SURFACE_PANEL,
+    marginBottom: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoryTileIconWrapActive: {
-    borderColor: '#E8BED7',
-    backgroundColor: '#FFF5FA',
+    borderColor: BORDER_TINT,
+    backgroundColor: SURFACE_RAISED,
   },
   categoryTileText: {
-    color: '#635547',
-    fontWeight: '500',
+    color: THEME.inkSoft,
+    fontWeight: '600',
     fontSize: 12,
     textAlign: 'center',
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   categoryTileTextActive: {
     color: THEME.ink,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   shopListTitle: {
     color: THEME.ink,
-    fontSize: 32,
-    lineHeight: 36,
+    fontSize: 34,
+    lineHeight: 38,
     fontWeight: '800',
-    marginBottom: 2,
+    marginBottom: 4,
+    letterSpacing: -0.9,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopListSubtitle: {
     color: THEME.muted,
     fontSize: 15,
-    lineHeight: 20,
-    marginBottom: 12,
+    lineHeight: 21,
+    marginBottom: 14,
+    fontFamily: UI_FONT_FAMILY,
   },
   treatmentGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -5,
+    justifyContent: 'space-between',
   },
   treatmentCard: {
-    width: '50%',
-    paddingHorizontal: 5,
-    marginBottom: 12,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    width: '48.2%',
+    marginBottom: 14,
+    borderRadius: 26,
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: BORDER_LIGHT,
     overflow: 'hidden',
     ...SOFT_CARD_SHADOW,
   },
+  treatmentCardGloss: {
+    position: 'absolute',
+    top: -8,
+    left: -6,
+    right: 30,
+    height: 54,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.42)',
+    zIndex: 2,
+    transform: [{ rotate: '-6deg' }],
+  },
+  treatmentCardGlow: {
+    position: 'absolute',
+    top: -12,
+    right: -8,
+    width: 92,
+    height: 92,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.24)',
+    zIndex: 1,
+  },
+  treatmentCardPearl: {
+    position: 'absolute',
+    bottom: 34,
+    right: -12,
+    width: 74,
+    height: 74,
+    borderRadius: 999,
+    backgroundColor: 'rgba(241,139,207,0.18)',
+    zIndex: 1,
+  },
   treatmentImageMock: {
-    height: 116,
-    backgroundColor: '#D8C5AE',
+    height: 132,
+    backgroundColor: THEME.surfaceMuted,
   },
   treatmentImageReal: {
-    height: 116,
+    height: 132,
     width: '100%',
-    backgroundColor: '#D8C5AE',
+    backgroundColor: THEME.surfaceMuted,
   },
   treatmentCardBody: {
-    paddingHorizontal: 10,
-    paddingTop: 9,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
   treatmentName: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: THEME.ink,
-    marginBottom: 4,
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   treatmentDescription: {
     color: THEME.muted,
-    lineHeight: 17,
-    minHeight: 40,
-    fontSize: 12,
-    marginBottom: 6,
+    lineHeight: 19,
+    minHeight: 42,
+    fontSize: 13,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   treatmentPrice: {
-    color: THEME.brand,
-    fontWeight: '700',
+    color: THEME.ink,
+    fontWeight: '800',
     fontSize: 15,
+    fontFamily: UI_FONT_FAMILY,
   },
   detailCard: {
-    backgroundColor: THEME.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 22,
-    padding: 16,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 32,
+    padding: 20,
     ...SOFT_CARD_SHADOW,
   },
   detailImage: {
     width: '100%',
-    height: 190,
-    borderRadius: 12,
-    marginBottom: 10,
-    backgroundColor: '#D8C5AE',
+    height: 228,
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: THEME.surfaceMuted,
   },
   detailImageMock: {
     width: '100%',
-    height: 190,
-    borderRadius: 12,
-    marginBottom: 10,
-    backgroundColor: '#D8C5AE',
+    height: 228,
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: THEME.surfaceMuted,
   },
   detailGalleryRow: {
-    gap: 8,
+    gap: 10,
     paddingBottom: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   detailThumbImage: {
-    width: 74,
-    height: 74,
-    borderRadius: 10,
-    backgroundColor: '#D8C5AE',
+    width: 80,
+    height: 80,
+    borderRadius: 14,
+    backgroundColor: THEME.surfaceMuted,
   },
   backLink: {
-    color: THEME.brand,
+    color: THEME.accent,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   detailTitle: {
-    fontSize: 36,
+    fontSize: 38,
     fontWeight: '800',
     color: THEME.ink,
-    lineHeight: 38,
-    marginBottom: 8,
+    lineHeight: 40,
+    marginBottom: 10,
+    letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
   },
   detailBody: {
     color: THEME.muted,
-    lineHeight: 21,
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   detailMeta: {
-    color: THEME.ink,
-    fontWeight: '600',
-    marginBottom: 4,
+    color: THEME.inkSoft,
+    fontWeight: '700',
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   detailQuoteCard: {
-    marginTop: 6,
-    marginBottom: 10,
-    borderRadius: 12,
+    marginTop: 8,
+    marginBottom: 12,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E8D8C8',
-    backgroundColor: '#FBF4EC',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: SURFACE_TINT,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   detailQuoteText: {
-    color: '#5F4A57',
+    color: THEME.inkSoft,
     fontWeight: '600',
-    lineHeight: 20,
-    textAlign: 'center',
+    lineHeight: 21,
+    fontFamily: UI_FONT_FAMILY,
   },
   unitsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   unitsBtn: {
     width: 44,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#EEDCCA',
+    borderRadius: 16,
+    backgroundColor: SURFACE_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   unitsBtnText: {
     fontSize: 24,
     color: THEME.ink,
-    marginTop: -2,
+    marginTop: -1,
+    fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
   },
   unitsValueWrap: {
     flex: 1,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    minHeight: 44,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 16,
+    minHeight: 46,
     justifyContent: 'center',
-    paddingHorizontal: 12,
-    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    backgroundColor: SURFACE_PANEL,
   },
   unitsValue: {
     color: THEME.ink,
-    fontWeight: '600',
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   detailPlanSummaryRow: {
     flexDirection: 'row',
@@ -5135,138 +5948,204 @@ const styles = StyleSheet.create({
   },
   detailPlanSummaryMain: {
     color: THEME.ink,
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
   },
   detailPlanSummaryDivider: {
-    color: '#C7B7A4',
+    color: THEME.mutedSoft,
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   detailPlanSummaryMember: {
-    color: THEME.brand,
+    color: THEME.brandStrong,
     fontWeight: '700',
   },
   priceLine: {
     color: THEME.muted,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   priceHint: {
-    color: THEME.brand,
+    color: THEME.brandStrong,
     fontSize: 13,
-    marginBottom: 6,
+    marginBottom: 8,
+    lineHeight: 18,
   },
   primaryCta: {
-    marginTop: 8,
-    backgroundColor: THEME.brand,
-    borderRadius: 12,
-    paddingVertical: 13,
+    marginTop: 10,
+    backgroundColor: '#2A96EA',
+    borderWidth: 1,
+    borderColor: 'rgba(210,241,255,0.96)',
+    borderRadius: 20,
+    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#51D8FF',
+    shadowOpacity: 0.48,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
+    overflow: 'hidden',
   },
   primaryCtaText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+    letterSpacing: -0.3,
   },
   secondaryCta: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#E3D5C8',
-    borderRadius: 12,
-    paddingVertical: 11,
+    borderColor: 'rgba(204,224,241,0.96)',
+    borderRadius: 18,
+    paddingVertical: 13,
     alignItems: 'center',
-    backgroundColor: '#FFF6EF',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    shadowColor: '#8CDEFF',
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+    overflow: 'hidden',
   },
   secondaryCtaActive: {
-    backgroundColor: THEME.brand,
-    borderColor: THEME.brand,
+    backgroundColor: '#356AE7',
+    borderColor: 'rgba(255,255,255,0.36)',
   },
   secondaryCtaText: {
-    color: THEME.brand,
-    fontWeight: '700',
+    color: THEME.ink,
+    fontWeight: '800',
   },
   secondaryCtaTextActive: {
     color: '#fff',
   },
   membershipCard: {
-    backgroundColor: THEME.surface,
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 28,
+    padding: 16,
+    marginBottom: 12,
     ...SOFT_CARD_SHADOW,
   },
   membershipCardActive: {
-    backgroundColor: '#FCEFF6',
-    borderColor: '#E6C6D9',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,247,253,0.96)',
+    borderColor: BORDER_LIGHT,
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10,
-    ...SOFT_CARD_SHADOW,
-  },
-  membershipName: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: THEME.ink,
-    marginBottom: 3,
-  },
-  membershipPrice: {
-    color: THEME.brand,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  membershipPerk: {
-    color: THEME.muted,
-    marginBottom: 2,
-    lineHeight: 20,
-  },
-  shopMembershipBlock: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 20,
-    padding: 14,
+    borderRadius: 30,
+    padding: 18,
     marginBottom: 14,
     ...SOFT_CARD_SHADOW,
   },
+  membershipName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: THEME.ink,
+    marginBottom: 5,
+    letterSpacing: -0.4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  membershipPrice: {
+    color: THEME.brandStrong,
+    fontWeight: '700',
+    marginBottom: 8,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  membershipPerk: {
+    color: THEME.muted,
+    marginBottom: 4,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  shopMembershipBlock: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,226,240,0.98)',
+    borderRadius: 30,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: '#355A90',
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 6,
+  },
   shopMembershipBlockActive: {
-    borderColor: '#E2B8D2',
-    shadowColor: THEME.brand,
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+    borderColor: '#D7E1EE',
+    shadowColor: '#243247',
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   shopMembershipHero: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    backgroundColor: '#F8E8F2',
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    backgroundColor: '#2D73E2',
     borderWidth: 1,
-    borderColor: '#EACDE0',
-    marginBottom: 12,
+    borderColor: 'rgba(255,255,255,0.56)',
+    marginBottom: 14,
+  },
+  shopMembershipLiquidShine: {
+    position: 'absolute',
+    top: -26,
+    left: -190,
+    width: 98,
+    height: 232,
+    borderRadius: 68,
+    backgroundColor: 'rgba(255,255,255,0.26)',
+  },
+  shopMembershipHeroGloss: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: 40,
+    height: 78,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+    transform: [{ rotate: '-5deg' }],
+  },
+  shopMembershipHeroPearl: {
+    position: 'absolute',
+    bottom: -26,
+    right: -12,
+    width: 118,
+    height: 118,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.24)',
   },
   shopMembershipHeroEyebrow: {
-    color: '#7A5D76',
-    fontSize: 12,
+    color: '#D7DEEA',
+    fontSize: 11,
     fontWeight: '700',
-    marginBottom: 4,
-    letterSpacing: 0.6,
+    marginBottom: 6,
+    letterSpacing: 1,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipHeroTitle: {
-    color: '#2B2336',
-    fontSize: 30,
+    color: '#F7FBFF',
+    fontSize: 32,
     lineHeight: 34,
     fontWeight: '800',
-    marginBottom: 5,
+    marginBottom: 8,
+    letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipHeroBody: {
-    color: '#695E78',
-    lineHeight: 19,
-    marginBottom: 10,
+    color: '#C8D2DE',
+    lineHeight: 21,
+    marginBottom: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipPriceRow: {
     flexDirection: 'row',
@@ -5275,78 +6154,90 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   shopMembershipHeroPrice: {
-    color: '#2B2336',
+    color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 17,
+    fontSize: 18,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipHeroBadge: {
-    color: THEME.brand,
-    backgroundColor: '#FFFDF9',
+    color: THEME.brandStrong,
+    backgroundColor: THEME.brandSoft,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
     fontWeight: '700',
     overflow: 'hidden',
+    fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipBenefitsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -4,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   shopMembershipBenefitCard: {
-    width: '50%',
-    paddingHorizontal: 4,
-    marginBottom: 8,
+    width: '48.4%',
+    marginBottom: 10,
   },
   shopMembershipBenefitCardAlt: {
-    opacity: 0.92,
+    opacity: 1,
   },
   shopMembershipBenefitText: {
-    color: '#41394F',
-    borderRadius: 10,
+    color: THEME.inkSoft,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E9DCE8',
-    backgroundColor: '#FFF8FD',
-    minHeight: 72,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    borderColor: BORDER_TINT,
+    backgroundColor: SURFACE_PANEL,
+    minHeight: 78,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     fontWeight: '600',
     fontSize: 13,
-    lineHeight: 17,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipIncludedTitle: {
     color: THEME.ink,
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipIncludedEmpty: {
     color: THEME.muted,
-    marginBottom: 10,
+    marginBottom: 12,
+    lineHeight: 20,
   },
   shopMembershipIncludedCard: {
+    position: 'relative',
+    overflow: 'hidden',
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    padding: 8,
-    marginBottom: 9,
+    borderColor: BORDER_TINT,
+    borderRadius: 20,
+    backgroundColor: SURFACE_PANEL,
+    padding: 10,
+    marginBottom: 10,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   shopMembershipIncludedImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: '#D8C5AE',
+    width: 78,
+    height: 78,
+    borderRadius: 14,
+    backgroundColor: THEME.surfaceMuted,
   },
   shopMembershipIncludedImageMock: {
-    width: 72,
-    height: 72,
-    borderRadius: 10,
-    backgroundColor: '#D8C5AE',
+    width: 78,
+    height: 78,
+    borderRadius: 14,
+    backgroundColor: THEME.surfaceMuted,
   },
   shopMembershipIncludedBody: {
     flex: 1,
@@ -5354,95 +6245,194 @@ const styles = StyleSheet.create({
   },
   shopMembershipIncludedName: {
     color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontWeight: '800',
+    marginBottom: 3,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipIncludedMeta: {
     color: THEME.muted,
-    marginBottom: 4,
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipIncludedLink: {
-    color: THEME.brand,
+    color: THEME.accent,
     fontWeight: '700',
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipResultsWrap: {
-    marginTop: 4,
-    marginBottom: 10,
+    marginTop: 6,
+    marginBottom: 12,
   },
   shopMembershipResultsTitle: {
     color: THEME.ink,
     fontSize: 20,
     lineHeight: 24,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   shopMembershipResultsRow: {
-    gap: 10,
-    paddingRight: 4,
+    gap: 12,
+    paddingRight: 6,
   },
   shopMembershipResultImage: {
-    width: 124,
-    height: 124,
-    borderRadius: 12,
-    backgroundColor: '#D8C5AE',
+    width: 132,
+    height: 132,
+    borderRadius: 18,
+    backgroundColor: THEME.surfaceMuted,
   },
   treatmentListCard: {
-    backgroundColor: THEME.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    ...SOFT_CARD_SHADOW,
+    borderColor: BORDER_TINT,
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 10,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.11,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   treatmentListTitle: {
     color: THEME.ink,
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 3,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 5,
+    fontFamily: UI_FONT_FAMILY,
   },
   treatmentListBody: {
     color: THEME.muted,
-    lineHeight: 19,
-    marginBottom: 4,
+    lineHeight: 20,
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   treatmentListMeta: {
-    color: THEME.brand,
+    color: THEME.inkSoft,
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   cartBox: {
-    marginTop: 14,
-    backgroundColor: THEME.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 16,
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 13,
+    borderColor: BORDER_TINT,
+    borderRadius: 28,
+    padding: 16,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 6,
+  },
+  surfaceGlossStrip: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: 28,
+    height: 50,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  cartBoxGlow: {
+    position: 'absolute',
+    top: -14,
+    right: -10,
+    width: 110,
+    height: 110,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.22)',
   },
   cartTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: THEME.ink,
-    marginBottom: 6,
+    marginBottom: 8,
+    fontFamily: UI_FONT_FAMILY,
   },
   cartItem: {
     color: THEME.muted,
-    marginBottom: 2,
+    marginBottom: 4,
+    lineHeight: 19,
+    fontFamily: UI_FONT_FAMILY,
   },
   cartTotal: {
     color: THEME.ink,
     fontWeight: '800',
-    marginTop: 6,
+    marginTop: 8,
+    fontSize: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceCard: {
     position: 'relative',
-    borderRadius: 20,
-    padding: 15,
+    overflow: 'hidden',
+    borderRadius: 34,
+    padding: 20,
     backgroundColor: THEME.rewardsB,
     borderWidth: 1,
-    borderColor: '#4D8F8B',
-    marginBottom: 14,
-    overflow: 'hidden',
+    borderColor: 'rgba(255,255,255,0.52)',
+    marginBottom: 18,
+    ...SOFT_CARD_SHADOW,
+  },
+  rewardsLiquidShine: {
+    position: 'absolute',
+    top: -30,
+    left: -210,
+    width: 112,
+    height: 260,
+    borderRadius: 76,
+    backgroundColor: 'rgba(255,255,255,0.26)',
+  },
+  rewardsOrbit: {
+    position: 'absolute',
+    top: 26,
+    right: 18,
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rewardsOrbitCore: {
+    position: 'absolute',
+    width: 88,
+    height: 88,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  rewardsOrbitRing: {
+    position: 'absolute',
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.38)',
+  },
+  rewardsBalanceGloss: {
+    position: 'absolute',
+    top: -18,
+    left: -14,
+    right: 64,
+    height: 96,
+    borderRadius: 58,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  rewardsBalancePearl: {
+    position: 'absolute',
+    bottom: -36,
+    right: -12,
+    width: 138,
+    height: 138,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.24)',
   },
   rewardsBalanceGlow: {
     position: 'absolute',
@@ -5451,42 +6441,56 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  rewardsBalanceGlowSecondary: {
+    position: 'absolute',
+    left: -28,
+    bottom: -46,
+    width: 134,
+    height: 134,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   rewardsBalanceLogo: {
     color: '#ECFFFB',
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '800',
-    marginBottom: 2,
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceLabel: {
     color: '#D4EEEB',
-    marginBottom: 18,
+    marginBottom: 20,
+    letterSpacing: 0.5,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsCardStatsRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
   },
   rewardsCardStatItem: {
     flex: 1,
-    borderRadius: 10,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.24)',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 9,
-    paddingVertical: 8,
+    borderColor: 'rgba(255,255,255,0.38)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   rewardsCardStatValue: {
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 16,
-    marginBottom: 2,
+    fontSize: 18,
+    marginBottom: 3,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsCardStatLabel: {
     color: '#D9F0EC',
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceFooter: {
     flexDirection: 'row',
@@ -5496,86 +6500,104 @@ const styles = StyleSheet.create({
   rewardsBalanceMember: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontSize: 15,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceJoined: {
     color: '#CCE5E2',
-    marginTop: 2,
+    marginTop: 4,
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceRight: {
     alignItems: 'flex-end',
   },
   rewardsBalanceWallet: {
     color: '#FFFFFF',
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.34)',
     borderRadius: 999,
     overflow: 'hidden',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsBalanceCash: {
     color: '#E5FAF7',
     marginTop: 4,
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 2,
-    marginBottom: 8,
+    marginTop: 4,
+    marginBottom: 10,
   },
   rewardsHeaderTitle: {
     color: THEME.ink,
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: '800',
+    letterSpacing: -0.7,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsHeaderLink: {
-    color: THEME.brand,
+    color: THEME.accent,
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsSegmentRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8E2D9',
-    marginBottom: 10,
+    backgroundColor: SURFACE_SOFT,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
+    padding: 6,
+    marginBottom: 14,
+    ...SOFT_CARD_SHADOW,
   },
   rewardsSegmentBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 10,
   },
   rewardsSegmentBtnActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: THEME.brand,
+    backgroundColor: 'rgba(255,255,255,0.94)',
   },
   rewardsSegmentText: {
-    color: '#7A6B5B',
-    fontWeight: '500',
+    color: THEME.muted,
+    fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsSegmentTextActive: {
     color: THEME.ink,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsSectionTitle: {
     color: THEME.ink,
     fontSize: 30,
     lineHeight: 34,
     fontWeight: '800',
-    marginBottom: 10,
+    marginBottom: 12,
+    letterSpacing: -0.8,
   },
   rewardsActionRow: {
-    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 12,
-    padding: 11,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
   },
   rewardsActionLeft: {
     flexDirection: 'row',
@@ -5585,63 +6607,76 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   rewardsActionIconWrap: {
-    width: 33,
-    height: 33,
-    borderRadius: 999,
+    width: 38,
+    height: 38,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ECD8E8',
-    backgroundColor: '#FFF8FD',
+    borderColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'rgba(71,196,234,0.28)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rewardsActionLabel: {
     color: THEME.ink,
-    fontWeight: '600',
+    fontWeight: '700',
     flex: 1,
+    lineHeight: 19,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsActionBtn: {
-    backgroundColor: THEME.brand,
+    backgroundColor: '#2D8FE8',
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.46)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   rewardsActionBtnText: {
     color: '#fff',
     fontWeight: '700',
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsRedeemRow: {
-    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 14,
-    padding: 11,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
     ...SOFT_CARD_SHADOW,
   },
   rewardsRedeemLabel: {
     color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontWeight: '800',
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsRedeemHint: {
     color: THEME.muted,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsRedeemBtn: {
-    backgroundColor: THEME.brand,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: '#2D8FE8',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.46)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
   },
   rewardsRedeemBtnDisabled: {
-    opacity: 0.38,
+    opacity: 0.4,
   },
   rewardsRedeemBtnText: {
     color: '#fff',
     fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsPastList: {
     marginTop: 4,
@@ -5651,106 +6686,156 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
   rewardsPastItem: {
-    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 14,
-    padding: 10,
-    marginBottom: 8,
-    ...SOFT_CARD_SHADOW,
-  },
-  rewardsPastTitle: {
-    color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  rewardsPastMeta: {
-    color: THEME.muted,
-    marginBottom: 1,
-  },
-  scanCard: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
-    ...SOFT_CARD_SHADOW,
-  },
-  scanTitle: {
-    color: THEME.ink,
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  scanBody: {
-    color: THEME.muted,
-    lineHeight: 20,
-  },
-  scanQrMock: {
-    marginTop: 12,
-    marginBottom: 8,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#D7C0A3',
-    borderStyle: 'dashed',
-    height: 150,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FBF2E7',
-  },
-  scanQrText: {
-    color: THEME.brand,
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  emptyCard: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    padding: 12,
-  },
-  emptyTitle: {
-    color: THEME.ink,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  emptyBody: {
-    color: THEME.muted,
-  },
-  historyItem: {
-    backgroundColor: THEME.surface,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 11,
-    marginBottom: 10,
-    ...SOFT_CARD_SHADOW,
-  },
-  historyTitle: {
-    color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  historyMeta: {
-    color: THEME.muted,
-    marginBottom: 1,
-  },
-  profileEmptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EFE7DC',
-    borderRadius: 18,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
     padding: 14,
     marginBottom: 10,
     ...SOFT_CARD_SHADOW,
   },
+  rewardsPastTitle: {
+    color: THEME.ink,
+    fontWeight: '800',
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  rewardsPastMeta: {
+    color: THEME.muted,
+    marginBottom: 2,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  scanCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,226,240,0.98)',
+    borderRadius: 30,
+    padding: 18,
+    marginBottom: 14,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 6,
+  },
+  scanTitle: {
+    color: THEME.ink,
+    fontSize: 26,
+    fontWeight: '800',
+    marginBottom: 8,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  scanBody: {
+    color: THEME.muted,
+    lineHeight: 22,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  scanQrMock: {
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 16,
+    marginBottom: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.94)',
+    borderStyle: 'dashed',
+    height: 172,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.70)',
+  },
+  scanQrGloss: {
+    position: 'absolute',
+    top: -10,
+    left: -4,
+    right: 26,
+    height: 54,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+    transform: [{ rotate: '-6deg' }],
+  },
+  scanQrGlow: {
+    position: 'absolute',
+    top: 22,
+    right: 20,
+    width: 76,
+    height: 76,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.18)',
+  },
+  scanQrText: {
+    color: THEME.ink,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  emptyCard: {
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,226,240,0.98)',
+    borderRadius: 22,
+    padding: 16,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  emptyTitle: {
+    color: THEME.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  emptyBody: {
+    color: THEME.muted,
+    lineHeight: 20,
+  },
+  historyItem: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 24,
+    padding: 14,
+    marginBottom: 12,
+    ...SOFT_CARD_SHADOW,
+  },
+  historyTitle: {
+    color: THEME.ink,
+    fontWeight: '800',
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  historyMeta: {
+    color: THEME.muted,
+    marginBottom: 2,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  profileEmptyCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,226,240,0.98)',
+    borderRadius: 28,
+    padding: 18,
+    marginBottom: 12,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 5,
+  },
   profileGhostList: {
-    marginBottom: 16,
-    gap: 10,
+    marginBottom: 18,
+    gap: 12,
   },
   profileGhostRow: {
     flexDirection: 'row',
@@ -5758,21 +6843,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   profileGhostAvatar: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ECE4DA',
-    backgroundColor: '#F8F6F1',
+    borderColor: THEME.border,
+    backgroundColor: THEME.surfaceSoft,
   },
   profileGhostLineWrap: {
     flex: 1,
     gap: 6,
   },
   profileGhostLine: {
-    height: 7,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: '#ECE4DA',
+    backgroundColor: THEME.surfaceMuted,
     width: '72%',
   },
   profileGhostLineWide: {
@@ -5781,16 +6866,19 @@ const styles = StyleSheet.create({
   profileEmptyTitle: {
     color: THEME.muted,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
     fontWeight: '600',
+    lineHeight: 21,
   },
   profileEmptyCta: {
     alignSelf: 'center',
     minWidth: 160,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: THEME.brand,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 18,
+    backgroundColor: '#2B93E9',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.46)',
     alignItems: 'center',
   },
   profileEmptyCtaText: {
@@ -5804,52 +6892,60 @@ const styles = StyleSheet.create({
   },
   profileEmptyMembershipText: {
     color: THEME.muted,
-    marginBottom: 12,
+    marginBottom: 14,
     fontWeight: '600',
   },
   settingsCard: {
-    backgroundColor: THEME.surface,
+    position: 'relative',
+    overflow: 'hidden',
+    backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 12,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 30,
+    padding: 18,
+    gap: 2,
     ...SOFT_CARD_SHADOW,
   },
   input: {
-    minHeight: 42,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: THEME.border,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: SURFACE_PANEL,
+    borderRadius: 18,
+    paddingHorizontal: 14,
     color: THEME.ink,
-    marginBottom: 8,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   otpCard: {
-    marginTop: 10,
+    marginTop: 12,
     borderWidth: 1,
-    borderColor: '#E0C8AB',
-    borderRadius: 12,
-    backgroundColor: '#FBF2E7',
-    padding: 10,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 22,
+    backgroundColor: SURFACE_PANEL,
+    padding: 14,
   },
   otpTitle: {
     color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 6,
+    fontWeight: '800',
+    marginBottom: 8,
+    fontFamily: UI_FONT_FAMILY,
   },
   otpHint: {
     color: THEME.muted,
-    marginTop: -2,
-    marginBottom: 6,
+    marginTop: 0,
+    marginBottom: 8,
     fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
   },
   otpUiMessage: {
-    marginTop: 8,
-    marginBottom: 4,
-    lineHeight: 19,
+    marginTop: 10,
+    marginBottom: 6,
+    lineHeight: 20,
     fontWeight: '600',
     color: THEME.muted,
+    fontFamily: UI_FONT_FAMILY,
   },
   otpUiError: {
     color: '#A12323',
@@ -5862,40 +6958,46 @@ const styles = StyleSheet.create({
   },
   analyticsStatus: {
     color: THEME.muted,
-    marginTop: 8,
-    marginBottom: 2,
-    lineHeight: 18,
+    marginTop: 10,
+    marginBottom: 4,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
   },
   diagnosticText: {
-    color: THEME.brand,
-    marginTop: 8,
-    marginBottom: 2,
-    lineHeight: 19,
+    color: THEME.brandStrong,
+    marginTop: 10,
+    marginBottom: 4,
+    lineHeight: 20,
     fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
   },
   searchResultsCard: {
-    backgroundColor: '#FFFCF7',
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    marginBottom: 6,
+    borderColor: BORDER_TINT,
+    borderRadius: 22,
+    marginBottom: 8,
     overflow: 'hidden',
-    ...SOFT_CARD_SHADOW,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   searchResultsScroll: {
     maxHeight: 196,
   },
   searchResultsScrollContent: {
-    paddingVertical: 2,
+    paddingVertical: 4,
   },
   searchResultRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EFDFCB',
+    borderBottomColor: THEME.border,
   },
   searchResultRowLast: {
     borderBottomWidth: 0,
@@ -5906,95 +7008,161 @@ const styles = StyleSheet.create({
   },
   searchResultName: {
     color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontWeight: '800',
+    marginBottom: 3,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchResultMeta: {
     color: THEME.muted,
     fontSize: 12,
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchSelectLabel: {
-    color: THEME.brand,
+    color: THEME.accent,
     fontWeight: '700',
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchEmptyText: {
     color: THEME.muted,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     fontSize: 13,
+    fontFamily: UI_FONT_FAMILY,
   },
   inlineInfoBox: {
-    marginTop: 8,
-    backgroundColor: '#F9EEDC',
-    borderColor: '#E7CFB2',
+    marginTop: 10,
+    backgroundColor: SURFACE_TINT,
+    borderColor: BORDER_TINT,
     borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 22,
+    padding: 14,
+    shadowColor: '#69CFF0',
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
   },
   inlineInfoTitle: {
     color: THEME.ink,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontWeight: '800',
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
   },
   techToggleCta: {
     marginTop: 8,
   },
   inlineInfoText: {
     color: THEME.muted,
-    marginBottom: 2,
+    marginBottom: 3,
+    lineHeight: 19,
+    fontFamily: UI_FONT_FAMILY,
   },
   ctaDisabled: {
-    opacity: 0.6,
+    opacity: 0.55,
   },
   tapScaleSoft: {
-    transform: [{ scale: 0.985 }],
-    opacity: 0.96,
-  },
-  tapScaleCard: {
     transform: [{ scale: 0.992 }],
     opacity: 0.98,
   },
+  tapScaleCard: {
+    transform: [{ scale: 0.996 }],
+    opacity: 0.99,
+  },
   lastActionBox: {
-    marginTop: 8,
-    backgroundColor: '#EFE2D0',
+    marginTop: 10,
+    backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
-    borderColor: '#E1C8AA',
-    borderRadius: 10,
-    padding: 10,
+    borderColor: BORDER_TINT,
+    borderRadius: 20,
+    padding: 12,
+    shadowColor: '#3E7AC2',
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
   },
   lastActionText: {
-    color: '#6B4E2F',
+    color: THEME.inkSoft,
     fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
   },
   bottomBar: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 14,
-    borderRadius: 28,
+    overflow: 'hidden',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    borderRadius: 34,
     borderWidth: 1,
-    borderColor: '#DEE5F0',
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    borderColor: BORDER_TINT,
+    backgroundColor: SURFACE_RAISED,
     flexDirection: 'row',
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     justifyContent: 'space-between',
-    shadowColor: '#1A2438',
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    shadowColor: '#3B78C9',
+    shadowOpacity: 0.2,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 9,
+  },
+  bottomBarGlow: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    top: -18,
+    height: 60,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.40)',
+  },
+  bottomBarGloss: {
+    position: 'absolute',
+    top: 0,
+    left: 10,
+    right: 10,
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.30)',
   },
   bottomTabBtn: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 7,
-    borderRadius: 16,
-    gap: 3,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 4,
+    zIndex: 1,
+    overflow: 'hidden',
   },
   bottomTabBtnActive: {
-    backgroundColor: '#FFF4FA',
+    backgroundColor: SURFACE_PANEL,
+    borderWidth: 1,
+    borderColor: BORDER_TINT,
+    shadowColor: '#5CCAEF',
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  bottomTabActiveGlow: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 4,
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: 'rgba(71,196,234,0.22)',
+  },
+  bottomTabActiveBeam: {
+    position: 'absolute',
+    top: 2,
+    left: 8,
+    right: 8,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.34)',
   },
   bottomTabIcon: {
     color: '#8B93A2',
@@ -6008,9 +7176,11 @@ const styles = StyleSheet.create({
     color: THEME.muted,
     fontWeight: '600',
     fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
   },
   bottomTabLabelActive: {
-    color: THEME.brand,
+    color: '#1A5FAD',
     fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
   },
 });

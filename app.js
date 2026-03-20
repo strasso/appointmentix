@@ -5,7 +5,7 @@ const runtime = {
   calendlyConfigured: false,
   toastTimer: null,
   brandColor: "#8A5A2F",
-  fontFamily: "Gabarito, DM Sans, sans-serif"
+  fontFamily: "Manrope, DM Sans, sans-serif"
 };
 
 const HOME_VIEW = document.getElementById("homeView");
