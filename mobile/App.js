@@ -8,63 +8,35 @@ import {
   Alert,
   Animated,
   Easing,
-  Image,
-  Pressable,
   Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   Vibration,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
-
-const THEME = {
-  background: '#FFFFFF',
-  backgroundSoft: '#FFFFFF',
-  surface: '#FFFFFF',
-  surfaceSoft: '#F1FAFF',
-  surfaceMuted: '#DDEFFC',
-  ink: '#0E2146',
-  inkSoft: '#2D4E77',
-  muted: '#5B789A',
-  mutedSoft: '#89A8C8',
-  brand: '#F18BCF',
-  brandStrong: '#D152AE',
-  brandSoft: '#FDEAF8',
-  accent: '#47C4EA',
-  accentSoft: '#E3FAFF',
-  good: '#28B97D',
-  border: '#CEE0F0',
-  borderStrong: '#BBD6EA',
-  overlay: 'rgba(27, 49, 83, 0.26)',
-  rewardsA: '#84E3F5',
-  rewardsB: '#377EE0',
-};
-
-const SOFT_CARD_SHADOW = {
-  shadowColor: '#275189',
-  shadowOpacity: 0.12,
-  shadowRadius: 26,
-  shadowOffset: { width: 0, height: 14 },
-  elevation: 7,
-};
-
-const UI_FONT_FAMILY = Platform.select({
-  ios: 'Avenir Next',
-  android: 'sans-serif',
-  default: 'System',
-});
-
-const SURFACE_RAISED = 'rgba(255,255,255,0.98)';
-const SURFACE_PANEL = 'rgba(255,255,255,0.94)';
-const SURFACE_SOFT = 'rgba(255,255,255,0.90)';
-const SURFACE_TINT = 'rgba(247,252,255,0.95)';
-const BORDER_TINT = 'rgba(208,225,240,0.98)';
-const BORDER_LIGHT = 'rgba(223,233,244,0.98)';
+import OnboardingScreen from './src/screens/OnboardingScreen';
+import HomeScreen from './src/screens/HomeScreen';
+import ShopScreen from './src/screens/ShopScreen';
+import ScanScreen from './src/screens/ScanScreen';
+import RewardsScreen from './src/screens/RewardsScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import AmbientBackground from './src/components/AmbientBackground';
+import BottomNavigation from './src/components/BottomNavigation';
+import HeaderSearchOverlay from './src/overlays/HeaderSearchOverlay';
+import CartOverlay from './src/overlays/CartOverlay';
+import {
+  THEME,
+  SOFT_CARD_SHADOW,
+  UI_FONT_FAMILY,
+  SURFACE_RAISED,
+  SURFACE_PANEL,
+  SURFACE_SOFT,
+  SURFACE_TINT,
+  BORDER_TINT,
+  BORDER_LIGHT,
+} from './src/theme/tokens';
 
 const CLINIC = {
   name: 'Moser Milani Medical Spa',
@@ -1104,148 +1076,6 @@ function categoryIconName(categoryId) {
     default:
       return 'ellipse-outline';
   }
-}
-
-function TopHeader({
-  title,
-  clinicShortName,
-  onSearchPress,
-  onCartPress,
-  cartCount = 0,
-}) {
-  const safeCartCount = Math.max(0, Number(cartCount || 0));
-  const cartBadgeText = safeCartCount > 99 ? '99+' : String(safeCartCount);
-
-  return (
-    <View style={styles.headerRow}>
-      <View style={styles.headerLeft}>
-        <View style={styles.headerAvatar}>
-          <Text style={styles.headerAvatarText}>{String(clinicShortName || 'A').slice(0, 1)}</Text>
-        </View>
-        <View>
-          <Text style={styles.headerTitle}>{title}</Text>
-          <Text style={styles.headerClinic}>{clinicShortName || 'APP'}</Text>
-        </View>
-      </View>
-      <View style={styles.headerIcons}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconButtonWrap,
-            pressed && styles.tapScaleSoft,
-          ]}
-          onPress={onSearchPress}
-          hitSlop={8}
-        >
-          <Ionicons name="search-outline" size={22} color={THEME.inkSoft} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconButtonWrap,
-            pressed && styles.tapScaleSoft,
-          ]}
-          onPress={onCartPress}
-          hitSlop={8}
-        >
-          <Ionicons name="bag-handle-outline" size={21} color={THEME.inkSoft} />
-          {safeCartCount > 0 && (
-            <View style={styles.headerCartBadge}>
-              <Text style={styles.headerCartBadgeText}>{cartBadgeText}</Text>
-            </View>
-          )}
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function TabButton({ label, active, onPress }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.segmentBtn,
-        active && styles.segmentBtnActive,
-        pressed && styles.tapScaleSoft,
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function ShopTabButton({ label, active, onPress }) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.shopTabBtn,
-        active && styles.shopTabBtnActive,
-        pressed && styles.tapScaleSoft,
-      ]}
-      onPress={onPress}
-    >
-      <Text style={[styles.shopTabText, active && styles.shopTabTextActive]}>{label}</Text>
-      <View style={[styles.shopTabUnderline, active && styles.shopTabUnderlineActive]} />
-    </Pressable>
-  );
-}
-
-function BottomTab({ label, active, onPress }) {
-  const iconByTab = {
-    Home: { active: 'home', inactive: 'home-outline' },
-    Shop: { active: 'bag-handle', inactive: 'bag-handle-outline' },
-    Scan: { active: 'qr-code', inactive: 'qr-code-outline' },
-    Rewards: { active: 'gift', inactive: 'gift-outline' },
-    Profil: { active: 'person', inactive: 'person-outline' },
-  };
-  const iconSpec = iconByTab[label] || { active: 'ellipse', inactive: 'ellipse-outline' };
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.bottomTabBtn,
-        active && styles.bottomTabBtnActive,
-        pressed && styles.tapScaleSoft,
-      ]}
-      onPress={onPress}
-    >
-      {active && <View pointerEvents="none" style={styles.bottomTabActiveGlow} />}
-      {active && <View pointerEvents="none" style={styles.bottomTabActiveBeam} />}
-      <Ionicons
-        name={active ? iconSpec.active : iconSpec.inactive}
-        size={18}
-        color={active ? THEME.ink : THEME.mutedSoft}
-      />
-      <Text style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function TreatmentCard({ treatment, onPress }) {
-  const imageUrl = preferredTreatmentImage(treatment);
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.treatmentCard,
-        pressed && styles.tapScaleCard,
-      ]}
-      onPress={() => onPress(treatment)}
-    >
-      <View pointerEvents="none" style={styles.treatmentCardGloss} />
-      <View pointerEvents="none" style={styles.treatmentCardGlow} />
-      <View pointerEvents="none" style={styles.treatmentCardPearl} />
-      {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.treatmentImageReal} />
-      ) : (
-        <View style={styles.treatmentImageMock} />
-      )}
-      <View style={styles.treatmentCardBody}>
-        <Text style={styles.treatmentName} numberOfLines={1}>{treatment.name}</Text>
-        <Text style={styles.treatmentDescription} numberOfLines={2}>
-          {treatment.description}
-        </Text>
-        <Text style={styles.treatmentPrice}>ab {formatPrice(treatment.priceCents)}</Text>
-      </View>
-    </Pressable>
-  );
 }
 
 export default function App() {
@@ -3058,6 +2888,214 @@ function continueToAccessStep() {
     : otpCountdown > 0
       ? `Code neu senden in ${otpCountdown}s`
       : 'Code neu senden';
+  const cartCount = cartItems.length;
+
+  const handleClinicSearchChange = (value) => {
+    const next = String(value || '');
+    setClinicSearchQuery(next);
+    setClinicDropdownOpen(true);
+    setBackendCheckMessage('');
+    if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
+      setClinicLookupName('');
+      setClinicLookupId('');
+    }
+    if (!next.trim()) {
+      setClinicSearchResults([]);
+    }
+  };
+
+  const handleClinicSearchFocus = () => {
+    setClinicDropdownOpen(true);
+    void runClinicSearch({ query: clinicSearchQuery, silent: true, allowEmpty: true });
+  };
+
+  const handleClinicSearchSubmit = () => {
+    setClinicDropdownOpen(true);
+    void runClinicSearch();
+  };
+
+  const handleReloadClinicBundle = async () => {
+    try {
+      await loadClinicBundle();
+    } catch (error) {
+      Alert.alert('MedSpa-Daten konnten nicht geladen werden', String(error?.message || error));
+    }
+  };
+
+  const handleOpenOnboardingSetup = () => {
+    setOnboardingBaseUrl(analyticsBaseUrl || onboardingBaseUrl);
+    setClinicSearchQuery(clinicLookupName || clinicSearchQuery);
+    setClinicSearchResults([]);
+    setShowOnboarding(true);
+  };
+
+  const handleOpenOffers = () => {
+    switchMainTab('shop');
+    track('Start > Shop geöffnet', 'offer_view', {
+      treatmentId: 'shop_overview',
+    });
+  };
+
+  const handleOpenShopBrowse = () => {
+    setShopTab('browse');
+    switchMainTab('shop');
+  };
+
+  const handleOpenMembershipTab = () => {
+    setShopTab('membership');
+    switchMainTab('shop');
+  };
+
+  const handleOpenMembershipTreatment = (item) => {
+    setShopTab('browse');
+    openTreatment(item);
+  };
+
+  const renderMainTabScreen = () => {
+    switch (mainTab) {
+      case 'home':
+        return (
+          <HomeScreen
+            styles={styles}
+            clinicProfile={clinicProfile}
+            cartCount={cartCount}
+            onSearchPress={openHeaderSearch}
+            onCartPress={openHeaderCart}
+            liquidShineAnim={liquidShineAnim}
+            floatingAuraAnim={floatingAuraAnim}
+            activeMembershipName={activeMembershipName}
+            onViewOffers={handleOpenOffers}
+            homeArticles={homeArticles}
+            clinicMapRegion={clinicMapRegion}
+            clinicCoordinates={clinicCoordinates}
+            openClinicInMaps={openClinicInMaps}
+            callClinicNow={callClinicNow}
+            openProfile={() => switchMainTab('profile')}
+          />
+        );
+      case 'shop':
+        return (
+          <ShopScreen
+            styles={styles}
+            clinicProfile={clinicProfile}
+            cartCount={cartCount}
+            onSearchPress={openHeaderSearch}
+            onCartPress={openHeaderCart}
+            shopTab={shopTab}
+            setShopTab={setShopTab}
+            shopMembershipTabLabel={shopMembershipTabLabel}
+            selectedTreatment={selectedTreatment}
+            liquidShineAnim={liquidShineAnim}
+            treatmentCategories={treatmentCategories}
+            categoryId={categoryId}
+            setCategoryId={setCategoryId}
+            categoryIconName={categoryIconName}
+            selectedCategory={selectedCategory}
+            selectedCategoryMeta={selectedCategoryMeta}
+            browseItems={browseItems}
+            openTreatment={openTreatment}
+            preferredTreatmentImage={preferredTreatmentImage}
+            setSelectedTreatment={setSelectedTreatment}
+            units={units}
+            setUnits={setUnits}
+            formatPrice={formatPrice}
+            hasActiveMembership={hasActiveMembership}
+            cartSyncing={cartSyncing}
+            checkoutLoading={checkoutLoading}
+            addToCart={addToCart}
+            cartCtaLabel={cartCtaLabel}
+            memberships={memberships}
+            membershipStatus={membershipStatus}
+            treatments={treatments}
+            membershipSyncing={membershipSyncing}
+            activateMembership={activateMembership}
+            hasCart={hasCart}
+            cartItems={cartItems}
+            totalCartCents={totalCartCents}
+            selectedCheckoutMethod={selectedCheckoutMethod}
+            setSelectedCheckoutMethod={setSelectedCheckoutMethod}
+            checkoutMethodOptions={CHECKOUT_METHOD_OPTIONS}
+            runCheckout={runCheckout}
+            checkoutCtaLabel={checkoutCtaLabel}
+            openMembershipTreatment={handleOpenMembershipTreatment}
+          />
+        );
+      case 'scan':
+        return (
+          <ScanScreen
+            styles={styles}
+            clinicProfile={clinicProfile}
+            cartCount={cartCount}
+            onSearchPress={openHeaderSearch}
+            onCartPress={openHeaderCart}
+            points={points}
+            checkInViaScan={checkInViaScan}
+          />
+        );
+      case 'rewards':
+        return (
+          <RewardsScreen
+            styles={styles}
+            clinicProfile={clinicProfile}
+            cartCount={cartCount}
+            onSearchPress={openHeaderSearch}
+            onCartPress={openHeaderCart}
+            liquidShineAnim={liquidShineAnim}
+            floatingAuraAnim={floatingAuraAnim}
+            points={points}
+            rewardHistoryItems={rewardHistoryItems}
+            patientGuestMode={patientGuestMode}
+            walletCents={walletCents}
+            formatPrice={formatPrice}
+            rewardsView={rewardsView}
+            setRewardsView={setRewardsView}
+            rewardActions={rewardActions}
+            rewardActionIcon={rewardActionIcon}
+            claimActionPoints={claimActionPoints}
+            rewardRedeems={rewardRedeems}
+            redeemReward={redeemReward}
+            formatDate={formatDate}
+          />
+        );
+      case 'profile':
+        return (
+          <ProfileScreen
+            styles={styles}
+            clinicProfile={clinicProfile}
+            cartCount={cartCount}
+            onSearchPress={openHeaderSearch}
+            onCartPress={openHeaderCart}
+            profileTab={profileTab}
+            setProfileTab={setProfileTab}
+            history={history}
+            formatDate={formatDate}
+            formatPrice={formatPrice}
+            openShopBrowse={handleOpenShopBrowse}
+            hasActiveMembership={hasActiveMembership}
+            currentMembership={currentMembership}
+            membershipStatusText={membershipStatusText}
+            membershipStatus={membershipStatus}
+            treatments={treatments}
+            membershipSyncing={membershipSyncing}
+            cancelMembership={cancelMembership}
+            openMembershipTab={handleOpenMembershipTab}
+            settingsName={settingsName}
+            setSettingsName={setSettingsName}
+            settingsEmail={settingsEmail}
+            setSettingsEmail={setSettingsEmail}
+            analyticsConnected={analyticsConnected}
+            backendCheckMessage={backendCheckMessage}
+            patientGuestMode={patientGuestMode}
+            patientPhone={patientPhone}
+            reloadClinicBundle={handleReloadClinicBundle}
+            openOnboardingSetup={handleOpenOnboardingSetup}
+            disconnectClinicSession={disconnectClinicSession}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   if (isBootstrapping) {
     return (
@@ -3074,318 +3112,54 @@ function continueToAccessStep() {
 
   if (showOnboarding) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
-        <View style={styles.container}>
-          <View pointerEvents="none" style={styles.ambientLayer}>
-            <View style={styles.ambientWash} />
-            <View style={styles.ambientBeam} />
-            <View style={styles.ambientLensTop} />
-            <View style={styles.ambientLensBottom} />
-            <View style={styles.ambientOrbA} />
-            <View style={styles.ambientOrbB} />
-            <View style={styles.ambientOrbC} />
-          </View>
-          <ScrollView
-            contentContainerStyle={styles.onboardingScrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.onboardingHero}>
-              <View pointerEvents="none" style={styles.onboardingHeroVisual}>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.onboardingLiquidShine,
-                    {
-                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                    },
-                  ]}
-                />
-                <View style={styles.onboardingHeroGlass} />
-                <View style={styles.onboardingHeroBubbleLarge} />
-                <View style={styles.onboardingHeroBubbleSmall} />
-              </View>
-              <Text style={styles.onboardingHeroChip}>Curabo Patient App</Text>
-              <Text style={styles.onboardingHeroTitle}>
-                {onboardingStep === 'clinic' ? 'Finde deine MedSpa' : 'Ein ruhiger Zugang zu deiner Behandlung'}
-              </Text>
-              <Text style={styles.onboardingHeroBody}>
-                {onboardingStep === 'clinic'
-                  ? 'Suche deine MedSpa nach Name oder nutze einen QR-/Referral-Code. Danach bleibt alles an einem Ort: Treatments, Rewards und Membership.'
-                  : 'Bestätige deine Telefonnummer oder fahre als Gast fort. Alle weiteren Funktionen bleiben unverändert.'}
-              </Text>
-            </View>
-
-            <View style={styles.onboardingCard}>
-              <View pointerEvents="none" style={styles.cardChrome} />
-              <View pointerEvents="none" style={styles.cardChromeSecondary} />
-              <Text style={styles.onboardingEyebrow}>CURABO</Text>
-              <Text style={styles.onboardingTitle}>
-                {onboardingStep === 'clinic' ? 'Verbinde deine App' : 'Telefonnummer bestätigen'}
-              </Text>
-              <Text style={styles.onboardingBody}>
-                {onboardingStep === 'clinic'
-                  ? 'Starte mit deiner Klinikverbindung und gehe dann direkt in die App.'
-                  : 'Melde dich mit Telefonnummer an oder fahre als Gast fort.'}
-              </Text>
-
-              {ALLOW_TECHNICAL_SETUP && (
-                <Pressable
-                  style={[styles.secondaryCta, styles.techToggleCta]}
-                  onPress={() => setShowTechnicalSetup((prev) => !prev)}
-                >
-                  <Text style={styles.secondaryCtaText}>
-                    {showTechnicalSetup ? 'Technik ausblenden' : 'Technik / Backend (optional)'}
-                  </Text>
-                </Pressable>
-              )}
-
-              {ALLOW_TECHNICAL_SETUP && showTechnicalSetup && (
-                <View style={styles.inlineInfoBox}>
-                  <Text style={styles.inlineInfoTitle}>
-                    {needsBackendProvisioning ? 'Technische Einrichtung (intern)' : 'Backend-URL (bei Netzwerkwechsel)'}
-                  </Text>
-                  <TextInput
-                    style={styles.input}
-                    value={onboardingBaseUrl}
-                    onChangeText={setOnboardingBaseUrl}
-                    placeholder="http://192.168.x.x:4173"
-                    placeholderTextColor={THEME.muted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                  />
-                  <Pressable
-                    style={[styles.secondaryCta, backendCheckLoading && styles.ctaDisabled]}
-                    disabled={backendCheckLoading}
-                    onPress={() => {
-                      void runBackendHealthCheck();
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>
-                      {backendCheckLoading ? 'Teste Backend ...' : 'Backend testen'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {onboardingStep === 'clinic' && (
-                <View>
-                  <Text style={styles.sectionSubTitle}>MedSpa suchen</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={clinicSearchQuery}
-                    onChangeText={(value) => {
-                      const next = String(value || '');
-                      setClinicSearchQuery(next);
-                      setClinicDropdownOpen(true);
-                      setBackendCheckMessage('');
-                      if (String(clinicLookupName || '').trim().toLowerCase() !== next.trim().toLowerCase()) {
-                        setClinicLookupName('');
-                        setClinicLookupId('');
-                      }
-                      if (!next.trim()) {
-                        setClinicSearchResults([]);
-                      }
-                    }}
-                    onFocus={() => {
-                      setClinicDropdownOpen(true);
-                      void runClinicSearch({ query: clinicSearchQuery, silent: true, allowEmpty: true });
-                    }}
-                    placeholder="MedSpa Name eingeben"
-                    placeholderTextColor={THEME.muted}
-                    autoCorrect={false}
-                    returnKeyType="search"
-                    onSubmitEditing={() => {
-                      setClinicDropdownOpen(true);
-                      void runClinicSearch();
-                    }}
-                  />
-                  <Pressable
-                    style={[styles.secondaryCta, clinicSearchLoading && styles.ctaDisabled]}
-                    disabled={clinicSearchLoading}
-                    onPress={() => {
-                      setClinicDropdownOpen(true);
-                      void runClinicSearch();
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>
-                      {clinicSearchLoading ? 'Suche läuft ...' : 'MedSpa suchen'}
-                    </Text>
-                  </Pressable>
-
-                  {clinicDropdownOpen && clinicSuggestionResults.length > 0 && (
-                    <View style={styles.searchResultsCard}>
-                      <ScrollView
-                        style={styles.searchResultsScroll}
-                        contentContainerStyle={styles.searchResultsScrollContent}
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator
-                      >
-                        {clinicSuggestionResults.map((clinic, index) => {
-                          const clinicName = String(clinic?.name || '').trim();
-                          const isSelected = clinicName && clinicName === String(clinicLookupName || '').trim();
-                          const isLast = index === clinicSuggestionResults.length - 1;
-                          return (
-                            <Pressable
-                              key={clinicName || `clinic-${index}`}
-                              style={[styles.searchResultRow, isLast && styles.searchResultRowLast]}
-                              onPress={() => selectClinicFromSearch(clinic)}
-                            >
-                              <View style={styles.searchResultMain}>
-                                <Text style={styles.searchResultName}>{clinicName || 'MedSpa'}</Text>
-                                <Text style={styles.searchResultMeta}>
-                                  {[clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'MedSpa-Profil'}
-                                </Text>
-                              </View>
-                              <Text style={styles.searchSelectLabel}>{isSelected ? 'Ausgewählt' : 'Wählen'}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-                  {clinicDropdownOpen && String(clinicSearchQuery || '').trim().length > 0 && !clinicSearchLoading && clinicSuggestionResults.length === 0 && (
-                    <View style={styles.searchResultsCard}>
-                      <Text style={styles.searchEmptyText}>Keine MedSpa-Treffer. Bitte Eingabe anpassen.</Text>
-                    </View>
-                  )}
-
-                  <Text style={styles.sectionSubTitle}>QR-/Referral-Code</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={scanCodeValue}
-                    onChangeText={setScanCodeValue}
-                    placeholder="Code eingeben oder aus QR übernehmen"
-                    placeholderTextColor={THEME.muted}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                  />
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={() => {
-                      void useQrOrReferralCode();
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>Code verwenden</Text>
-                  </Pressable>
-
-                  <Text style={styles.analyticsStatus}>
-                    Ausgewählte MedSpa: {clinicLookupName || 'Noch nicht ausgewählt'}
-                  </Text>
-
-                  <Pressable
-                    style={styles.primaryCta}
-                    onPress={continueToAccessStep}
-                  >
-                    <Text style={styles.primaryCtaText}>Weiter</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {onboardingStep === 'access' && (
-                <View>
-                  <Text style={styles.sectionSubTitle}>Telefonnummer</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={patientPhone}
-                    onChangeText={setPatientPhone}
-                    placeholder="+43 660 1234567"
-                    placeholderTextColor={THEME.muted}
-                    keyboardType="phone-pad"
-                    autoCorrect={false}
-                  />
-                  <Pressable
-                    style={[styles.primaryCta, (connectLoading || otpLoading || otpResendLoading) && styles.ctaDisabled]}
-                    disabled={connectLoading || otpLoading || otpResendLoading}
-                    onPress={() => {
-                      void continueWithPhone();
-                    }}
-                  >
-                    <Text style={styles.primaryCtaText}>{otpCtaLabel}</Text>
-                  </Pressable>
-
-                  {!!otpUiMessage && (
-                    <Text
-                      style={[
-                        styles.otpUiMessage,
-                        otpUiType === 'error' && styles.otpUiError,
-                        otpUiType === 'warning' && styles.otpUiWarning,
-                        otpUiType === 'success' && styles.otpUiSuccess,
-                      ]}
-                    >
-                      {otpUiMessage}
-                    </Text>
-                  )}
-
-                  {otpReadyToVerify && (
-                    <View style={styles.otpCard}>
-                      <Text style={styles.otpTitle}>SMS-Code</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={otpCode}
-                        onChangeText={setOtpCode}
-                        placeholder="6-stelligen Code eingeben"
-                        placeholderTextColor={THEME.muted}
-                        keyboardType="number-pad"
-                        autoCorrect={false}
-                        autoCapitalize="none"
-                      />
-                      {!!otpExpiresAt && (
-                        <Text style={styles.otpHint}>
-                          Code gültig bis {formatClock(otpExpiresAt)}.
-                        </Text>
-                      )}
-                      <Pressable
-                        style={[styles.secondaryCta, (otpLoading || otpResendLoading || otpCountdown > 0) && styles.ctaDisabled]}
-                        disabled={otpLoading || otpResendLoading || otpCountdown > 0}
-                        onPress={() => {
-                          void resendOtpCode();
-                        }}
-                      >
-                        <Text style={styles.secondaryCtaText}>{otpResendLabel}</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={() => {
-                      void continueAsGuest();
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>Als Gast fortfahren</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={() => {
-                      resetOtpFlow();
-                      setOnboardingStep('clinic');
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>Zurück zur MedSpa-Suche</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {!!backendCheckMessage && onboardingStep === 'clinic' && (
-                <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>
-              )}
-
-              <Pressable
-                style={styles.secondaryCta}
-                onPress={() => {
-                  void continueOfflineDemo();
-                }}
-              >
-                <Text style={styles.secondaryCtaText}>Offline-Demo ohne Backend</Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </View>
-      </SafeAreaView>
+      <OnboardingScreen
+        styles={styles}
+        liquidShineAnim={liquidShineAnim}
+        onboardingStep={onboardingStep}
+        showTechnicalSetup={showTechnicalSetup}
+        setShowTechnicalSetup={setShowTechnicalSetup}
+        needsBackendProvisioning={needsBackendProvisioning}
+        onboardingBaseUrl={onboardingBaseUrl}
+        setOnboardingBaseUrl={setOnboardingBaseUrl}
+        backendCheckLoading={backendCheckLoading}
+        runBackendHealthCheck={runBackendHealthCheck}
+        clinicSearchQuery={clinicSearchQuery}
+        onClinicSearchChange={handleClinicSearchChange}
+        onClinicSearchFocus={handleClinicSearchFocus}
+        onClinicSearchSubmit={handleClinicSearchSubmit}
+        clinicSearchLoading={clinicSearchLoading}
+        clinicDropdownOpen={clinicDropdownOpen}
+        clinicSuggestionResults={clinicSuggestionResults}
+        clinicLookupName={clinicLookupName}
+        selectClinicFromSearch={selectClinicFromSearch}
+        scanCodeValue={scanCodeValue}
+        setScanCodeValue={setScanCodeValue}
+        useQrOrReferralCode={useQrOrReferralCode}
+        continueToAccessStep={continueToAccessStep}
+        patientPhone={patientPhone}
+        setPatientPhone={setPatientPhone}
+        connectLoading={connectLoading}
+        otpLoading={otpLoading}
+        otpResendLoading={otpResendLoading}
+        continueWithPhone={continueWithPhone}
+        otpCtaLabel={otpCtaLabel}
+        otpUiMessage={otpUiMessage}
+        otpUiType={otpUiType}
+        otpReadyToVerify={otpReadyToVerify}
+        otpCode={otpCode}
+        setOtpCode={setOtpCode}
+        otpExpiresAt={otpExpiresAt}
+        formatClock={formatClock}
+        otpCountdown={otpCountdown}
+        resendOtpCode={resendOtpCode}
+        otpResendLabel={otpResendLabel}
+        continueAsGuest={continueAsGuest}
+        resetOtpFlow={resetOtpFlow}
+        setOnboardingStep={setOnboardingStep}
+        backendCheckMessage={backendCheckMessage}
+        continueOfflineDemo={continueOfflineDemo}
+        allowTechnicalSetup={ALLOW_TECHNICAL_SETUP}
+      />
     );
   }
 
@@ -3394,15 +3168,7 @@ function continueToAccessStep() {
       <StatusBar style="dark" />
 
       <View style={styles.container}>
-        <View pointerEvents="none" style={styles.ambientLayer}>
-          <View style={styles.ambientWash} />
-          <View style={styles.ambientBeam} />
-          <View style={styles.ambientLensTop} />
-          <View style={styles.ambientLensBottom} />
-          <View style={styles.ambientOrbA} />
-          <View style={styles.ambientOrbB} />
-          <View style={styles.ambientOrbC} />
-        </View>
+        <AmbientBackground styles={styles} />
         <Animated.View
           style={[
             styles.mainAnimatedPanel,
@@ -3420,1080 +3186,47 @@ function continueToAccessStep() {
           ]}
         >
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {mainTab === 'home' && (
-            <View>
-              <TopHeader
-                title="Start"
-                clinicShortName={clinicProfile.shortName}
-                onSearchPress={openHeaderSearch}
-                onCartPress={openHeaderCart}
-                cartCount={cartItems.length}
-              />
-
-              <View style={styles.heroCard}>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.heroLiquidShine,
-                    {
-                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                    },
-                  ]}
-                />
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.heroAeroCluster,
-                    {
-                      transform: [
-                        {
-                          translateY: floatingAuraAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, -14],
-                          }),
-                        },
-                        {
-                          translateX: floatingAuraAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 8],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  <View style={styles.heroAeroHalo} />
-                  <View style={styles.heroAeroCore} />
-                  <View style={styles.heroAeroRing} />
-                  <View style={styles.heroAeroDot} />
-                </Animated.View>
-                <View pointerEvents="none" style={styles.heroGlossArc} />
-                <View pointerEvents="none" style={styles.heroGlassPill} />
-                <View pointerEvents="none" style={styles.heroPearl} />
-                <View pointerEvents="none" style={styles.heroGlowPrimary} />
-                <View pointerEvents="none" style={styles.heroGlowSecondary} />
-                <Text style={styles.heroEyebrow}>PERSONALISIERT FÜR DICH</Text>
-                <Text style={styles.heroTitle}>Mehr Ergebnisse mit deinem {activeMembershipName}</Text>
-                <Text style={styles.heroBody}>
-                  Erhalte exklusive Pakete, Punkte pro Besuch und priorisierte Terminbuchung direkt in der App.
-                </Text>
-                <Pressable
-                  style={styles.heroCta}
-                  onPress={() => {
-                    switchMainTab('shop');
-                    track('Start > Shop geöffnet', 'offer_view', {
-                      treatmentId: 'shop_overview',
-                    });
-                  }}
-                >
-                  <Text style={styles.heroCtaText}>Angebote ansehen</Text>
-                </Pressable>
+            {renderMainTabScreen()}
+            {!!lastAction && (
+              <View style={styles.lastActionBox}>
+                <Text style={styles.lastActionText}>{lastAction}</Text>
               </View>
-
-              <View style={styles.financeBanner}>
-                <View pointerEvents="none" style={styles.surfaceRim} />
-                <View pointerEvents="none" style={styles.surfaceBlueAura} />
-                <View pointerEvents="none" style={styles.financeGlow} />
-                <Text style={styles.financeTitle}>Heute behandeln. Später zahlen. Punkte sammeln.</Text>
-                <Text style={styles.financeBody}>Flexible Monatsraten und Rewards für wiederkehrende Besuche.</Text>
-              </View>
-
-              <Text style={styles.sectionTitle}>Wissen & Tipps</Text>
-              {homeArticles.map((article) => (
-                <View key={article.id} style={styles.articleCard}>
-                  <View pointerEvents="none" style={styles.surfaceRim} />
-                  <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                  <Text style={styles.articleTag}>{article.tag}</Text>
-                  <Text style={styles.articleTitle}>{article.title}</Text>
-                  <Text style={styles.articleBody}>{article.body}</Text>
-                </View>
-              ))}
-
-              <Text style={styles.sectionTitle}>MedSpa</Text>
-              <View style={styles.clinicCard}>
-                <View pointerEvents="none" style={styles.surfaceRim} />
-                <View pointerEvents="none" style={styles.surfaceBlueAura} />
-                <View pointerEvents="none" style={styles.cardChrome} />
-                <Pressable style={styles.mapWrap} onPress={() => { void openClinicInMaps(); }}>
-                  <MapView style={styles.mapView} initialRegion={clinicMapRegion}>
-                    <Marker
-                      coordinate={clinicCoordinates}
-                      title={clinicProfile.name || 'MedSpa'}
-                      description={clinicProfile.address || clinicProfile.city || 'Standort'}
-                    />
-                  </MapView>
-                  <View style={styles.mapOpenHint}>
-                    <Ionicons name="map-outline" size={13} color="#FFFFFF" />
-                    <Text style={styles.mapOpenHintText}>In Maps öffnen</Text>
-                  </View>
-                </Pressable>
-                <Text style={styles.clinicName}>{clinicProfile.name}</Text>
-                <View style={styles.clinicMetaRow}>
-                  <Ionicons name="location-outline" size={14} color={THEME.mutedSoft} />
-                  <Text style={styles.clinicMeta}>{clinicProfile.address || clinicProfile.city || 'Standortdaten folgen'}</Text>
-                </View>
-                <View style={styles.clinicMetaRow}>
-                  <Ionicons name="time-outline" size={14} color={THEME.mutedSoft} />
-                  <Text style={styles.clinicMeta}>{clinicProfile.openingHours || 'Mo - Sa, 09:00 - 17:00'}</Text>
-                </View>
-                <Pressable
-                  style={styles.callNowCta}
-                  onPress={() => { void callClinicNow(); }}
-                >
-                  <Text style={styles.callNowCtaText}>Call now</Text>
-                </Pressable>
-                <Pressable style={styles.secondaryCta} onPress={() => switchMainTab('profile')}>
-                  <Text style={styles.secondaryCtaText}>Profil & Mitgliedschaft öffnen</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {mainTab === 'shop' && (
-            <View>
-              <TopHeader
-                title="Shop"
-                clinicShortName={clinicProfile.shortName}
-                onSearchPress={openHeaderSearch}
-                onCartPress={openHeaderCart}
-                cartCount={cartItems.length}
-              />
-
-              <View style={styles.shopTabsRow}>
-                <ShopTabButton label="Browse" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
-                <ShopTabButton
-                  label={shopMembershipTabLabel}
-                  active={shopTab === 'membership'}
-                  onPress={() => setShopTab('membership')}
-                />
-                <ShopTabButton
-                  label="Treatments"
-                  active={shopTab === 'treatments'}
-                  onPress={() => setShopTab('treatments')}
-                />
-              </View>
-
-              {shopTab === 'browse' && !selectedTreatment && (
-                <View>
-                  <View style={styles.shopPinkHeroCard}>
-                    <Animated.View
-                      pointerEvents="none"
-                      style={[
-                        styles.shopPinkLiquidShine,
-                        {
-                          transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                        },
-                      ]}
-                    />
-                    <View pointerEvents="none" style={styles.shopPinkHeroGloss} />
-                    <View pointerEvents="none" style={styles.shopPinkHeroPearl} />
-                    <View pointerEvents="none" style={styles.shopPinkHeroGlow} />
-                    <Text style={styles.shopPinkHeroTitle}>Treat today. Pay later. Earn rewards.</Text>
-                    <Text style={styles.shopPinkHeroBody}>Kostenlose Treatments und exklusive Member-Vorteile.</Text>
-                    <Pressable
-                      style={styles.shopPinkHeroCta}
-                      onPress={() => {
-                        setShopTab('membership');
-                      }}
-                    >
-                      <Text style={styles.shopPinkHeroCtaText}>Wie funktioniert es?</Text>
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.categoryGrid}>
-                    {treatmentCategories.map((cat) => (
-                      <Pressable
-                        key={cat.id}
-                        style={[styles.categoryTile, categoryId === cat.id && styles.categoryTileActive]}
-                        onPress={() => setCategoryId(cat.id)}
-                      >
-                        <View pointerEvents="none" style={styles.categoryTileGloss} />
-                        {categoryId === cat.id && <View pointerEvents="none" style={styles.categoryTileGlow} />}
-                        <View
-                          style={[
-                            styles.categoryTileIconWrap,
-                            categoryId === cat.id && styles.categoryTileIconWrapActive,
-                          ]}
-                        >
-                          <Ionicons
-                            name={categoryIconName(cat.id)}
-                            size={20}
-                            color={categoryId === cat.id ? THEME.ink : THEME.muted}
-                          />
-                        </View>
-                        <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
-                          {cat.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-
-                  <Text style={styles.shopListTitle}>Alle "{selectedCategory?.label || categoryId}" treatments</Text>
-                  <Text style={styles.shopListSubtitle}>{selectedCategoryMeta.description}</Text>
-                  <View style={styles.treatmentGrid}>
-                    {browseItems.map((item) => (
-                      <TreatmentCard key={item.id} treatment={item} onPress={openTreatment} />
-                    ))}
-                  </View>
-                  {browseItems.length === 0 && (
-                    <View style={styles.emptyCard}>
-                      <Text style={styles.emptyTitle}>Keine Behandlungen in dieser Kategorie</Text>
-                      <Text style={styles.emptyBody}>Passe später den MedSpa-Katalog im Backend an.</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {shopTab === 'browse' && selectedTreatment && (
-                <View style={styles.detailCard}>
-                  <View pointerEvents="none" style={styles.cardChrome} />
-                  <Pressable onPress={() => setSelectedTreatment(null)}>
-                    <Text style={styles.backLink}>← Zurück</Text>
-                  </Pressable>
-
-                  {preferredTreatmentImage(selectedTreatment) ? (
-                    <Image source={{ uri: preferredTreatmentImage(selectedTreatment) }} style={styles.detailImage} />
-                  ) : (
-                    <View style={styles.detailImageMock} />
-                  )}
-
-                  {Array.isArray(selectedTreatment.galleryUrls) && selectedTreatment.galleryUrls.length > 1 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.detailGalleryRow}
-                    >
-                      {selectedTreatment.galleryUrls.slice(0, 6).map((url) => (
-                        <Image key={`${selectedTreatment.id}-${url}`} source={{ uri: url }} style={styles.detailThumbImage} />
-                      ))}
-                    </ScrollView>
-                  )}
-
-                  <Text style={styles.detailTitle}>{selectedTreatment.name}</Text>
-                  <Text style={styles.detailBody}>{selectedTreatment.description}</Text>
-                  <Text style={styles.detailMeta}>⏱ {selectedTreatment.durationMinutes} Min / Behandlung</Text>
-                  <View style={styles.detailQuoteCard}>
-                    <Text style={styles.detailQuoteText}>
-                      “{selectedTreatment.name} war schnell, präzise und deutlich angenehmer als erwartet.”
-                    </Text>
-                  </View>
-
-                  <Text style={styles.sectionSubTitle}>Behandlungsplan wählen</Text>
-                  <View style={styles.unitsRow}>
-                    <Pressable
-                      style={styles.unitsBtn}
-                      onPress={() => setUnits((prev) => Math.max(1, prev - 1))}
-                    >
-                      <Text style={styles.unitsBtnText}>−</Text>
-                    </Pressable>
-                    <View style={styles.unitsValueWrap}>
-                      <Text style={styles.unitsValue}>{units} Behandlung(en)</Text>
-                    </View>
-                    <Pressable style={styles.unitsBtn} onPress={() => setUnits((prev) => prev + 1)}>
-                      <Text style={styles.unitsBtnText}>＋</Text>
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.detailPlanSummaryRow}>
-                    <Text style={styles.detailPlanSummaryMain}>
-                      {formatPrice((selectedTreatment.priceCents || 0) * units)}
-                    </Text>
-                    <Text style={styles.detailPlanSummaryDivider}>|</Text>
-                    <Text style={styles.detailPlanSummaryMember}>
-                      {hasActiveMembership
-                        ? `Member: ${formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}`
-                        : `Member: ${formatPrice((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0)}`}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.priceLine}>Standard: {formatPrice(selectedTreatment.priceCents)}</Text>
-                  <Text style={styles.priceLine}>Mitglied: {formatPrice(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents)}</Text>
-                  {!hasActiveMembership && (
-                    <Text style={styles.priceHint}>
-                      Aktiviere eine Membership, um Member-Preise und inkludierte Treatments freizuschalten.
-                    </Text>
-                  )}
-
-                  <Pressable
-                    style={[styles.primaryCta, (cartSyncing || checkoutLoading) && styles.ctaDisabled]}
-                    disabled={cartSyncing || checkoutLoading}
-                    onPress={() => {
-                      void addToCart();
-                    }}
-                  >
-                    <Text style={styles.primaryCtaText}>{cartCtaLabel}</Text>
-                  </Pressable>
-                </View>
-              )}
-
-              {shopTab === 'membership' && (
-                <View>
-                  {memberships.map((plan) => {
-                    const active =
-                      membershipStatus?.status === 'active' && membershipStatus?.membershipId === plan.id;
-                    const recovering =
-                      membershipStatus?.status === 'past_due' && membershipStatus?.membershipId === plan.id;
-                    const highlightedPerks = (Array.isArray(plan.perks) ? plan.perks : []).slice(0, 4);
-                    const includedIds = Array.isArray(plan.includedTreatmentIds) ? plan.includedTreatmentIds : [];
-                    const includedTreatments = treatments
-                      .filter((item) => includedIds.includes(item.id))
-                      .slice(0, 4);
-                    const resultGallery = includedTreatments
-                      .flatMap((item) => (Array.isArray(item.galleryUrls) ? item.galleryUrls.slice(0, 2) : []))
-                      .filter(Boolean)
-                      .slice(0, 6);
-                    return (
-                      <View
-                        key={plan.id}
-                        style={[styles.shopMembershipBlock, active && styles.shopMembershipBlockActive]}
-                      >
-                        <View pointerEvents="none" style={styles.surfaceRim} />
-                        <View pointerEvents="none" style={styles.surfacePinkAura} />
-                        <View style={styles.shopMembershipHero}>
-                          <Animated.View
-                            pointerEvents="none"
-                            style={[
-                              styles.shopMembershipLiquidShine,
-                              {
-                                transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                              },
-                            ]}
-                          />
-                          <View pointerEvents="none" style={styles.shopMembershipHeroGloss} />
-                          <View pointerEvents="none" style={styles.shopMembershipHeroPearl} />
-                          <Text style={styles.shopMembershipHeroEyebrow}>MEMBERSHIP</Text>
-                          <Text style={styles.shopMembershipHeroTitle}>{plan.name}</Text>
-                          <Text style={styles.shopMembershipHeroBody}>
-                            {highlightedPerks[0] || 'Exklusive Member-Vorteile mit monatlichem Mehrwert.'}
-                          </Text>
-                          <View style={styles.shopMembershipPriceRow}>
-                            <Text style={styles.shopMembershipHeroPrice}>{formatPrice(plan.priceCents)} / Monat</Text>
-                            {active && <Text style={styles.shopMembershipHeroBadge}>Aktiv</Text>}
-                          </View>
-                        </View>
-
-                        <View style={styles.shopMembershipBenefitsGrid}>
-                          {highlightedPerks.map((perk, index) => (
-                            <View
-                              key={`${plan.id}-perk-${index}`}
-                              style={[
-                                styles.shopMembershipBenefitCard,
-                                index % 2 === 1 && styles.shopMembershipBenefitCardAlt,
-                              ]}
-                            >
-                              <Text style={styles.shopMembershipBenefitText}>{perk}</Text>
-                            </View>
-                          ))}
-                        </View>
-
-                        <Text style={styles.shopMembershipIncludedTitle}>Inkludierte Treatments</Text>
-                        {includedTreatments.length === 0 && (
-                          <Text style={styles.shopMembershipIncludedEmpty}>
-                            Dieses Paket enthält aktuell keine fixen Inklusiv-Treatments.
-                          </Text>
-                        )}
-                        {includedTreatments.map((item) => (
-                          <Pressable
-                            key={`${plan.id}-${item.id}`}
-                            style={styles.shopMembershipIncludedCard}
-                            onPress={() => {
-                              setShopTab('browse');
-                              openTreatment(item);
-                            }}
-                          >
-                            <View pointerEvents="none" style={styles.surfaceRimSoft} />
-                            {preferredTreatmentImage(item) ? (
-                              <Image source={{ uri: preferredTreatmentImage(item) }} style={styles.shopMembershipIncludedImage} />
-                            ) : (
-                              <View style={styles.shopMembershipIncludedImageMock} />
-                            )}
-                            <View style={styles.shopMembershipIncludedBody}>
-                              <Text style={styles.shopMembershipIncludedName}>{item.name}</Text>
-                              <Text style={styles.shopMembershipIncludedMeta}>1 Behandlung</Text>
-                              <Text style={styles.shopMembershipIncludedLink}>Mehr über dieses Treatment</Text>
-                            </View>
-                          </Pressable>
-                        ))}
-
-                        {resultGallery.length > 0 && (
-                          <View style={styles.shopMembershipResultsWrap}>
-                            <Text style={styles.shopMembershipResultsTitle}>Member Results</Text>
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              contentContainerStyle={styles.shopMembershipResultsRow}
-                            >
-                              {resultGallery.map((url, index) => (
-                                <Image
-                                  key={`${plan.id}-result-${index}`}
-                                  source={{ uri: url }}
-                                  style={styles.shopMembershipResultImage}
-                                />
-                              ))}
-                            </ScrollView>
-                          </View>
-                        )}
-
-                        <Pressable
-                          style={[styles.primaryCta, active && styles.secondaryCtaActive]}
-                          disabled={membershipSyncing}
-                          onPress={() => {
-                            void activateMembership(plan.id);
-                          }}
-                        >
-                          <Text style={styles.primaryCtaText}>
-                            {active
-                              ? 'Aktiv'
-                              : recovering
-                                ? 'Zahlung fehlgeschlagen – reaktivieren'
-                                : membershipSyncing
-                                  ? 'Wird aktiviert...'
-                                  : 'Mitgliedschaft starten'}
-                          </Text>
-                        </Pressable>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-
-              {shopTab === 'treatments' && (
-                <View>
-                  {treatments.map((item) => (
-                    <View key={item.id} style={styles.treatmentListCard}>
-                      <View pointerEvents="none" style={styles.surfaceRimSoft} />
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <Text style={styles.treatmentListTitle}>{item.name}</Text>
-                      <Text style={styles.treatmentListBody}>{item.description}</Text>
-                      <Text style={styles.treatmentListMeta}>
-                        ab {formatPrice(item.priceCents)} • {item.durationMinutes} Min
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {hasCart && (
-                <View style={styles.cartBox}>
-                  <View pointerEvents="none" style={styles.surfaceRim} />
-                  <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                  <View pointerEvents="none" style={styles.cartBoxGlow} />
-                  <Text style={styles.cartTitle}>Warenkorb ({cartItems.length})</Text>
-                  {cartItems.slice(0, 3).map((item) => (
-                    <Text key={item.id} style={styles.cartItem}>
-                      {item.name} • {item.units}x • {formatPrice(item.totalCents)}
-                    </Text>
-                  ))}
-                  <Text style={styles.cartTotal}>Gesamt: {formatPrice(totalCartCents)}</Text>
-                  <View style={styles.checkoutMethodWrap}>
-                    <Text style={styles.checkoutMethodLabel}>Zahlart</Text>
-                    <View style={styles.checkoutMethodRow}>
-                      {CHECKOUT_METHOD_OPTIONS.map((option) => {
-                        const active = selectedCheckoutMethod === option.id;
-                        return (
-                          <Pressable
-                            key={`box-${option.id}`}
-                            style={[styles.checkoutMethodChip, active && styles.checkoutMethodChipActive]}
-                            onPress={() => setSelectedCheckoutMethod(option.id)}
-                          >
-                            <Text style={[styles.checkoutMethodChipText, active && styles.checkoutMethodChipTextActive]}>
-                              {option.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                  <Pressable
-                    style={[styles.primaryCta, (checkoutLoading || cartSyncing) && styles.ctaDisabled]}
-                    disabled={checkoutLoading || cartSyncing}
-                    onPress={() => {
-                      void runCheckout();
-                    }}
-                  >
-                    <Text style={styles.primaryCtaText}>{checkoutCtaLabel}</Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          )}
-
-          {mainTab === 'scan' && (
-            <View>
-              <TopHeader
-                title="Scan"
-                clinicShortName={clinicProfile.shortName}
-                onSearchPress={openHeaderSearch}
-                onCartPress={openHeaderCart}
-                cartCount={cartItems.length}
-              />
-
-              <View style={styles.scanCard}>
-                <View pointerEvents="none" style={styles.surfaceRim} />
-                <View pointerEvents="none" style={styles.surfaceBlueAura} />
-                <View pointerEvents="none" style={styles.cardChrome} />
-                <Text style={styles.scanTitle}>Check-in QR</Text>
-                <Text style={styles.scanBody}>
-                  Scanne beim Empfang deinen App-Code. So werden Besuche sauber erfasst und Rewards automatisch gutgeschrieben.
-                </Text>
-                <View style={styles.scanQrMock}>
-                  <View pointerEvents="none" style={styles.scanQrGloss} />
-                  <View pointerEvents="none" style={styles.scanQrGlow} />
-                  <Text style={styles.scanQrText}>{clinicProfile.shortName || 'APP'}-{String(points).slice(0, 4)}</Text>
-                </View>
-                <Pressable style={styles.primaryCta} onPress={checkInViaScan}>
-                  <Text style={styles.primaryCtaText}>Scan bestätigen (Demo)</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.inlineInfoBox}>
-                <Text style={styles.inlineInfoTitle}>So funktioniert es live</Text>
-                <Text style={styles.inlineInfoText}>• Empfang scannt den QR aus der App</Text>
-                <Text style={styles.inlineInfoText}>• Besuch wird in der MedSpa-Historie verbucht</Text>
-                <Text style={styles.inlineInfoText}>• Punkte werden automatisch gutgeschrieben</Text>
-              </View>
-            </View>
-          )}
-
-          {mainTab === 'rewards' && (
-            <View>
-              <TopHeader
-                title="Rewards"
-                clinicShortName={clinicProfile.shortName}
-                onSearchPress={openHeaderSearch}
-                onCartPress={openHeaderCart}
-                cartCount={cartItems.length}
-              />
-
-              <View style={styles.rewardsBalanceCard}>
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.rewardsLiquidShine,
-                    {
-                      transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                    },
-                  ]}
-                />
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.rewardsOrbit,
-                    {
-                      transform: [
-                        {
-                          translateY: floatingAuraAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, -10],
-                          }),
-                        },
-                        {
-                          translateX: floatingAuraAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 6],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  <View style={styles.rewardsOrbitCore} />
-                  <View style={styles.rewardsOrbitRing} />
-                </Animated.View>
-                <View pointerEvents="none" style={styles.rewardsBalanceGloss} />
-                <View pointerEvents="none" style={styles.rewardsBalancePearl} />
-                <View pointerEvents="none" style={styles.rewardsBalanceGlow} />
-                <View pointerEvents="none" style={styles.rewardsBalanceGlowSecondary} />
-                <Text style={styles.rewardsBalanceLogo}>O</Text>
-                <Text style={styles.rewardsBalanceLabel}>Loyalty Points</Text>
-                <View style={styles.rewardsCardStatsRow}>
-                  <View style={styles.rewardsCardStatItem}>
-                    <Text style={styles.rewardsCardStatValue}>{points}</Text>
-                    <Text style={styles.rewardsCardStatLabel}>Punkte</Text>
-                  </View>
-                  <View style={styles.rewardsCardStatItem}>
-                    <Text style={styles.rewardsCardStatValue}>{rewardHistoryItems.length}</Text>
-                    <Text style={styles.rewardsCardStatLabel}>Aktivitäten</Text>
-                  </View>
-                </View>
-                <View style={styles.rewardsBalanceFooter}>
-                  <View>
-                    <Text style={styles.rewardsBalanceMember}>{patientGuestMode ? 'Guest' : 'Member'}</Text>
-                    <Text style={styles.rewardsBalanceJoined}>Joined now</Text>
-                  </View>
-                  <View style={styles.rewardsBalanceRight}>
-                    <Text style={styles.rewardsBalanceWallet}>{formatPrice(walletCents)}</Text>
-                    <Text style={styles.rewardsBalanceCash}>{clinicProfile.shortName || 'APP'} Cash</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.rewardsHeaderRow}>
-                <Text style={styles.rewardsHeaderTitle}>Rewards</Text>
-                <Pressable onPress={() => setRewardsView('past')}>
-                  <Text style={styles.rewardsHeaderLink}>Mehr sehen ›</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.rewardsSegmentRow}>
-                <Pressable
-                  style={[styles.rewardsSegmentBtn, rewardsView === 'active' && styles.rewardsSegmentBtnActive]}
-                  onPress={() => setRewardsView('active')}
-                >
-                  <Text
-                    style={[
-                      styles.rewardsSegmentText,
-                      rewardsView === 'active' && styles.rewardsSegmentTextActive,
-                    ]}
-                  >
-                    Aktiv
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.rewardsSegmentBtn, rewardsView === 'past' && styles.rewardsSegmentBtnActive]}
-                  onPress={() => setRewardsView('past')}
-                >
-                  <Text
-                    style={[
-                      styles.rewardsSegmentText,
-                      rewardsView === 'past' && styles.rewardsSegmentTextActive,
-                    ]}
-                  >
-                    Vergangen
-                  </Text>
-                </Pressable>
-              </View>
-
-              {rewardsView === 'active' && (
-                <View>
-                  <Text style={styles.rewardsSectionTitle}>Mehr Punkte sammeln?</Text>
-                  {rewardActions.map((action) => (
-                    <View key={action.id} style={styles.rewardsActionRow}>
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <View style={styles.rewardsActionLeft}>
-                        <View style={styles.rewardsActionIconWrap}>
-                          <Ionicons name={rewardActionIcon(action.id)} size={17} color={THEME.brandStrong} />
-                        </View>
-                        <Text style={styles.rewardsActionLabel}>{action.label}</Text>
-                      </View>
-                      <Pressable style={styles.rewardsActionBtn} onPress={() => claimActionPoints(action)}>
-                        <Text style={styles.rewardsActionBtnText}>+{action.points} Punkte</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-
-                  <Text style={styles.rewardsSectionTitle}>Punkte einlösen</Text>
-                  {rewardRedeems.map((item) => (
-                    <View key={item.id} style={styles.rewardsRedeemRow}>
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <View>
-                        <Text style={styles.rewardsRedeemLabel}>{item.label}</Text>
-                        <Text style={styles.rewardsRedeemHint}>{item.requiredPoints} Punkte</Text>
-                      </View>
-                      <Pressable
-                        style={[
-                          styles.rewardsRedeemBtn,
-                          points < item.requiredPoints && styles.rewardsRedeemBtnDisabled,
-                        ]}
-                        disabled={points < item.requiredPoints}
-                        onPress={() => redeemReward(item)}
-                      >
-                        <Text style={styles.rewardsRedeemBtnText}>Einlösen</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {rewardsView === 'past' && (
-                <View style={styles.rewardsPastList}>
-                  {rewardHistoryItems.length === 0 && (
-                    <Text style={styles.rewardsPastEmpty}>Keine Rewards in diesem Bereich.</Text>
-                  )}
-                  {rewardHistoryItems.map((entry) => (
-                    <View key={entry.id} style={styles.rewardsPastItem}>
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <Text style={styles.rewardsPastTitle}>{entry.title}</Text>
-                      <Text style={styles.rewardsPastMeta}>{formatDate(entry.createdAt)}</Text>
-                      {'points' in entry && (
-                        <Text style={styles.rewardsPastMeta}>+{entry.points} Punkte</Text>
-                      )}
-                      {'amount' in entry && (
-                        <Text style={styles.rewardsPastMeta}>{formatPrice(entry.amount)}</Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
-
-          {mainTab === 'profile' && (
-            <View>
-              <TopHeader
-                title="Konto"
-                clinicShortName={clinicProfile.shortName}
-                onSearchPress={openHeaderSearch}
-                onCartPress={openHeaderCart}
-                cartCount={cartItems.length}
-              />
-
-              <View style={styles.segmentRow}>
-                <TabButton
-                  label="Behandlungen"
-                  active={profileTab === 'behandlungen'}
-                  onPress={() => setProfileTab('behandlungen')}
-                />
-                <TabButton
-                  label="Membership"
-                  active={profileTab === 'membership'}
-                  onPress={() => setProfileTab('membership')}
-                />
-                <TabButton
-                  label="Einstellungen"
-                  active={profileTab === 'settings'}
-                  onPress={() => setProfileTab('settings')}
-                />
-              </View>
-
-              {profileTab === 'behandlungen' && (
-                <View>
-                  {history.length === 0 && (
-                    <View style={styles.profileEmptyCard}>
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <View style={styles.profileGhostList}>
-                        {[1, 2, 3].map((row) => (
-                          <View key={`ghost-${row}`} style={styles.profileGhostRow}>
-                            <View style={styles.profileGhostAvatar} />
-                            <View style={styles.profileGhostLineWrap}>
-                              <View style={[styles.profileGhostLine, styles.profileGhostLineWide]} />
-                              <View style={styles.profileGhostLine} />
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                      <Text style={styles.profileEmptyTitle}>Noch keine Behandlung gekauft</Text>
-                      <Pressable
-                        style={styles.profileEmptyCta}
-                        onPress={() => {
-                          setShopTab('browse');
-                          switchMainTab('shop');
-                        }}
-                      >
-                        <Text style={styles.profileEmptyCtaText}>Shop öffnen</Text>
-                      </Pressable>
-                    </View>
-                  )}
-
-                  {history.map((entry) => (
-                    <View key={entry.id} style={styles.historyItem}>
-                      <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-                      <Text style={styles.historyTitle}>{entry.title}</Text>
-                      <Text style={styles.historyMeta}>{formatDate(entry.createdAt)}</Text>
-                      {'amount' in entry && <Text style={styles.historyMeta}>{formatPrice(entry.amount)}</Text>}
-                      {'points' in entry && <Text style={styles.historyMeta}>+{entry.points} Punkte</Text>}
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {profileTab === 'membership' && (
-                <View style={styles.membershipCardActive}>
-                  <View pointerEvents="none" style={styles.cardChrome} />
-                  <Text style={styles.membershipName}>
-                    {hasActiveMembership ? currentMembership.name : 'Keine aktive Membership'}
-                  </Text>
-                  <Text style={styles.membershipPrice}>
-                    Status: {membershipStatusText}
-                    {membershipStatus?.nextChargeAt ? ` • Nächste Abbuchung: ${formatDate(membershipStatus.nextChargeAt)}` : ''}
-                  </Text>
-                  {hasActiveMembership ? (
-                    <View>
-                      <Text style={styles.membershipPerk}>Inklusive Treatments:</Text>
-                      {includedTreatmentIds.map((id) => {
-                        const treatment = treatments.find((item) => item.id === id);
-                        if (!treatment) return null;
-                        return (
-                          <Text key={id} style={styles.membershipPerk}>• {treatment.name}</Text>
-                        );
-                      })}
-                      <Pressable
-                        style={styles.secondaryCta}
-                        disabled={membershipSyncing}
-                        onPress={() => {
-                          void cancelMembership();
-                        }}
-                      >
-                        <Text style={styles.secondaryCtaText}>
-                          {membershipSyncing ? 'Wird verarbeitet...' : 'Mitgliedschaft kündigen'}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.profileEmptyMembershipWrap}>
-                      <Text style={styles.profileEmptyMembershipText}>Keine aktive Membership</Text>
-                      <Pressable
-                        style={styles.profileEmptyCta}
-                        onPress={() => {
-                          setShopTab('membership');
-                          switchMainTab('shop');
-                        }}
-                      >
-                        <Text style={styles.profileEmptyCtaText}>Memberships ansehen</Text>
-                      </Pressable>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {profileTab === 'settings' && (
-                <View style={styles.settingsCard}>
-                  <View pointerEvents="none" style={styles.cardChrome} />
-                  <Text style={styles.sectionSubTitle}>Profil</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={settingsName}
-                    onChangeText={setSettingsName}
-                    placeholder="Name"
-                    placeholderTextColor={THEME.muted}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    value={settingsEmail}
-                    onChangeText={setSettingsEmail}
-                    placeholder="E-Mail"
-                    placeholderTextColor={THEME.muted}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-
-                  <Text style={styles.sectionSubTitle}>MedSpa-App Verbindung</Text>
-                  <Text style={styles.analyticsStatus}>MedSpa: {clinicProfile.name || 'Nicht gesetzt'}</Text>
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={async () => {
-                      try {
-                        await loadClinicBundle();
-                      } catch (error) {
-                        Alert.alert('MedSpa-Daten konnten nicht geladen werden', String(error?.message || error));
-                      }
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>MedSpa-Daten neu laden</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={() => {
-                      setOnboardingBaseUrl(analyticsBaseUrl || onboardingBaseUrl);
-                      setClinicSearchQuery(clinicLookupName || clinicSearchQuery);
-                      setClinicSearchResults([]);
-                      setShowOnboarding(true);
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>Verbindung neu einrichten</Text>
-                  </Pressable>
-                  <Text style={styles.analyticsStatus}>
-                    {analyticsConnected
-                      ? 'MedSpa-Daten sind verbunden.'
-                      : 'MedSpa-Daten sind aktuell nicht verbunden.'}
-                  </Text>
-                  <Text style={styles.analyticsStatus}>
-                    MedSpa-Metriken und Kampagnen werden ausschließlich im Web-Dashboard verwaltet.
-                  </Text>
-                  {!!backendCheckMessage && <Text style={styles.diagnosticText}>{backendCheckMessage}</Text>}
-                  <Text style={styles.analyticsStatus}>
-                    Membership-Konto: {String(settingsEmail || '').trim() || 'nicht gesetzt'}
-                  </Text>
-                  <Text style={styles.analyticsStatus}>
-                    Modus: {patientGuestMode ? 'Gast' : patientPhone ? `Telefon ${patientPhone}` : 'Unbekannt'}
-                  </Text>
-
-                  <Pressable
-                    style={styles.secondaryCta}
-                    onPress={() => {
-                      void disconnectClinicSession();
-                    }}
-                  >
-                    <Text style={styles.secondaryCtaText}>Von MedSpa abmelden</Text>
-                  </Pressable>
-
-                  <View style={styles.inlineInfoBox}>
-                    <Text style={styles.inlineInfoTitle}>Reward-Regeln</Text>
-                    <Text style={styles.inlineInfoText}>• 1 EUR Umsatz = 1 Punkt</Text>
-                    <Text style={styles.inlineInfoText}>• 250 Punkte = 15 EUR Wallet-Guthaben</Text>
-                    <Text style={styles.inlineInfoText}>• Punkte verfallen nach 12 Monaten</Text>
-                  </View>
-                </View>
-              )}
-            </View>
-          )}
-
-          {!!lastAction && (
-            <View style={styles.lastActionBox}>
-              <Text style={styles.lastActionText}>{lastAction}</Text>
-            </View>
-          )}
+            )}
           </ScrollView>
         </Animated.View>
 
         {headerSearchOpen && (
-          <View style={styles.overlayLayer} pointerEvents="box-none">
-            <Pressable style={styles.overlayBackdrop} onPress={closeHeaderSearch} />
-            <View style={styles.searchOverlayCard}>
-              <View pointerEvents="none" style={styles.surfaceRim} />
-              <View pointerEvents="none" style={styles.overlayCardGloss} />
-              <View style={styles.searchOverlayHeader}>
-                <Text style={styles.searchOverlayTitle}>Suchen</Text>
-                <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderSearch}>
-                  <Ionicons name="close" size={20} color={THEME.inkSoft} />
-                </Pressable>
-              </View>
-              <TextInput
-                style={styles.searchOverlayInput}
-                value={headerSearchQuery}
-                onChangeText={setHeaderSearchQuery}
-                placeholder="Treatments, Memberships, Artikel"
-                placeholderTextColor={THEME.muted}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
-
-              {!headerSearchQuery.trim() && (
-                <Text style={styles.searchOverlayHint}>
-                  Tipp: Suche nach „Laser“, „Mikrodermabrasion“ oder „Silber“.
-                </Text>
-              )}
-
-              {!!headerSearchQuery.trim() && globalSearchResults.length === 0 && (
-                <Text style={styles.searchOverlayHint}>Keine Ergebnisse gefunden.</Text>
-              )}
-
-              {!!headerSearchQuery.trim() && globalSearchResults.length > 0 && (
-                <ScrollView
-                  style={styles.searchOverlayResults}
-                  contentContainerStyle={styles.searchOverlayResultsContent}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {globalSearchResults.map((item) => (
-                    <Pressable
-                      key={`${item.type}-${item.id}`}
-                      style={styles.searchOverlayRow}
-                      onPress={() => onGlobalSearchSelect(item)}
-                    >
-                      <View style={styles.searchOverlayIconWrap}>
-                        <Ionicons name={searchResultIcon(item.type)} size={16} color={THEME.accent} />
-                      </View>
-                      <View style={styles.searchOverlayMain}>
-                        <Text style={styles.searchOverlayRowTitle}>{item.title}</Text>
-                        <Text style={styles.searchOverlayRowMeta}>{item.subtitle}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={16} color={THEME.mutedSoft} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-            </View>
-          </View>
+          <HeaderSearchOverlay
+            styles={styles}
+            closeHeaderSearch={closeHeaderSearch}
+            headerSearchQuery={headerSearchQuery}
+            setHeaderSearchQuery={setHeaderSearchQuery}
+            globalSearchResults={globalSearchResults}
+            searchResultIcon={searchResultIcon}
+            onGlobalSearchSelect={onGlobalSearchSelect}
+          />
         )}
 
         {cartSheetOpen && (
-          <View style={styles.overlayLayer} pointerEvents="box-none">
-            <Pressable style={styles.overlayBackdrop} onPress={closeHeaderCart} />
-            <View style={styles.cartOverlayCard}>
-              <View pointerEvents="none" style={styles.surfaceRim} />
-              <View pointerEvents="none" style={styles.overlayCardGloss} />
-              <View style={styles.searchOverlayHeader}>
-                <Text style={styles.searchOverlayTitle}>Warenkorb</Text>
-                <Pressable style={styles.overlayCloseBtn} onPress={closeHeaderCart}>
-                  <Ionicons name="close" size={20} color={THEME.inkSoft} />
-                </Pressable>
-              </View>
-
-              {cartItems.length === 0 ? (
-                <Text style={styles.searchOverlayHint}>Dein Warenkorb ist aktuell leer.</Text>
-              ) : (
-                <ScrollView
-                  style={styles.searchOverlayResults}
-                  contentContainerStyle={styles.searchOverlayResultsContent}
-                >
-                  {cartItems.map((item) => (
-                    <View key={item.id} style={styles.cartOverlayRow}>
-                      <View style={styles.cartOverlayMain}>
-                        <Text style={styles.cartOverlayName}>{item.name}</Text>
-                        <Text style={styles.cartOverlayMeta}>Einzelpreis: {formatPrice(item.unitCents)}</Text>
-                        <View style={styles.cartOverlayControlsRow}>
-                          <Pressable
-                            style={styles.cartOverlayStepBtn}
-                            onPress={() => updateCartItemUnits(item.id, Number(item.units || 1) - 1)}
-                          >
-                            <Text style={styles.cartOverlayStepBtnText}>−</Text>
-                          </Pressable>
-                          <Text style={styles.cartOverlayUnitsText}>{Math.max(1, Number(item.units || 1))}</Text>
-                          <Pressable
-                            style={styles.cartOverlayStepBtn}
-                            onPress={() => updateCartItemUnits(item.id, Number(item.units || 1) + 1)}
-                          >
-                            <Text style={styles.cartOverlayStepBtnText}>+</Text>
-                          </Pressable>
-                          <Pressable style={styles.cartOverlayRemoveBtn} onPress={() => removeCartItem(item.id)}>
-                            <Ionicons name="trash-outline" size={14} color={THEME.brandStrong} />
-                            <Text style={styles.cartOverlayRemoveText}>Entfernen</Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                      <Text style={styles.cartOverlayPrice}>{formatPrice(item.totalCents)}</Text>
-                    </View>
-                  ))}
-                </ScrollView>
-              )}
-
-              <View style={styles.checkoutMethodWrap}>
-                <Text style={styles.checkoutMethodLabel}>Zahlart</Text>
-                <View style={styles.checkoutMethodRow}>
-                  {CHECKOUT_METHOD_OPTIONS.map((option) => {
-                    const active = selectedCheckoutMethod === option.id;
-                    return (
-                      <Pressable
-                        key={`overlay-${option.id}`}
-                        style={[styles.checkoutMethodChip, active && styles.checkoutMethodChipActive]}
-                        onPress={() => setSelectedCheckoutMethod(option.id)}
-                      >
-                        <Text style={[styles.checkoutMethodChipText, active && styles.checkoutMethodChipTextActive]}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View style={styles.cartOverlayFooter}>
-                <Text style={styles.cartOverlayTotalLabel}>Gesamt</Text>
-                <Text style={styles.cartOverlayTotalValue}>{formatPrice(totalCartCents)}</Text>
-              </View>
-
-              <Pressable
-                style={[styles.primaryCta, (checkoutLoading || cartSyncing || cartItems.length === 0) && styles.ctaDisabled]}
-                disabled={checkoutLoading || cartSyncing || cartItems.length === 0}
-                onPress={() => {
-                  void runCheckout();
-                }}
-              >
-                <Text style={styles.primaryCtaText}>{checkoutCtaLabel}</Text>
-              </Pressable>
-            </View>
-          </View>
+          <CartOverlay
+            styles={styles}
+            closeHeaderCart={closeHeaderCart}
+            cartItems={cartItems}
+            formatPrice={formatPrice}
+            updateCartItemUnits={updateCartItemUnits}
+            removeCartItem={removeCartItem}
+            checkoutMethodOptions={CHECKOUT_METHOD_OPTIONS}
+            selectedCheckoutMethod={selectedCheckoutMethod}
+            setSelectedCheckoutMethod={setSelectedCheckoutMethod}
+            totalCartCents={totalCartCents}
+            checkoutLoading={checkoutLoading}
+            cartSyncing={cartSyncing}
+            runCheckout={runCheckout}
+            checkoutCtaLabel={checkoutCtaLabel}
+          />
         )}
 
-        <View style={styles.bottomBar}>
-          <View pointerEvents="none" style={styles.bottomBarGlow} />
-          <View pointerEvents="none" style={styles.bottomBarGloss} />
-          <BottomTab label="Home" active={mainTab === 'home'} onPress={() => switchMainTab('home')} />
-          <BottomTab label="Shop" active={mainTab === 'shop'} onPress={() => switchMainTab('shop')} />
-          <BottomTab label="Scan" active={mainTab === 'scan'} onPress={() => switchMainTab('scan')} />
-          <BottomTab label="Rewards" active={mainTab === 'rewards'} onPress={() => switchMainTab('rewards')} />
-          <BottomTab label="Profil" active={mainTab === 'profile'} onPress={() => switchMainTab('profile')} />
-        </View>
+        <BottomNavigation styles={styles} mainTab={mainTab} switchMainTab={switchMainTab} />
       </View>
     </SafeAreaView>
   );
@@ -4748,9 +3481,9 @@ const styles = StyleSheet.create({
     fontFamily: UI_FONT_FAMILY,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 136,
-    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 148,
+    paddingTop: 18,
   },
   headerRow: {
     flexDirection: 'row',
@@ -4855,14 +3588,14 @@ const styles = StyleSheet.create({
   searchOverlayCard: {
     position: 'relative',
     overflow: 'hidden',
-    marginTop: 78,
-    marginHorizontal: 12,
+    marginTop: 74,
+    marginHorizontal: 14,
     backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
     borderColor: BORDER_TINT,
-    borderRadius: 30,
-    padding: 18,
-    maxHeight: 430,
+    borderRadius: 32,
+    padding: 20,
+    maxHeight: 448,
     shadowColor: '#3C7CC8',
     shadowOpacity: 0.18,
     shadowRadius: 32,
@@ -4872,14 +3605,14 @@ const styles = StyleSheet.create({
   cartOverlayCard: {
     position: 'relative',
     overflow: 'hidden',
-    marginTop: 78,
-    marginHorizontal: 12,
+    marginTop: 74,
+    marginHorizontal: 14,
     backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
     borderColor: BORDER_TINT,
-    borderRadius: 30,
-    padding: 18,
-    maxHeight: 500,
+    borderRadius: 32,
+    padding: 20,
+    maxHeight: 520,
     shadowColor: '#3C7CC8',
     shadowOpacity: 0.18,
     shadowRadius: 32,
@@ -4929,21 +3662,40 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 86,
+    height: 94,
     backgroundColor: 'rgba(255,255,255,0.50)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
   },
   searchOverlayHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 6,
+    gap: 12,
+  },
+  overlayTitleStack: {
+    flex: 1,
+  },
+  overlayEyebrow: {
+    color: THEME.brandStrong,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    marginBottom: 4,
+    fontSize: 11,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchOverlayTitle: {
-    fontSize: 24,
+    fontSize: 28,
+    lineHeight: 30,
     fontWeight: '800',
     color: THEME.ink,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  overlaySubTitle: {
+    color: THEME.inkSoft,
+    lineHeight: 21,
+    marginBottom: 12,
     fontFamily: UI_FONT_FAMILY,
   },
   overlayCloseBtn: {
@@ -4957,17 +3709,18 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE_PANEL,
   },
   searchOverlayInput: {
-    minHeight: 46,
+    minHeight: 50,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
     backgroundColor: SURFACE_TINT,
-    borderRadius: 18,
-    paddingHorizontal: 14,
+    borderRadius: 20,
+    paddingHorizontal: 16,
     color: THEME.ink,
-    marginBottom: 8,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
   },
   searchOverlayHint: {
-    color: THEME.muted,
+    color: THEME.inkSoft,
     marginTop: 6,
     marginBottom: 4,
     lineHeight: 21,
@@ -4977,9 +3730,9 @@ const styles = StyleSheet.create({
     maxHeight: 280,
   },
   searchOverlayResultsContent: {
-    paddingTop: 4,
+    paddingTop: 6,
     paddingBottom: 8,
-    gap: 8,
+    gap: 10,
   },
   searchOverlayRow: {
     flexDirection: 'row',
@@ -4987,9 +3740,9 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     backgroundColor: SURFACE_PANEL,
   },
   searchOverlayIconWrap: {
@@ -5009,13 +3762,13 @@ const styles = StyleSheet.create({
   searchOverlayRowTitle: {
     color: THEME.ink,
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: UI_FONT_FAMILY,
   },
   searchOverlayRowMeta: {
-    color: THEME.muted,
+    color: THEME.inkSoft,
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 17,
     fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayRow: {
@@ -5024,9 +3777,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     backgroundColor: SURFACE_PANEL,
   },
   cartOverlayMain: {
@@ -5036,13 +3789,13 @@ const styles = StyleSheet.create({
   cartOverlayName: {
     color: THEME.ink,
     fontWeight: '700',
-    marginBottom: 1,
+    marginBottom: 3,
     fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayMeta: {
-    color: THEME.muted,
+    color: THEME.inkSoft,
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 17,
     fontFamily: UI_FONT_FAMILY,
   },
   cartOverlayPrice: {
@@ -5160,9 +3913,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.64)',
     borderRadius: 34,
-    padding: 24,
-    paddingRight: 126,
-    marginBottom: 18,
+    padding: 26,
+    paddingRight: 128,
+    marginBottom: 22,
     ...SOFT_CARD_SHADOW,
   },
   heroLiquidShine: {
@@ -5268,25 +4021,26 @@ const styles = StyleSheet.create({
   },
   heroEyebrow: {
     fontSize: 11,
-    letterSpacing: 1.2,
-    color: '#D7DEEA',
-    marginBottom: 10,
+    letterSpacing: 1.4,
+    color: '#EAF2FB',
+    marginBottom: 12,
     fontWeight: '700',
     fontFamily: UI_FONT_FAMILY,
   },
   heroTitle: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '800',
     color: '#F7FBFF',
-    marginBottom: 10,
-    letterSpacing: -0.9,
+    marginBottom: 12,
+    letterSpacing: -1,
     fontFamily: UI_FONT_FAMILY,
   },
   heroBody: {
-    color: '#C7D0DC',
-    lineHeight: 22,
-    marginBottom: 16,
+    color: '#E5F0FD',
+    lineHeight: 23,
+    marginBottom: 18,
+    maxWidth: 240,
     fontFamily: UI_FONT_FAMILY,
   },
   heroCta: {
@@ -5316,8 +4070,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(212,226,240,0.98)',
     borderWidth: 1,
     borderRadius: 26,
-    padding: 18,
-    marginBottom: 18,
+    padding: 20,
+    marginBottom: 22,
     shadowColor: '#3E7AC2',
     shadowOpacity: 0.12,
     shadowRadius: 24,
@@ -5335,24 +4089,45 @@ const styles = StyleSheet.create({
   },
   financeTitle: {
     color: THEME.ink,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 8,
     fontFamily: UI_FONT_FAMILY,
   },
   financeBody: {
-    color: THEME.muted,
+    color: THEME.inkSoft,
     lineHeight: 22,
     fontFamily: UI_FONT_FAMILY,
   },
+  sectionHeader: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  sectionHeaderCompact: {
+    marginTop: 10,
+  },
+  sectionEyebrow: {
+    color: THEME.brandStrong,
+    fontWeight: '700',
+    fontSize: 11,
+    letterSpacing: 1.5,
+    marginBottom: 8,
+    fontFamily: UI_FONT_FAMILY,
+  },
   sectionTitle: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '800',
     color: THEME.ink,
-    marginTop: 12,
-    marginBottom: 14,
+    marginBottom: 8,
     letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  sectionLead: {
+    color: THEME.inkSoft,
+    lineHeight: 22,
+    fontSize: 14,
+    maxWidth: 320,
     fontFamily: UI_FONT_FAMILY,
   },
   sectionSubTitle: {
@@ -5379,6 +4154,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 5,
   },
+  articleCardFeatured: {
+    padding: 22,
+    borderRadius: 30,
+    marginBottom: 16,
+    shadowOpacity: 0.15,
+    shadowRadius: 28,
+  },
   articleTag: {
     alignSelf: 'flex-start',
     color: THEME.brandStrong,
@@ -5401,10 +4183,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     fontFamily: UI_FONT_FAMILY,
   },
+  articleTitleFeatured: {
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.5,
+  },
   articleBody: {
-    color: THEME.muted,
+    color: THEME.inkSoft,
     lineHeight: 22,
     fontFamily: UI_FONT_FAMILY,
+  },
+  articleBodyFeatured: {
+    fontSize: 15,
+    lineHeight: 23,
   },
   clinicCard: {
     position: 'relative',
@@ -5414,7 +4205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 28,
     padding: 18,
-    marginBottom: 18,
+    marginBottom: 20,
     shadowColor: '#3E7AC2',
     shadowOpacity: 0.13,
     shadowRadius: 26,
@@ -5536,7 +4327,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: SURFACE_SOFT,
     padding: 6,
-    marginBottom: 16,
+    marginBottom: 20,
     ...SOFT_CARD_SHADOW,
   },
   shopTabBtn: {
@@ -5572,12 +4363,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 32,
-    paddingHorizontal: 20,
-    paddingVertical: 22,
+    paddingHorizontal: 22,
+    paddingVertical: 24,
     backgroundColor: '#FFF0FA',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.82)',
-    marginBottom: 18,
+    marginBottom: 22,
     ...SOFT_CARD_SHADOW,
   },
   shopPinkLiquidShine: {
@@ -5619,17 +4410,17 @@ const styles = StyleSheet.create({
   },
   shopPinkHeroTitle: {
     color: THEME.ink,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '800',
-    marginBottom: 8,
+    marginBottom: 10,
     letterSpacing: -0.8,
     fontFamily: UI_FONT_FAMILY,
   },
   shopPinkHeroBody: {
-    color: THEME.muted,
-    marginBottom: 14,
-    lineHeight: 21,
+    color: THEME.inkSoft,
+    marginBottom: 16,
+    lineHeight: 22,
     fontFamily: UI_FONT_FAMILY,
   },
   shopPinkHeroCta: {
@@ -5656,13 +4447,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   categoryTile: {
     position: 'relative',
     overflow: 'hidden',
     width: '31.5%',
-    marginBottom: 10,
+    marginBottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 102,
@@ -5720,27 +4511,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12,
     textAlign: 'center',
-    lineHeight: 16,
+    lineHeight: 17,
     fontFamily: UI_FONT_FAMILY,
   },
   categoryTileTextActive: {
     color: THEME.ink,
     fontWeight: '800',
   },
+  sectionMetaPill: {
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: SURFACE_PANEL,
+  },
+  sectionMetaPillText: {
+    color: THEME.inkSoft,
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: UI_FONT_FAMILY,
+  },
   shopListTitle: {
     color: THEME.ink,
-    fontSize: 34,
-    lineHeight: 38,
+    fontSize: 32,
+    lineHeight: 36,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 6,
     letterSpacing: -0.9,
     fontFamily: UI_FONT_FAMILY,
   },
   shopListSubtitle: {
-    color: THEME.muted,
-    fontSize: 15,
+    color: THEME.inkSoft,
+    fontSize: 14,
     lineHeight: 21,
-    marginBottom: 14,
+    marginBottom: 16,
     fontFamily: UI_FONT_FAMILY,
   },
   treatmentGrid: {
@@ -6323,7 +5130,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_TINT,
     borderRadius: 28,
-    padding: 16,
+    padding: 18,
     shadowColor: '#3E7AC2',
     shadowOpacity: 0.14,
     shadowRadius: 24,
@@ -6373,7 +5180,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 34,
-    padding: 20,
+    padding: 22,
     backgroundColor: THEME.rewardsB,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.52)',
@@ -6459,9 +5266,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontFamily: UI_FONT_FAMILY,
   },
+  rewardsBalanceEyebrow: {
+    color: '#D9F5F2',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    marginBottom: 6,
+    fontFamily: UI_FONT_FAMILY,
+  },
   rewardsBalanceLabel: {
     color: '#D4EEEB',
-    marginBottom: 20,
+    marginBottom: 18,
     letterSpacing: 0.5,
     fontFamily: UI_FONT_FAMILY,
   },
@@ -6531,14 +5346,15 @@ const styles = StyleSheet.create({
   rewardsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 10,
+    alignItems: 'flex-end',
+    marginTop: 6,
+    marginBottom: 14,
+    gap: 12,
   },
   rewardsHeaderTitle: {
     color: THEME.ink,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontWeight: '800',
     letterSpacing: -0.7,
     fontFamily: UI_FONT_FAMILY,
@@ -6555,7 +5371,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER_LIGHT,
     borderRadius: 22,
     padding: 6,
-    marginBottom: 14,
+    marginBottom: 16,
     ...SOFT_CARD_SHADOW,
   },
   rewardsSegmentBtn: {
@@ -6579,11 +5395,12 @@ const styles = StyleSheet.create({
   },
   rewardsSectionTitle: {
     color: THEME.ink,
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 24,
+    lineHeight: 28,
     fontWeight: '800',
     marginBottom: 12,
     letterSpacing: -0.8,
+    fontFamily: UI_FONT_FAMILY,
   },
   rewardsActionRow: {
     position: 'relative',
@@ -6591,8 +5408,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    borderRadius: 22,
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -6643,8 +5460,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    borderRadius: 22,
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -6691,8 +5508,8 @@ const styles = StyleSheet.create({
     backgroundColor: SURFACE_PANEL,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    borderRadius: 22,
-    padding: 14,
+    borderRadius: 24,
+    padding: 16,
     marginBottom: 10,
     ...SOFT_CARD_SHADOW,
   },
@@ -6714,7 +5531,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(212,226,240,0.98)',
     borderRadius: 30,
-    padding: 18,
+    padding: 20,
     marginBottom: 14,
     shadowColor: '#3E7AC2',
     shadowOpacity: 0.14,
@@ -7071,7 +5888,7 @@ const styles = StyleSheet.create({
     opacity: 0.99,
   },
   lastActionBox: {
-    marginTop: 10,
+    marginTop: 14,
     backgroundColor: SURFACE_RAISED,
     borderWidth: 1,
     borderColor: BORDER_TINT,
@@ -7092,15 +5909,15 @@ const styles = StyleSheet.create({
   bottomBar: {
     position: 'absolute',
     overflow: 'hidden',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    borderRadius: 34,
+    left: 14,
+    right: 14,
+    bottom: 14,
+    borderRadius: 32,
     borderWidth: 1,
     borderColor: BORDER_TINT,
     backgroundColor: SURFACE_RAISED,
     flexDirection: 'row',
-    paddingVertical: 10,
+    paddingVertical: 11,
     paddingHorizontal: 8,
     justifyContent: 'space-between',
     shadowColor: '#3B78C9',
