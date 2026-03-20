@@ -31,7 +31,7 @@ export default function HomeScreen({
         styles={styles}
         title="Start"
         sectionLabel="Täglicher Überblick"
-        subtitle="Heute für dich kuratiert"
+        subtitle="Heute im Überblick"
         clinicShortName={clinicProfile.shortName}
         clinicName={clinicProfile.name}
         onSearchPress={onSearchPress}
@@ -90,9 +90,9 @@ export default function HomeScreen({
           </View>
         </View>
         <Text style={styles.heroEyebrow}>INSPIRIERT VON DEINER KLINIK</Text>
-        <Text style={styles.heroTitle}>Alles, was deine Klinik für dich freigeschaltet hat.</Text>
+        <Text style={styles.heroTitle}>Alles Wichtige deiner Klinik in einer App.</Text>
         <Text style={styles.heroBody}>
-          Behandlungen, Punkte, Mitgliedschaft und Kontakt liegen in einer klaren Oberfläche an einem Ort.
+          Behandlungen, Vorteile, Mitgliedschaft und Kontakt bleiben übersichtlich an einem Ort.
         </Text>
         <View style={styles.heroStatsRow}>
           <View style={styles.heroStatCard}>
@@ -105,7 +105,7 @@ export default function HomeScreen({
           </View>
         </View>
         <Pressable style={styles.heroCta} onPress={onViewOffers}>
-          <Text style={styles.heroCtaText}>Vorteile ansehen</Text>
+          <Text style={styles.heroCtaText}>Zum Überblick</Text>
         </Pressable>
       </View>
 

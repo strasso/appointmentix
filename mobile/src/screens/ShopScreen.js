@@ -56,7 +56,7 @@ export default function ShopScreen({
         styles={styles}
         title="Shop"
         sectionLabel="Behandlungen & Pakete"
-        subtitle="Buchen, vergleichen, planen"
+        subtitle="Buchen und vergleichen"
         clinicShortName={clinicProfile.shortName}
         clinicName={clinicProfile.name}
         onSearchPress={onSearchPress}
@@ -103,8 +103,8 @@ export default function ShopScreen({
                 <Text style={styles.shopHeroBadgeSoftText}>Mit Vorteilen</Text>
               </View>
             </View>
-            <Text style={styles.shopPinkHeroTitle}>Behandlungen, Pakete und Mitgliedschaften in einer klaren Auswahl.</Text>
-            <Text style={styles.shopPinkHeroBody}>Flexible Buchung, spätere Zahlung und Vorteile deiner Klinik in einem ruhigen Flow.</Text>
+            <Text style={styles.shopPinkHeroTitle}>Behandlungen und Pakete auf einen Blick.</Text>
+            <Text style={styles.shopPinkHeroBody}>Schnell wählen, später zahlen und Vorteile direkt mitnehmen.</Text>
             <View style={styles.shopHeroFactRow}>
               <View style={styles.shopHeroFactPill}>
                 <Text style={styles.shopHeroFactText}>Später zahlen</Text>
