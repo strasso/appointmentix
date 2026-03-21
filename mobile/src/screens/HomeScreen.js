@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import TopHeader from '../components/TopHeader';
@@ -11,8 +11,6 @@ export default function HomeScreen({
   cartCount,
   onSearchPress,
   onCartPress,
-  liquidShineAnim,
-  floatingAuraAnim,
   activeMembershipName,
   onViewOffers,
   homeArticles,
@@ -40,47 +38,9 @@ export default function HomeScreen({
       />
 
       <View style={styles.heroCard}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.heroLiquidShine,
-            {
-              transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-            },
-          ]}
-        />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.heroAeroCluster,
-            {
-              transform: [
-                {
-                  translateY: floatingAuraAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -14],
-                  }),
-                },
-                {
-                  translateX: floatingAuraAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 8],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.heroAeroHalo} />
-          <View style={styles.heroAeroCore} />
-          <View style={styles.heroAeroRing} />
-          <View style={styles.heroAeroDot} />
-        </Animated.View>
-        <View pointerEvents="none" style={styles.heroGlossArc} />
-        <View pointerEvents="none" style={styles.heroGlassPill} />
-        <View pointerEvents="none" style={styles.heroPearl} />
-        <View pointerEvents="none" style={styles.heroGlowPrimary} />
-        <View pointerEvents="none" style={styles.heroGlowSecondary} />
+        <View pointerEvents="none" style={styles.surfaceRim} />
+        <View pointerEvents="none" style={styles.heroPanelGloss} />
+        <View pointerEvents="none" style={styles.heroCornerPlate} />
         <View style={styles.heroTopRow}>
           <View style={styles.heroLabelChip}>
             <Text style={styles.heroLabelChipText}>PERSÖNLICHER MODUS</Text>
@@ -94,17 +54,18 @@ export default function HomeScreen({
         <Text style={styles.heroBody}>
           Behandlungen, Vorteile, Mitgliedschaft und Kontakt bleiben übersichtlich an einem Ort.
         </Text>
-        <View style={styles.heroStatsRow}>
-          <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatValue}>{activeMembershipName}</Text>
-            <Text style={styles.heroStatLabel}>Aktiver Zugang</Text>
+        <View style={styles.heroSummaryRow}>
+          <View style={styles.heroSummaryBlock}>
+            <Text style={styles.heroSummaryValue}>{activeMembershipName}</Text>
+            <Text style={styles.heroSummaryLabel}>Aktiver Zugang</Text>
           </View>
-          <View style={styles.heroStatCard}>
-            <Text style={styles.heroStatValue}>Vorteile</Text>
-            <Text style={styles.heroStatLabel}>Punkte & Vorteile</Text>
+          <View style={styles.heroSummaryDivider} />
+          <View style={styles.heroSummaryBlock}>
+            <Text style={styles.heroSummaryValue}>Vorteile</Text>
+            <Text style={styles.heroSummaryLabel}>Wallet & Punkte</Text>
           </View>
         </View>
-        <Pressable style={styles.heroCta} onPress={onViewOffers}>
+        <Pressable style={({ pressed }) => [styles.heroCta, pressed && styles.tapScaleSoft]} onPress={onViewOffers}>
           <Text style={styles.heroCtaText}>Zum Überblick</Text>
         </Pressable>
       </View>

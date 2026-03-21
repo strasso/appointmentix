@@ -4,6 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import TopHeader from '../components/TopHeader';
 import ShopTabButton from '../components/ShopTabButton';
 import TreatmentCard from '../components/TreatmentCard';
+import FaceContourIcon from '../components/FaceContourIcon';
+import HairFollicleIcon from '../components/HairFollicleIcon';
+import InjectableIcon from '../components/InjectableIcon';
 import { THEME } from '../theme/tokens';
 
 export default function ShopScreen({
@@ -137,22 +140,33 @@ export default function ShopScreen({
             {treatmentCategories.map((cat) => (
               <Pressable
                 key={cat.id}
-                style={[styles.categoryTile, categoryId === cat.id && styles.categoryTileActive]}
+                style={({ pressed }) => [
+                  styles.categoryTile,
+                  categoryId === cat.id && styles.categoryTileActive,
+                  pressed && styles.categoryTilePressed,
+                ]}
                 onPress={() => setCategoryId(cat.id)}
               >
                 <View pointerEvents="none" style={styles.categoryTileGloss} />
-                {categoryId === cat.id && <View pointerEvents="none" style={styles.categoryTileGlow} />}
                 <View
                   style={[
                     styles.categoryTileIconWrap,
                     categoryId === cat.id && styles.categoryTileIconWrapActive,
                   ]}
                 >
-                  <Ionicons
-                    name={categoryIconName(cat.id)}
-                    size={20}
-                    color={categoryId === cat.id ? THEME.ink : THEME.muted}
-                  />
+                  {String(cat.id || '').toLowerCase() === 'gesicht' ? (
+                    <FaceContourIcon active={categoryId === cat.id} />
+                  ) : String(cat.id || '').toLowerCase() === 'haare' ? (
+                    <HairFollicleIcon active={categoryId === cat.id} />
+                  ) : String(cat.id || '').toLowerCase() === 'injectables' ? (
+                    <InjectableIcon active={categoryId === cat.id} />
+                  ) : (
+                    <Ionicons
+                      name={categoryIconName(cat.id)}
+                      size={23}
+                      color={categoryId === cat.id ? THEME.ink : THEME.muted}
+                    />
+                  )}
                 </View>
                 <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
                   {cat.label}

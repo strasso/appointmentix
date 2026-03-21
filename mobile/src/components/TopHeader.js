@@ -38,7 +38,7 @@ export default function TopHeader({
             <Text style={styles.headerAvatarText}>{safeClinicShortName.slice(0, 1)}</Text>
           </View>
           <View style={styles.headerTitleStack}>
-          <Text style={styles.headerTitle}>{title}</Text>
+            <Text style={styles.headerTitle}>{title}</Text>
             <View style={styles.headerMetaRow}>
               <Text style={styles.headerClinic}>{clinicShortName || 'APP'}</Text>
               <Text style={styles.headerSubline}>{subtitle || 'Klinikmodus aktiv'}</Text>
