@@ -578,6 +578,17 @@ function absolutizeMediaUrl(baseUrl, rawUrl) {
   return `${safeBase}/${value}`;
 }
 
+function normalizeHomeArticles(baseUrl, articles) {
+  const safeList = Array.isArray(articles) ? articles : [];
+  return safeList.map((article) => ({
+    ...article,
+    imageUrl: absolutizeMediaUrl(baseUrl, article?.imageUrl),
+    heroImageUrl: absolutizeMediaUrl(baseUrl, article?.heroImageUrl),
+    coverImageUrl: absolutizeMediaUrl(baseUrl, article?.coverImageUrl),
+    thumbnailUrl: absolutizeMediaUrl(baseUrl, article?.thumbnailUrl),
+  }));
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1094,6 +1105,7 @@ export default function App() {
   const [rewardsView, setRewardsView] = useState('active');
   const [categoryId, setCategoryId] = useState('gesicht');
   const [selectedTreatment, setSelectedTreatment] = useState(null);
+  const [selectedHomeArticle, setSelectedHomeArticle] = useState(null);
   const [units, setUnits] = useState(1);
 
   const [clinicProfile, setClinicProfile] = useState(CLINIC);
@@ -1156,6 +1168,7 @@ export default function App() {
   const liquidShineAnim = useRef(new Animated.Value(-220)).current;
   const floatingAuraAnim = useRef(new Animated.Value(0)).current;
   const clinicSearchRequestRef = useRef(0);
+  const mainScrollRef = useRef(null);
   const appSessionId = useMemo(
     () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     []
@@ -1466,6 +1479,7 @@ export default function App() {
     if (!result) return;
 
     if (result.type === 'treatment' && result.payload) {
+      mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
       setShopTab('browse');
       setSelectedTreatment(result.payload);
       switchMainTab('shop');
@@ -1474,6 +1488,7 @@ export default function App() {
     }
 
     if (result.type === 'membership') {
+      mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
       setShopTab('membership');
       switchMainTab('shop');
       closeHeaderSearch();
@@ -1481,6 +1496,8 @@ export default function App() {
     }
 
     if (result.type === 'article') {
+      mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+      setSelectedHomeArticle(result.payload || null);
       switchMainTab('home');
       closeHeaderSearch();
       return;
@@ -1488,6 +1505,7 @@ export default function App() {
   }
 
   function openTreatment(treatment) {
+    mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
     setSelectedTreatment(treatment);
     track(`Angebot geöffnet: ${treatment.name}`, 'offer_view', {
       treatmentId: treatment.id,
@@ -1549,7 +1567,7 @@ export default function App() {
     const nextMemberships = Array.isArray(catalog.memberships) ? catalog.memberships : [];
     const nextRewardActions = Array.isArray(catalog.rewardActions) ? catalog.rewardActions : [];
     const nextRewardRedeems = Array.isArray(catalog.rewardRedeems) ? catalog.rewardRedeems : [];
-    const nextHomeArticles = Array.isArray(catalog.homeArticles) ? catalog.homeArticles : [];
+    const nextHomeArticles = normalizeHomeArticles(normalized, catalog.homeArticles);
 
     setTreatmentCategories(nextCategories);
     setCategoryId(nextCategories[0]?.id || 'gesicht');
@@ -1576,7 +1594,8 @@ export default function App() {
 
     setRewardActions(nextRewardActions);
     setRewardRedeems(nextRewardRedeems);
-    setHomeArticles(nextHomeArticles);
+    setHomeArticles(nextHomeArticles.length > 0 ? nextHomeArticles : HOME_ARTICLES);
+    setSelectedHomeArticle(null);
 
     if (clinic && typeof clinic === 'object') {
       setClinicProfile({
@@ -2976,6 +2995,20 @@ function continueToAccessStep() {
     openTreatment(treatment);
   };
 
+  const handleOpenHomeArticle = (article) => {
+    if (!article) return;
+    mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+    setSelectedHomeArticle(article);
+    switchMainTab('home');
+    track(`Artikel geöffnet: ${article.title || 'Beitrag'}`, 'article_open', {
+      articleId: article.id || '',
+    });
+  };
+
+  const handleCloseHomeArticle = () => {
+    setSelectedHomeArticle(null);
+  };
+
   const handleOpenShopBrowse = () => {
     setShopTab('browse');
     switchMainTab('shop');
@@ -3017,6 +3050,9 @@ function continueToAccessStep() {
             openTreatmentFromHome={handleOpenHomeTreatment}
             openMembershipTab={handleOpenMembershipTab}
             formatPrice={formatPrice}
+            selectedArticle={selectedHomeArticle}
+            openArticle={handleOpenHomeArticle}
+            closeArticle={handleCloseHomeArticle}
           />
         );
       case 'shop':
@@ -3235,7 +3271,7 @@ function continueToAccessStep() {
             },
           ]}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView ref={mainScrollRef} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {renderMainTabScreen()}
             {!!lastAction && (
               <View style={styles.lastActionBox}>
@@ -3278,7 +3314,9 @@ function continueToAccessStep() {
           />
         )}
 
-        <BottomNavigation styles={styles} mowgliTheme={mowgliTheme} mainTab={mainTab} switchMainTab={switchMainTab} />
+        {!(mainTab === 'home' && selectedHomeArticle) && !(mainTab === 'shop' && selectedTreatment) && (
+          <BottomNavigation styles={styles} mowgliTheme={mowgliTheme} mainTab={mainTab} switchMainTab={switchMainTab} />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -4167,6 +4205,149 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -1 }],
     opacity: 0.96,
   },
+  mowgliHeaderMinimal: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+    paddingTop: 2,
+    paddingBottom: 8,
+  },
+  mowgliHeaderMinimalCopy: {
+    flex: 1,
+    paddingRight: 12,
+    gap: 4,
+  },
+  mowgliHeaderSmallLabel: {
+    color: '#8F8579',
+    fontSize: 11,
+    lineHeight: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliHeaderClinicName: {
+    color: '#F2ECE3',
+    fontSize: 26,
+    lineHeight: 30,
+    letterSpacing: -0.5,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliWelcomeBlock: {
+    gap: 6,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  mowgliWelcomeTitle: {
+    color: '#F2ECE3',
+    fontSize: 34,
+    lineHeight: 37,
+    letterSpacing: -1,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliWelcomeBody: {
+    color: '#A59A8E',
+    fontSize: 14,
+    lineHeight: 22,
+    maxWidth: 520,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliClinicHeroCard: {
+    position: 'relative',
+    overflow: 'hidden',
+    height: 246,
+    borderRadius: 24,
+    borderWidth: 1,
+    marginBottom: 18,
+  },
+  mowgliClinicHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliClinicHeroFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliClinicHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliClinicHeroContent: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 18,
+    gap: 5,
+  },
+  mowgliClinicHeroTitle: {
+    color: '#F2ECE3',
+    fontSize: 30,
+    lineHeight: 33,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliClinicHeroBody: {
+    color: '#A59A8E',
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: 420,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverviewRail: {
+    gap: 12,
+    marginBottom: 10,
+  },
+  mowgliOverviewCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  mowgliOverviewCardRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mowgliOverviewCardCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mowgliOverviewCardTitle: {
+    color: '#F2ECE3',
+    fontSize: 20,
+    lineHeight: 24,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliOverviewCardBody: {
+    color: '#A59A8E',
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverviewCardIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   mowgliHeroCard: {
     position: 'relative',
     overflow: 'hidden',
@@ -4435,11 +4616,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: '#121214',
-    borderRadius: 26,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.14)',
-    padding: 18,
-    minHeight: 184,
+    padding: 0,
+    minHeight: 214,
   },
   mowgliArticleFeaturedGlow: {
     position: 'absolute',
@@ -4450,31 +4631,56 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(200,169,126,0.08)',
   },
+  mowgliArticleFeaturedImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliArticleFeaturedFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliArticleFeaturedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliArticleFeaturedContent: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 18,
+    gap: 4,
+  },
   mowgliArticleList: {
-    gap: 12,
+    gap: 10,
   },
   mowgliArticleRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
     padding: 14,
-    borderRadius: 22,
+    borderRadius: 18,
     backgroundColor: '#151518',
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.10)',
   },
   mowgliArticleThumb: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 78,
+    height: 78,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#101013',
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.12)',
   },
+  mowgliArticleRowImage: {
+    width: 78,
+    height: 78,
+    borderRadius: 18,
+    backgroundColor: '#101013',
+  },
   mowgliArticleCopy: {
     flex: 1,
-    gap: 4,
+    gap: 5,
   },
   mowgliArticleTag: {
     color: '#C8A97E',
@@ -4486,10 +4692,10 @@ const styles = StyleSheet.create({
   },
   mowgliArticleFeaturedTitle: {
     color: '#F2ECE3',
-    fontSize: 25,
-    lineHeight: 28,
-    marginTop: 10,
-    marginBottom: 8,
+    fontSize: 27,
+    lineHeight: 30,
+    marginTop: 6,
+    marginBottom: 6,
     fontFamily: Platform.select({
       ios: 'Georgia',
       android: 'serif',
@@ -4505,13 +4711,94 @@ const styles = StyleSheet.create({
   },
   mowgliArticleTitle: {
     color: '#F2ECE3',
-    fontSize: 15,
-    lineHeight: 18,
+    fontSize: 16,
+    lineHeight: 20,
     fontWeight: '700',
     fontFamily: UI_FONT_FAMILY,
   },
   mowgliArticleBody: {
     color: '#8F8579',
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliArticleDetailStage: {
+    gap: 0,
+  },
+  mowgliArticleDetailHero: {
+    position: 'relative',
+    height: 318,
+    marginHorizontal: -24,
+    marginTop: -12,
+    overflow: 'hidden',
+  },
+  mowgliArticleDetailHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliArticleDetailHeroFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliArticleDetailHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliArticleDetailNavRow: {
+    position: 'absolute',
+    top: 22,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mowgliArticleDetailContent: {
+    gap: 10,
+    marginTop: -26,
+    paddingTop: 22,
+    paddingHorizontal: 2,
+    paddingBottom: 20,
+  },
+  mowgliArticleDetailTitle: {
+    color: '#F2ECE3',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -1,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliArticleDetailMeta: {
+    color: '#8F8579',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliArticleDetailBodyWrap: {
+    gap: 12,
+    marginTop: 6,
+  },
+  mowgliArticleDetailBody: {
+    color: '#A59A8E',
+    fontSize: 15,
+    lineHeight: 25,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliArticleDetailNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  mowgliArticleDetailNoteText: {
+    flex: 1,
+    color: '#A59A8E',
     fontSize: 12,
     lineHeight: 18,
     fontFamily: UI_FONT_FAMILY,
@@ -4655,7 +4942,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 999,
+    borderRadius: 18,
     backgroundColor: '#151518',
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.10)',
@@ -4665,9 +4952,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.12)',
   },
   mowgliCategoryIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#101013',
@@ -4696,7 +4983,7 @@ const styles = StyleSheet.create({
   mowgliProductCard: {
     width: '48.2%',
     backgroundColor: '#151518',
-    borderRadius: 24,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.10)',
     overflow: 'hidden',
@@ -5152,7 +5439,7 @@ const styles = StyleSheet.create({
   },
   mowgliFeaturedHero: {
     height: 220,
-    borderRadius: 18,
+    borderRadius: 24,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -5217,8 +5504,8 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   mowgliPopularCard: {
-    width: 164,
-    borderRadius: 16,
+    width: 174,
+    borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
   },

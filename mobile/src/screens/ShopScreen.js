@@ -172,17 +172,16 @@ export default function ShopScreen({
     secondaryButtonBorder: 'rgba(200,169,126,0.16)',
   };
   const membershipTabLabel = shopMembershipTabLabel === 'Membership' ? 'Mitgliedschaft' : shopMembershipTabLabel;
+  const displayName = String(clinicProfile.name || 'Deine Klinik').trim();
 
   return (
     <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
-      <View style={[styles.mowgliHeader, { backgroundColor: theme.header, borderColor: theme.border }]}>
-        <View style={styles.mowgliHeaderCopy}>
-          <View style={styles.mowgliHeaderBrandRow}>
-            <Ionicons name="sparkles-outline" size={15} color={theme.accent} />
-            <Text style={[styles.mowgliHeaderBrandText, { color: theme.accent }]}>Curabo Shop</Text>
-          </View>
-          <Text style={[styles.mowgliHeaderTitle, { color: theme.text }]}>Shop</Text>
-          <Text style={[styles.mowgliHeaderSubtitle, { color: theme.textMuted }]}>{clinicProfile.name || 'Treatments, Mitgliedschaften und Checkout'}</Text>
+      <View style={styles.mowgliHeaderMinimal}>
+        <View style={styles.mowgliHeaderMinimalCopy}>
+          <Text style={[styles.mowgliHeaderSmallLabel, { color: theme.textMuted }]}>Shop</Text>
+          <Text style={[styles.mowgliHeaderClinicName, { color: theme.text }]} numberOfLines={2}>
+            {displayName}
+          </Text>
         </View>
         <View style={styles.mowgliHeaderActions}>
           <HeaderAction styles={styles} theme={theme} icon="search-outline" onPress={onSearchPress} />
@@ -198,22 +197,11 @@ export default function ShopScreen({
 
       {shopTab === 'browse' && !selectedTreatment && (
         <View style={styles.mowgliShopSection}>
-          <View style={[styles.mowgliHeroCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-            <View pointerEvents="none" style={[styles.mowgliHeroGlow, { backgroundColor: theme.heroGlow }]} />
-            <View pointerEvents="none" style={[styles.mowgliHeroShimmer, { backgroundColor: theme.borderStrong }]} />
-            <View style={styles.mowgliHeroTopRow}>
-              <View style={[styles.mowgliHeroChip, { backgroundColor: theme.chipBg, borderColor: theme.border }]}>
-                <Text style={[styles.mowgliHeroChipText, { color: theme.accent }]}>{clinicProfile.shortName || 'APP'}</Text>
-              </View>
-              <View style={[styles.mowgliHeroStatus, { backgroundColor: theme.chipBg, borderColor: theme.border }]}>
-                <Ionicons name="bag-check-outline" size={13} color={theme.accent} />
-                <Text style={[styles.mowgliHeroStatusText, { color: theme.chipText }]}>Kuratierter Shop</Text>
-              </View>
-            </View>
-            <Text style={[styles.mowgliHeroEyebrow, { color: theme.textMuted }]}>Behandlungen & Pakete</Text>
-            <Text style={[styles.mowgliHeroTitle, { color: theme.text }]}>Dein Einstieg in Treatments, Mitgliedschaften und Vorteile.</Text>
-            <Text style={[styles.mowgliHeroBody, { color: theme.textSoft }]}>
-              Die wichtigsten Leistungen deiner Klinik bleiben sortiert, ruhig und kaufbar, ohne wie ein überladener Katalog zu wirken.
+          <View style={styles.mowgliSectionHead}>
+            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Treatments & Vorteile</Text>
+            <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Wähle, was zu dir passt.</Text>
+            <Text style={[styles.mowgliShopLead, { color: theme.textMuted }]}>
+              Filtere nach Bereichen und öffne einzelne Treatments in einer ruhigeren, detailreichen Ansicht.
             </Text>
           </View>
 
