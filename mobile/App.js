@@ -1304,6 +1304,15 @@ export default function App() {
     analyticsBaseUrl,
   ]);
 
+  const selectedClinicPreview = useMemo(() => {
+    const selectedName = String(clinicLookupName || clinicSearchQuery || '').trim().toLowerCase();
+    if (!selectedName) return null;
+    return (
+      clinicSuggestionResults.find((entry) => String(entry?.name || '').trim().toLowerCase() === selectedName)
+      || null
+    );
+  }, [clinicSuggestionResults, clinicLookupName, clinicSearchQuery]);
+
   const selectedCategory = useMemo(() => {
     return (
       treatmentCategories.find((item) => String(item.id || '') === String(categoryId || ''))
@@ -1598,10 +1607,11 @@ export default function App() {
     setSelectedHomeArticle(null);
 
     if (clinic && typeof clinic === 'object') {
-      setClinicProfile({
+      setClinicProfile((prev) => ({
         ...CLINIC,
+        ...prev,
         ...clinic,
-      });
+      }));
       if (clinic.name) {
         setClinicLookupName(clinic.name);
         setClinicSearchQuery(clinic.name);
@@ -1907,6 +1917,15 @@ function selectClinicFromSearch(clinic) {
   setClinicLookupName(name);
   setClinicLookupId(String(clinic?.id ?? '').trim());
   setClinicSearchQuery(name);
+  setClinicProfile((prev) => ({
+    ...prev,
+    name,
+    city: clinic?.city || prev?.city || '',
+    website: clinic?.website || prev?.website || '',
+    logoUrl: clinic?.logoUrl || prev?.logoUrl || '',
+    brandColor: clinic?.brandColor || prev?.brandColor || '',
+    accentColor: clinic?.accentColor || prev?.accentColor || '',
+  }));
   setClinicDropdownOpen(false);
   setBackendCheckMessage('');
   setOtpUiMessage('');
@@ -2941,6 +2960,20 @@ function continueToAccessStep() {
     }),
     [uiAppearance, clinicProfile?.brandColor, clinicProfile?.accentColor]
   );
+  const onboardingMowgliTheme = useMemo(
+    () => createMowgliTheme({
+      mode: uiAppearance,
+      brandColor: selectedClinicPreview?.brandColor || clinicProfile?.brandColor,
+      accentColor: selectedClinicPreview?.accentColor || clinicProfile?.accentColor,
+    }),
+    [
+      uiAppearance,
+      selectedClinicPreview?.brandColor,
+      selectedClinicPreview?.accentColor,
+      clinicProfile?.brandColor,
+      clinicProfile?.accentColor,
+    ]
+  );
   const cartCount = cartItems.length;
 
   const handleClinicSearchChange = (value) => {
@@ -3199,7 +3232,7 @@ function continueToAccessStep() {
     return (
       <OnboardingScreen
         styles={styles}
-        mowgliTheme={mowgliTheme}
+        mowgliTheme={onboardingMowgliTheme}
         liquidShineAnim={liquidShineAnim}
         onboardingStep={onboardingStep}
         showTechnicalSetup={showTechnicalSetup}
@@ -3848,6 +3881,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     fontFamily: UI_FONT_FAMILY,
+  },
+  onboardingClinicSwatch: {
+    width: 16,
+    height: 16,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   onboardingEmptyState: {
     flexDirection: 'row',

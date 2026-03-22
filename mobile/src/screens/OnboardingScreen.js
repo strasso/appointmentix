@@ -59,6 +59,7 @@ function ActionButton({ styles, theme, label, onPress, disabled, variant = 'prim
 function ClinicResultCard({ styles, theme, clinic, isSelected, onPress, isLast }) {
   const clinicName = String(clinic?.name || '').trim() || 'MedSpa';
   const clinicMeta = [clinic?.city, clinic?.website].filter(Boolean).join(' • ') || 'Klinikprofil';
+  const clinicAccent = String(clinic?.accentColor || clinic?.brandColor || theme.accent).trim() || theme.accent;
 
   return (
     <Pressable
@@ -74,18 +75,18 @@ function ClinicResultCard({ styles, theme, clinic, isSelected, onPress, isLast }
       ]}
       onPress={onPress}
     >
-      <View style={[styles.onboardingClinicLogo, { backgroundColor: theme.input, borderColor: theme.border }]}>
+      <View style={[styles.onboardingClinicLogo, { backgroundColor: theme.input, borderColor: isSelected ? theme.borderStrong : theme.border }]}>
         <Ionicons
           name={isSelected ? 'checkmark-circle' : 'business-outline'}
           size={18}
-          color={theme.accent}
+          color={isSelected ? theme.accent : clinicAccent}
         />
       </View>
       <View style={styles.onboardingClinicText}>
         <Text style={[styles.onboardingClinicName, { color: theme.text }]}>{clinicName}</Text>
         <Text style={[styles.onboardingClinicMeta, { color: theme.textMuted }]}>{clinicMeta}</Text>
       </View>
-      <Text style={[styles.onboardingClinicAction, { color: theme.accent }]}>{isSelected ? 'Aktiv' : 'Wählen'}</Text>
+      <View style={[styles.onboardingClinicSwatch, { backgroundColor: clinicAccent, borderColor: isSelected ? theme.borderStrong : theme.border }]} />
     </Pressable>
   );
 }
@@ -199,32 +200,27 @@ export default function OnboardingScreen({
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.onboardingStageHeader}>
-            <View style={styles.onboardingBrandRow}>
-              <View style={styles.onboardingBrandMark}>
-                <View style={styles.onboardingBrandCore} />
-              </View>
-              <View style={styles.onboardingBrandTextWrap}>
-                <Text style={[styles.onboardingBrandText, { color: theme.accent }]}>CURABO</Text>
-                <Text style={[styles.onboardingBrandSubtext, { color: theme.textMuted }]}>Patient Experience Platform</Text>
-              </View>
-              <View style={[styles.onboardingStepBadge, { borderColor: theme.border, backgroundColor: theme.chipBg }]}>
-                <Text style={[styles.onboardingStepBadgeText, { color: theme.accent }]}>
-                  {onboardingStep === 'clinic' ? 'Schritt 1' : 'Schritt 2'}
-                </Text>
-              </View>
+            <View style={[styles.onboardingBrandRow, { justifyContent: 'center', marginBottom: 18 }]}>
+              <Ionicons name="sparkles-outline" size={16} color={theme.accent} />
+              <Text style={[styles.onboardingBrandText, { color: theme.accent }]}>CURABO</Text>
             </View>
 
-            <Text style={[styles.onboardingStageEyebrow, { color: theme.accent }]}>
+            <Text style={[styles.onboardingStageEyebrow, { color: theme.accent, textAlign: 'center' }]}>
               {onboardingStep === 'clinic' ? 'Klinik auswählen' : 'Zugang bestätigen'}
             </Text>
-            <Text style={[styles.onboardingStageTitle, { color: theme.text }]}>
-              {onboardingStep === 'clinic' ? 'Willkommen bei Curabo' : (selectedClinicName || 'Klinikzugang')}
+            <Text style={[styles.onboardingStageTitle, { color: theme.text, textAlign: 'center' }]}>
+              {onboardingStep === 'clinic' ? 'Willkommen' : (selectedClinicName || 'Klinikzugang')}
             </Text>
-            <Text style={[styles.onboardingStageBody, { color: theme.textSoft }]}>
+            <Text style={[styles.onboardingStageBody, { color: theme.textSoft, textAlign: 'center', alignSelf: 'center' }]}>
               {onboardingStep === 'clinic'
-                ? 'Suche deine Klinik nach Name oder Stadt, wähle sie aus und gehe anschließend direkt in deinen persönlichen Curabo-Bereich.'
-                : 'Bestätige deine Telefonnummer per SMS oder fahre als Gast fort. Deine Klinik, Treatments und Vorteile bleiben danach direkt verfügbar.'}
+                ? 'Wähle deine Klinik aus und starte in eine ruhige, klinikspezifische Experience mit eigenem Branding, Treatments und Wissen.'
+                : 'Bestätige deine Telefonnummer per SMS oder fahre als Gast fort. Danach öffnet sich direkt dein persönlicher Klinikbereich.'}
             </Text>
+            <View style={[styles.onboardingStepBadge, { borderColor: theme.border, backgroundColor: theme.chipBg, alignSelf: 'center', marginTop: 18 }]}>
+              <Text style={[styles.onboardingStepBadgeText, { color: theme.accent }]}>
+                {onboardingStep === 'clinic' ? 'Schritt 1 von 2' : 'Schritt 2 von 2'}
+              </Text>
+            </View>
           </View>
 
           <View style={[styles.onboardingPanelDark, { backgroundColor: theme.shell, borderColor: theme.border }]}>
@@ -354,7 +350,7 @@ export default function OnboardingScreen({
                   </View>
                 )}
 
-                <View style={[styles.onboardingDivider, { backgroundColor: theme.border }]} />
+                <View style={[styles.onboardingDivider, { backgroundColor: theme.border, marginVertical: 8 }]} />
 
                 <Text style={[styles.onboardingFieldLabel, { color: theme.accent }]}>QR- oder Referral-Code</Text>
                 <View style={[styles.onboardingInputShell, { backgroundColor: theme.input, borderColor: theme.border }]}>
@@ -404,21 +400,17 @@ export default function OnboardingScreen({
 
             {onboardingStep === 'access' && (
               <View style={styles.onboardingSection}>
-                <View style={styles.onboardingSectionHead}>
-                  <Text style={[styles.onboardingSectionEyebrow, { color: theme.textMuted }]}>Schritt 2</Text>
-                  <Text style={[styles.onboardingSectionTitle, { color: theme.text }]}>Zugang zur Klinik</Text>
-                </View>
-
-                <View style={[styles.onboardingSelectedClinicBanner, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
-                  <View style={[styles.onboardingSelectedClinicIcon, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                <View style={[styles.onboardingSectionHead, { alignItems: 'center', marginBottom: 6 }]}>
+                  <View style={[styles.onboardingSelectedClinicIcon, { backgroundColor: theme.input, borderColor: theme.border, width: 58, height: 58, borderRadius: 29, marginBottom: 12 }]}>
                     <Ionicons name="business-outline" size={18} color={theme.accent} />
                   </View>
-                  <View style={styles.onboardingSelectedClinicText}>
-                    <Text style={[styles.onboardingSelectedClinicLabel, { color: theme.textMuted }]}>Verbunden mit</Text>
-                    <Text style={[styles.onboardingSelectedClinicName, { color: theme.text }]}>
-                      {selectedClinicName || 'Deiner Klinik'}
-                    </Text>
-                  </View>
+                  <Text style={[styles.onboardingSectionEyebrow, { color: theme.textMuted, marginBottom: 4 }]}>Verbunden mit</Text>
+                  <Text style={[styles.onboardingSectionTitle, { color: theme.text, textAlign: 'center' }]}>
+                    {selectedClinicName || 'Deiner Klinik'}
+                  </Text>
+                  <Text style={[styles.onboardingStageBody, { color: theme.textSoft, textAlign: 'center', fontSize: 13, lineHeight: 20 }]}>
+                    Bestätige jetzt deine Nummer, damit Memberships, Rewards und persönliche Inhalte freigeschaltet werden.
+                  </Text>
                 </View>
 
                 <Text style={[styles.onboardingFieldLabel, { color: theme.accent }]}>Telefonnummer</Text>
