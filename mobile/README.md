@@ -129,3 +129,21 @@ Die vorherige Admin-Mobile-App wurde gesichert als:
 - `AppAdminLegacy.js`
 
 Falls du sie wieder brauchst, kann ich sie in ein separates Projekt (`mobile-admin/`) auslagern.
+
+## Mowgli UI Referenz
+
+Ein exportierter Mowgli-Designstand liegt im Repo unter:
+
+- [mobile/_mowgli_export](/Users/valentinstrasser/Documents/New project/mobile/_mowgli_export)
+
+Dieser Export ist aktuell die visuelle Referenz fuer den moeglichen naechsten grossen Mobile-Redesign-Pass.
+Er ist nicht direkt die produktive App, sondern ein UI-Referenzpaket mit mehreren zusaetzlichen Screens und Flows.
+
+Die offizielle Zuordnung zwischen Mowgli-UI und der echten Curabo-App liegt hier:
+
+- [mobile/MOWGLI_UI_ADOPTION.md](/Users/valentinstrasser/Documents/New project/mobile/MOWGLI_UI_ADOPTION.md)
+
+Wichtig:
+- Curabo-Logik, APIs und Datenfluss bleiben Source of Truth
+- Mowgli dient als neue UI-Basis
+- Adoption erfolgt schrittweise, nicht als blindes Ersetzen der App

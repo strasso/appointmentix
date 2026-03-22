@@ -1,13 +1,89 @@
 import React from 'react';
-import { Animated, Image, Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import TopHeader from '../components/TopHeader';
-import ShopTabButton from '../components/ShopTabButton';
-import TreatmentCard from '../components/TreatmentCard';
 import FaceContourIcon from '../components/FaceContourIcon';
 import HairFollicleIcon from '../components/HairFollicleIcon';
 import InjectableIcon from '../components/InjectableIcon';
-import { THEME } from '../theme/tokens';
+
+function HeaderAction({ styles, icon, onPress, badge = false }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.mowgliHeaderAction, pressed && styles.mowgliLiftSoft]} onPress={onPress}>
+      <Ionicons name={icon} size={21} color="#F2ECE3" />
+      {badge && <View style={styles.mowgliHeaderActionDot} />}
+    </Pressable>
+  );
+}
+
+function ShopTab({ styles, label, active, onPress }) {
+  return (
+    <Pressable style={({ pressed }) => [
+      styles.mowgliShopTab,
+      active && styles.mowgliShopTabActive,
+      pressed && !active && styles.mowgliLiftSoft,
+    ]} onPress={onPress}>
+      <Text style={[styles.mowgliShopTabText, active && styles.mowgliShopTabTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function CategoryIcon({ catId, active }) {
+  const normalized = String(catId || '').toLowerCase();
+  if (normalized === 'gesicht') return <FaceContourIcon active={active} />;
+  if (normalized === 'haare') return <HairFollicleIcon active={active} />;
+  if (normalized === 'injectables') return <InjectableIcon active={active} />;
+  return null;
+}
+
+function CategoryPill({ styles, cat, active, onPress, categoryIconName }) {
+  const fallbackIcon = categoryIconName(cat.id);
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.mowgliCategoryPill,
+        active && styles.mowgliCategoryPillActive,
+        pressed && styles.mowgliLiftSoft,
+      ]}
+      onPress={onPress}
+    >
+      <View style={[styles.mowgliCategoryIconWrap, active && styles.mowgliCategoryIconWrapActive]}>
+        <CategoryIcon catId={cat.id} active={active} />
+        {!['gesicht', 'haare', 'injectables'].includes(String(cat.id || '').toLowerCase()) && (
+          <Ionicons
+            name={fallbackIcon}
+            size={17}
+            color={active ? '#0A0A0C' : '#C8A97E'}
+          />
+        )}
+      </View>
+      <Text style={[styles.mowgliCategoryPillText, active && styles.mowgliCategoryPillTextActive]}>
+        {cat.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function ProductCard({ styles, item, onPress, formatPrice, getImageUrl }) {
+  const imageUrl = getImageUrl(item);
+  return (
+    <Pressable style={({ pressed }) => [styles.mowgliProductCard, pressed && styles.mowgliQuickActionPressed]} onPress={() => onPress(item)}>
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.mowgliProductImage} />
+      ) : (
+        <View style={styles.mowgliProductImageFallback}>
+          <Ionicons name="sparkles-outline" size={22} color="#C8A97E" />
+        </View>
+      )}
+      <View style={styles.mowgliProductBody}>
+        <View style={styles.mowgliProductMetaRow}>
+          <Text style={styles.mowgliProductMeta}>{item.durationMinutes} Min</Text>
+          <Text style={styles.mowgliProductPrice}>ab {formatPrice(item.priceCents)}</Text>
+        </View>
+        <Text style={styles.mowgliProductTitle} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.mowgliProductDescription} numberOfLines={2}>{item.description}</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function ShopScreen({
   styles,
@@ -19,7 +95,6 @@ export default function ShopScreen({
   setShopTab,
   shopMembershipTabLabel,
   selectedTreatment,
-  liquidShineAnim,
   treatmentCategories,
   categoryId,
   setCategoryId,
@@ -53,363 +128,235 @@ export default function ShopScreen({
   checkoutCtaLabel,
   openMembershipTreatment,
 }) {
-  return (
-    <View>
-      <TopHeader
-        styles={styles}
-        title="Shop"
-        sectionLabel="Behandlungen & Pakete"
-        subtitle="Buchen und vergleichen"
-        clinicShortName={clinicProfile.shortName}
-        clinicName={clinicProfile.name}
-        onSearchPress={onSearchPress}
-        onCartPress={onCartPress}
-        cartCount={cartCount}
-      />
+  const membershipTabLabel = shopMembershipTabLabel === 'Membership' ? 'Mitgliedschaft' : shopMembershipTabLabel;
 
-      <View style={styles.shopTabsRow}>
-        <ShopTabButton styles={styles} label="Entdecken" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
-        <ShopTabButton
-          styles={styles}
-          label={shopMembershipTabLabel === 'Membership' ? 'Mitgliedschaft' : shopMembershipTabLabel}
-          active={shopTab === 'membership'}
-          onPress={() => setShopTab('membership')}
-        />
-        <ShopTabButton
-          styles={styles}
-          label="Katalog"
-          active={shopTab === 'treatments'}
-          onPress={() => setShopTab('treatments')}
-        />
+  return (
+    <View style={styles.mowgliScreenShell}>
+      <View style={styles.mowgliHeader}>
+        <View style={styles.mowgliHeaderCopy}>
+          <View style={styles.mowgliHeaderBrandRow}>
+            <Ionicons name="sparkles-outline" size={15} color="#C8A97E" />
+            <Text style={styles.mowgliHeaderBrandText}>Curabo Shop</Text>
+          </View>
+          <Text style={styles.mowgliHeaderTitle}>Shop</Text>
+          <Text style={styles.mowgliHeaderSubtitle}>{clinicProfile.name || 'Treatments, Mitgliedschaften und Checkout'}</Text>
+        </View>
+        <View style={styles.mowgliHeaderActions}>
+          <HeaderAction styles={styles} icon="search-outline" onPress={onSearchPress} />
+          <HeaderAction styles={styles} icon="bag-handle-outline" onPress={onCartPress} badge={cartCount > 0} />
+        </View>
+      </View>
+
+      <View style={styles.mowgliShopTabsRow}>
+        <ShopTab styles={styles} label="Treatments" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
+        <ShopTab styles={styles} label={membershipTabLabel} active={shopTab === 'membership'} onPress={() => setShopTab('membership')} />
+        <ShopTab styles={styles} label="Katalog" active={shopTab === 'treatments'} onPress={() => setShopTab('treatments')} />
       </View>
 
       {shopTab === 'browse' && !selectedTreatment && (
-        <View>
-          <View style={styles.shopPinkHeroCard}>
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.shopPinkLiquidShine,
-                {
-                  transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                },
-              ]}
-            />
-            <View pointerEvents="none" style={styles.shopPinkHeroGloss} />
-            <View pointerEvents="none" style={styles.shopPinkHeroPearl} />
-            <View pointerEvents="none" style={styles.shopPinkHeroGlow} />
-            <View style={styles.shopHeroTopRow}>
-              <View style={styles.shopHeroBadge}>
-                <Text style={styles.shopHeroBadgeText}>{clinicProfile.shortName || 'APP'}</Text>
+        <View style={styles.mowgliShopSection}>
+          <View style={styles.mowgliHeroCard}>
+            <View pointerEvents="none" style={styles.mowgliHeroGlow} />
+            <View pointerEvents="none" style={styles.mowgliHeroShimmer} />
+            <View style={styles.mowgliHeroTopRow}>
+              <View style={styles.mowgliHeroChip}>
+                <Text style={styles.mowgliHeroChipText}>{clinicProfile.shortName || 'APP'}</Text>
               </View>
-              <View style={styles.shopHeroBadgeSoft}>
-                <Text style={styles.shopHeroBadgeSoftText}>Mit Vorteilen</Text>
+              <View style={styles.mowgliHeroStatus}>
+                <Ionicons name="bag-check-outline" size={13} color="#C8A97E" />
+                <Text style={styles.mowgliHeroStatusText}>Kuratierter Shop</Text>
               </View>
             </View>
-            <Text style={styles.shopPinkHeroTitle}>Behandlungen und Pakete auf einen Blick.</Text>
-            <Text style={styles.shopPinkHeroBody}>Schnell wählen, später zahlen und Vorteile direkt mitnehmen.</Text>
-            <View style={styles.shopHeroFactRow}>
-              <View style={styles.shopHeroFactPill}>
-                <Text style={styles.shopHeroFactText}>Später zahlen</Text>
-              </View>
-              <View style={styles.shopHeroFactPill}>
-                <Text style={styles.shopHeroFactText}>Punkte sammeln</Text>
-              </View>
-              <View style={styles.shopHeroFactPill}>
-                <Text style={styles.shopHeroFactText}>Mitgliedschaft</Text>
-              </View>
-            </View>
-            <Pressable
-              style={styles.shopPinkHeroCta}
-              onPress={() => {
-                setShopTab('membership');
-              }}
-            >
-              <Text style={styles.shopPinkHeroCtaText}>Mitgliedschaften ansehen</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionEyebrow}>KATEGORIEN</Text>
-            <Text style={styles.sectionTitle}>Finde das passende Treatment</Text>
-            <Text style={styles.sectionLead}>
-              Wähle zuerst einen Bereich, dann siehst du die passenden Optionen deiner Klinik.
+            <Text style={styles.mowgliHeroEyebrow}>Behandlungen & Pakete</Text>
+            <Text style={styles.mowgliHeroTitle}>Dein Einstieg in Treatments, Mitgliedschaften und Vorteile.</Text>
+            <Text style={styles.mowgliHeroBody}>
+              Die wichtigsten Leistungen deiner Klinik bleiben sortiert, ruhig und kaufbar, ohne wie ein überladener Katalog zu wirken.
             </Text>
           </View>
-          <View style={styles.categoryGrid}>
-            {treatmentCategories.map((cat) => (
-              <Pressable
-                key={cat.id}
-                style={({ pressed }) => [
-                  styles.categoryTile,
-                  categoryId === cat.id && styles.categoryTileActive,
-                  pressed && styles.categoryTilePressed,
-                ]}
-                onPress={() => setCategoryId(cat.id)}
-              >
-                <View pointerEvents="none" style={styles.categoryTileGloss} />
-                <View
-                  style={[
-                    styles.categoryTileIconWrap,
-                    categoryId === cat.id && styles.categoryTileIconWrapActive,
-                  ]}
-                >
-                  {String(cat.id || '').toLowerCase() === 'gesicht' ? (
-                    <FaceContourIcon active={categoryId === cat.id} />
-                  ) : String(cat.id || '').toLowerCase() === 'haare' ? (
-                    <HairFollicleIcon active={categoryId === cat.id} />
-                  ) : String(cat.id || '').toLowerCase() === 'injectables' ? (
-                    <InjectableIcon active={categoryId === cat.id} />
-                  ) : (
-                    <Ionicons
-                      name={categoryIconName(cat.id)}
-                      size={23}
-                      color={categoryId === cat.id ? THEME.ink : THEME.muted}
-                    />
-                  )}
-                </View>
-                <Text style={[styles.categoryTileText, categoryId === cat.id && styles.categoryTileTextActive]}>
-                  {cat.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
 
-          <View style={styles.sectionMetaPill}>
-            <Text style={styles.sectionMetaPillText}>{selectedCategory?.label || categoryId}</Text>
+          <View style={styles.mowgliSectionHead}>
+            <Text style={styles.mowgliSectionEyebrow}>Kategorien</Text>
+            <Text style={styles.mowgliSectionTitleSmall}>{selectedCategory?.label || 'Treatments filtern'}</Text>
           </View>
-          <Text style={styles.shopListTitle}>Behandlungen für „{selectedCategory?.label || categoryId}“</Text>
-          <Text style={styles.shopListSubtitle}>{selectedCategoryMeta.description}</Text>
-          <View style={styles.treatmentGrid}>
-            {browseItems.map((item, index) => (
-              <TreatmentCard
-                key={item.id}
+          <View style={styles.mowgliCategoryPillRow}>
+            {treatmentCategories.map((cat) => (
+              <CategoryPill
+                key={cat.id}
                 styles={styles}
-                treatment={item}
-                onPress={openTreatment}
-                getImageUrl={preferredTreatmentImage}
-                formatPrice={formatPrice}
-                featured={index === 0}
+                cat={cat}
+                active={categoryId === cat.id}
+                categoryIconName={categoryIconName}
+                onPress={() => setCategoryId(cat.id)}
               />
             ))}
           </View>
+
+          <View style={styles.mowgliSectionHeadCompact}>
+            <Text style={styles.mowgliSectionEyebrow}>Auswahl</Text>
+            <Text style={styles.mowgliSectionTitleSmall}>Für {selectedCategory?.label || categoryId}</Text>
+            <Text style={styles.mowgliShopLead}>{selectedCategoryMeta.description}</Text>
+          </View>
+
+          <View style={styles.mowgliProductGrid}>
+            {browseItems.map((item) => (
+              <ProductCard
+                key={item.id}
+                styles={styles}
+                item={item}
+                onPress={openTreatment}
+                getImageUrl={preferredTreatmentImage}
+                formatPrice={formatPrice}
+              />
+            ))}
+          </View>
+
           {browseItems.length === 0 && (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>Keine Behandlungen in dieser Kategorie</Text>
-              <Text style={styles.emptyBody}>Passe später den MedSpa-Katalog im Backend an.</Text>
+            <View style={styles.mowgliEmptyCard}>
+              <Ionicons name="search-outline" size={18} color="#8F8579" />
+              <Text style={styles.mowgliEmptyTitle}>Keine Treatments in dieser Kategorie</Text>
+              <Text style={styles.mowgliEmptyBody}>Passe später den Katalog im Backend an oder wähle eine andere Kategorie.</Text>
             </View>
           )}
         </View>
       )}
 
       {shopTab === 'browse' && selectedTreatment && (
-        <View style={styles.detailCard}>
-          <View pointerEvents="none" style={styles.cardChrome} />
-          <Pressable onPress={() => setSelectedTreatment(null)}>
-            <Text style={styles.backLink}>← Zurück</Text>
+        <View style={styles.mowgliDetailCard}>
+          <Pressable style={({ pressed }) => [styles.mowgliTextLink, pressed && styles.mowgliLiftSoft]} onPress={() => setSelectedTreatment(null)}>
+            <Text style={styles.mowgliTextLinkText}>Zurück zur Übersicht</Text>
+            <Ionicons name="arrow-back" size={13} color="#C8A97E" />
           </Pressable>
 
           {preferredTreatmentImage(selectedTreatment) ? (
-            <Image source={{ uri: preferredTreatmentImage(selectedTreatment) }} style={styles.detailImage} />
+            <Image source={{ uri: preferredTreatmentImage(selectedTreatment) }} style={styles.mowgliDetailImage} />
           ) : (
-            <View style={styles.detailImageMock} />
+            <View style={styles.mowgliDetailImageFallback}>
+              <Ionicons name="sparkles-outline" size={28} color="#C8A97E" />
+            </View>
           )}
 
           {Array.isArray(selectedTreatment.galleryUrls) && selectedTreatment.galleryUrls.length > 1 && (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.detailGalleryRow}
+              contentContainerStyle={styles.mowgliDetailGalleryRow}
             >
               {selectedTreatment.galleryUrls.slice(0, 6).map((url) => (
-                <Image key={`${selectedTreatment.id}-${url}`} source={{ uri: url }} style={styles.detailThumbImage} />
+                <Image key={`${selectedTreatment.id}-${url}`} source={{ uri: url }} style={styles.mowgliDetailThumbImage} />
               ))}
             </ScrollView>
           )}
 
-          <Text style={styles.detailTitle}>{selectedTreatment.name}</Text>
-          <Text style={styles.detailBody}>{selectedTreatment.description}</Text>
-          <Text style={styles.detailMeta}>⏱ {selectedTreatment.durationMinutes} Min / Behandlung</Text>
-          <View style={styles.detailQuoteCard}>
-            <Text style={styles.detailQuoteText}>
-              “{selectedTreatment.name} war schnell, präzise und deutlich angenehmer als erwartet.”
-            </Text>
-          </View>
+          <Text style={styles.mowgliSectionEyebrow}>Treatment</Text>
+          <Text style={styles.mowgliDetailTitle}>{selectedTreatment.name}</Text>
+          <Text style={styles.mowgliDetailBody}>{selectedTreatment.description}</Text>
+          <Text style={styles.mowgliDetailMeta}>⏱ {selectedTreatment.durationMinutes} Min pro Behandlung</Text>
 
-          <Text style={styles.sectionSubTitle}>Behandlungsplan wählen</Text>
-          <View style={styles.unitsRow}>
-            <Pressable
-              style={styles.unitsBtn}
-              onPress={() => setUnits((prev) => Math.max(1, prev - 1))}
-            >
-              <Text style={styles.unitsBtnText}>−</Text>
+          <View style={styles.mowgliUnitsRow}>
+            <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => Math.max(1, prev - 1))}>
+              <Text style={styles.mowgliUnitsButtonText}>−</Text>
             </Pressable>
-            <View style={styles.unitsValueWrap}>
-              <Text style={styles.unitsValue}>{units} Behandlung(en)</Text>
+            <View style={styles.mowgliUnitsValueWrap}>
+              <Text style={styles.mowgliUnitsValue}>{units} Behandlung(en)</Text>
             </View>
-            <Pressable style={styles.unitsBtn} onPress={() => setUnits((prev) => prev + 1)}>
-              <Text style={styles.unitsBtnText}>＋</Text>
+            <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => prev + 1)}>
+              <Text style={styles.mowgliUnitsButtonText}>＋</Text>
             </Pressable>
           </View>
 
-          <View style={styles.detailPlanSummaryRow}>
-            <Text style={styles.detailPlanSummaryMain}>
-              {formatPrice((selectedTreatment.priceCents || 0) * units)}
+          <View style={styles.mowgliDetailPriceCard}>
+            <Text style={styles.mowgliDetailPriceMain}>{formatPrice((selectedTreatment.priceCents || 0) * units)}</Text>
+            <Text style={styles.mowgliDetailPriceSub}>
+              Mitglied: {formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}
             </Text>
-            <Text style={styles.detailPlanSummaryDivider}>|</Text>
-            <Text style={styles.detailPlanSummaryMember}>
-              {hasActiveMembership
-                ? `Mitglied: ${formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}`
-                : `Mitglied: ${formatPrice((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0)}`}
-            </Text>
+            {!hasActiveMembership && (
+              <Text style={styles.mowgliDetailHint}>
+                Mit aktiver Mitgliedschaft werden Mitgliedspreise und inkludierte Treatments freigeschaltet.
+              </Text>
+            )}
           </View>
-
-          <Text style={styles.priceLine}>Standard: {formatPrice(selectedTreatment.priceCents)}</Text>
-          <Text style={styles.priceLine}>Mitglied: {formatPrice(selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents)}</Text>
-          {!hasActiveMembership && (
-            <Text style={styles.priceHint}>
-              Aktiviere eine Mitgliedschaft, um Mitgliedspreise und inkludierte Behandlungen freizuschalten.
-            </Text>
-          )}
 
           <Pressable
-            style={[styles.primaryCta, (cartSyncing || checkoutLoading) && styles.ctaDisabled]}
+            style={({ pressed }) => [
+              styles.mowgliHeroCta,
+              (cartSyncing || checkoutLoading) && styles.ctaDisabled,
+              pressed && !(cartSyncing || checkoutLoading) && styles.mowgliLiftSoft,
+            ]}
             disabled={cartSyncing || checkoutLoading}
             onPress={() => {
               void addToCart();
             }}
           >
-            <Text style={styles.primaryCtaText}>{cartCtaLabel}</Text>
+            <Text style={styles.mowgliHeroCtaText}>{cartCtaLabel}</Text>
+            <Ionicons name="bag-add-outline" size={15} color="#0A0A0C" />
           </Pressable>
         </View>
       )}
 
       {shopTab === 'membership' && (
-        <View>
-          <View style={[styles.sectionHeader, styles.sectionHeaderCompact]}>
-            <Text style={styles.sectionEyebrow}>MEMBERSHIPS</Text>
-            <Text style={styles.sectionTitle}>Monatliche Vorteile mit Mehrwert</Text>
-            <Text style={styles.sectionLead}>
-              Pakete für Patientinnen, die regelmäßig wiederkommen und bessere Konditionen wollen.
-            </Text>
+        <View style={styles.mowgliShopSection}>
+          <View style={styles.mowgliSectionHead}>
+            <Text style={styles.mowgliSectionEyebrow}>Mitgliedschaften</Text>
+            <Text style={styles.mowgliSectionTitle}>Monatliche Vorteile mit Substanz</Text>
           </View>
+
           {memberships.map((plan) => {
-            const active =
-              membershipStatus?.status === 'active' && membershipStatus?.membershipId === plan.id;
-            const recovering =
-              membershipStatus?.status === 'past_due' && membershipStatus?.membershipId === plan.id;
+            const active = membershipStatus?.status === 'active' && membershipStatus?.membershipId === plan.id;
+            const recovering = membershipStatus?.status === 'past_due' && membershipStatus?.membershipId === plan.id;
             const highlightedPerks = (Array.isArray(plan.perks) ? plan.perks : []).slice(0, 4);
             const planIncludedIds = Array.isArray(plan.includedTreatmentIds) ? plan.includedTreatmentIds : [];
-            const includedTreatments = treatments
-              .filter((item) => planIncludedIds.includes(item.id))
-              .slice(0, 4);
-            const resultGallery = includedTreatments
-              .flatMap((item) => (Array.isArray(item.galleryUrls) ? item.galleryUrls.slice(0, 2) : []))
-              .filter(Boolean)
-              .slice(0, 6);
+            const includedTreatments = treatments.filter((item) => planIncludedIds.includes(item.id)).slice(0, 3);
             return (
-              <View
-                key={plan.id}
-                style={[styles.shopMembershipBlock, active && styles.shopMembershipBlockActive]}
-              >
-                <View pointerEvents="none" style={styles.surfaceRim} />
-                <View pointerEvents="none" style={styles.surfacePinkAura} />
-                <View style={styles.shopMembershipHero}>
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[
-                      styles.shopMembershipLiquidShine,
-                      {
-                        transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-                      },
-                    ]}
-                  />
-                  <View pointerEvents="none" style={styles.shopMembershipHeroGloss} />
-                  <View pointerEvents="none" style={styles.shopMembershipHeroPearl} />
-                  <Text style={styles.shopMembershipHeroEyebrow}>MITGLIEDSCHAFT</Text>
-                  <Text style={styles.shopMembershipHeroTitle}>{plan.name}</Text>
-                  <Text style={styles.shopMembershipHeroBody}>
-                    {highlightedPerks[0] || 'Exklusive Mitgliedervorteile mit monatlichem Mehrwert.'}
-                  </Text>
-                  <View style={styles.shopMembershipPriceRow}>
-                    <Text style={styles.shopMembershipHeroPrice}>{formatPrice(plan.priceCents)} / Monat</Text>
-                    {active && <Text style={styles.shopMembershipHeroBadge}>Aktiv</Text>}
+              <View key={plan.id} style={[styles.mowgliMembershipPlanCard, active && styles.mowgliMembershipPlanCardActive]}>
+                <View style={styles.mowgliMembershipPlanTopRow}>
+                  <View style={styles.mowgliMembershipPlanCopy}>
+                    <Text style={styles.mowgliSectionEyebrow}>Mitgliedschaft</Text>
+                    <Text style={styles.mowgliMembershipPlanTitle}>{plan.name}</Text>
                   </View>
+                  <Text style={styles.mowgliMembershipPlanPrice}>{formatPrice(plan.priceCents)} / Monat</Text>
                 </View>
 
-                <View style={styles.shopMembershipBenefitsGrid}>
-                  {highlightedPerks.map((perk, index) => (
-                    <View
-                      key={`${plan.id}-perk-${index}`}
-                      style={[
-                        styles.shopMembershipBenefitCard,
-                        index % 2 === 1 && styles.shopMembershipBenefitCardAlt,
-                      ]}
-                    >
-                      <Text style={styles.shopMembershipBenefitText}>{perk}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <Text style={styles.shopMembershipIncludedTitle}>Inkludierte Behandlungen</Text>
-                {includedTreatments.length === 0 && (
-                  <Text style={styles.shopMembershipIncludedEmpty}>
-                    Dieses Paket enthält aktuell keine fixen Inklusiv-Behandlungen.
-                  </Text>
-                )}
-                {includedTreatments.map((item) => (
-                  <Pressable
-                    key={`${plan.id}-${item.id}`}
-                    style={styles.shopMembershipIncludedCard}
-                    onPress={() => openMembershipTreatment(item)}
-                  >
-                    <View pointerEvents="none" style={styles.surfaceRimSoft} />
-                    {preferredTreatmentImage(item) ? (
-                      <Image source={{ uri: preferredTreatmentImage(item) }} style={styles.shopMembershipIncludedImage} />
-                    ) : (
-                      <View style={styles.shopMembershipIncludedImageMock} />
-                    )}
-                    <View style={styles.shopMembershipIncludedBody}>
-                      <Text style={styles.shopMembershipIncludedName}>{item.name}</Text>
-                      <Text style={styles.shopMembershipIncludedMeta}>1 Behandlung</Text>
-                      <Text style={styles.shopMembershipIncludedLink}>Mehr über diese Behandlung</Text>
-                    </View>
-                  </Pressable>
+                {highlightedPerks.map((perk, index) => (
+                  <View key={`${plan.id}-perk-${index}`} style={styles.mowgliMembershipPerkRow}>
+                    <Ionicons name="checkmark-outline" size={15} color="#C8A97E" />
+                    <Text style={styles.mowgliMembershipPerkText}>{perk}</Text>
+                  </View>
                 ))}
 
-                {resultGallery.length > 0 && (
-                  <View style={styles.shopMembershipResultsWrap}>
-                    <Text style={styles.shopMembershipResultsTitle}>Ergebnisse</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.shopMembershipResultsRow}
-                    >
-                      {resultGallery.map((url, index) => (
-                        <Image
-                          key={`${plan.id}-result-${index}`}
-                          source={{ uri: url }}
-                          style={styles.shopMembershipResultImage}
-                        />
-                      ))}
-                    </ScrollView>
+                {includedTreatments.length > 0 && (
+                  <View style={styles.mowgliIncludedList}>
+                    <Text style={styles.mowgliIncludedLabel}>Inklusive Treatments</Text>
+                    {includedTreatments.map((item) => (
+                      <Pressable
+                        key={`${plan.id}-${item.id}`}
+                        style={({ pressed }) => [styles.mowgliIncludedCard, pressed && styles.mowgliLiftSoft]}
+                        onPress={() => openMembershipTreatment(item)}
+                      >
+                        <Text style={styles.mowgliIncludedCardTitle}>{item.name}</Text>
+                        <Text style={styles.mowgliIncludedCardMeta}>1 Behandlung • Mehr erfahren</Text>
+                      </Pressable>
+                    ))}
                   </View>
                 )}
 
                 <Pressable
-                  style={[styles.primaryCta, active && styles.secondaryCtaActive]}
+                  style={({ pressed }) => [
+                    active ? styles.mowgliMembershipCtaActive : styles.mowgliMembershipCta,
+                    membershipSyncing && styles.ctaDisabled,
+                    pressed && !membershipSyncing && styles.mowgliLiftSoft,
+                  ]}
                   disabled={membershipSyncing}
                   onPress={() => {
                     void activateMembership(plan.id);
                   }}
                 >
-                  <Text style={styles.primaryCtaText}>
+                  <Text style={active ? styles.mowgliMembershipCtaTextActive : styles.mowgliMembershipCtaText}>
                     {active
                       ? 'Aktiv'
                       : recovering
                         ? 'Zahlung fehlgeschlagen – reaktivieren'
                         : membershipSyncing
-                          ? 'Wird aktiviert...'
+                          ? 'Wird aktiviert ...'
                           : 'Mitgliedschaft starten'}
                   </Text>
                 </Pressable>
@@ -420,68 +367,69 @@ export default function ShopScreen({
       )}
 
       {shopTab === 'treatments' && (
-        <View>
-          <View style={[styles.sectionHeader, styles.sectionHeaderCompact]}>
-            <Text style={styles.sectionEyebrow}>KATALOG</Text>
-            <Text style={styles.sectionTitle}>Alle Behandlungen im Überblick</Text>
-            <Text style={styles.sectionLead}>
-              Eine klare Liste für schnelles Scannen, Vergleichen und späteres Buchen.
-            </Text>
+        <View style={styles.mowgliShopSection}>
+          <View style={styles.mowgliSectionHead}>
+            <Text style={styles.mowgliSectionEyebrow}>Katalog</Text>
+            <Text style={styles.mowgliSectionTitle}>Alle Treatments im Überblick</Text>
           </View>
           {treatments.map((item) => (
-            <View key={item.id} style={styles.treatmentListCard}>
-              <View pointerEvents="none" style={styles.surfaceRimSoft} />
-              <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-              <Text style={styles.treatmentListTitle}>{item.name}</Text>
-              <Text style={styles.treatmentListBody}>{item.description}</Text>
-              <Text style={styles.treatmentListMeta}>
-                ab {formatPrice(item.priceCents)} • {item.durationMinutes} Min
-              </Text>
+            <View key={item.id} style={styles.mowgliCatalogRow}>
+              <View style={styles.mowgliCatalogCopy}>
+                <Text style={styles.mowgliCatalogTitle}>{item.name}</Text>
+                <Text style={styles.mowgliCatalogBody}>{item.description}</Text>
+              </View>
+              <View style={styles.mowgliCatalogMeta}>
+                <Text style={styles.mowgliCatalogPrice}>{formatPrice(item.priceCents)}</Text>
+                <Text style={styles.mowgliCatalogDuration}>{item.durationMinutes} Min</Text>
+              </View>
             </View>
           ))}
         </View>
       )}
 
       {hasCart && (
-        <View style={styles.cartBox}>
-          <View pointerEvents="none" style={styles.surfaceRim} />
-          <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-          <View pointerEvents="none" style={styles.cartBoxGlow} />
-          <Text style={styles.sectionEyebrow}>BEREIT ZUM CHECKOUT</Text>
-          <Text style={styles.cartTitle}>Warenkorb ({cartItems.length})</Text>
+        <View style={styles.mowgliCartCard}>
+          <Text style={styles.mowgliSectionEyebrow}>Checkout</Text>
+          <Text style={styles.mowgliCartTitle}>Warenkorb ({cartItems.length})</Text>
           {cartItems.slice(0, 3).map((item) => (
-            <Text key={item.id} style={styles.cartItem}>
+            <Text key={item.id} style={styles.mowgliCartItem}>
               {item.name} • {item.units}x • {formatPrice(item.totalCents)}
             </Text>
           ))}
-          <Text style={styles.cartTotal}>Gesamt: {formatPrice(totalCartCents)}</Text>
-          <View style={styles.checkoutMethodWrap}>
-            <Text style={styles.checkoutMethodLabel}>Zahlart</Text>
-            <View style={styles.checkoutMethodRow}>
-              {checkoutMethodOptions.map((option) => {
-                const active = selectedCheckoutMethod === option.id;
-                return (
-                  <Pressable
-                    key={`box-${option.id}`}
-                    style={[styles.checkoutMethodChip, active && styles.checkoutMethodChipActive]}
-                    onPress={() => setSelectedCheckoutMethod(option.id)}
-                  >
-                    <Text style={[styles.checkoutMethodChipText, active && styles.checkoutMethodChipTextActive]}>
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+          <Text style={styles.mowgliCartTotal}>Gesamt: {formatPrice(totalCartCents)}</Text>
+          <View style={styles.mowgliCheckoutMethodRow}>
+            {checkoutMethodOptions.map((option) => {
+              const active = selectedCheckoutMethod === option.id;
+              return (
+                <Pressable
+                  key={`box-${option.id}`}
+                  style={({ pressed }) => [
+                    styles.mowgliCheckoutMethodChip,
+                    active && styles.mowgliCheckoutMethodChipActive,
+                    pressed && styles.mowgliLiftSoft,
+                  ]}
+                  onPress={() => setSelectedCheckoutMethod(option.id)}
+                >
+                  <Text style={[styles.mowgliCheckoutMethodChipText, active && styles.mowgliCheckoutMethodChipTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
           <Pressable
-            style={[styles.primaryCta, (checkoutLoading || cartSyncing) && styles.ctaDisabled]}
+            style={({ pressed }) => [
+              styles.mowgliHeroCta,
+              (checkoutLoading || cartSyncing) && styles.ctaDisabled,
+              pressed && !(checkoutLoading || cartSyncing) && styles.mowgliLiftSoft,
+            ]}
             disabled={checkoutLoading || cartSyncing}
             onPress={() => {
               void runCheckout();
             }}
           >
-            <Text style={styles.primaryCtaText}>{checkoutCtaLabel}</Text>
+            <Text style={styles.mowgliHeroCtaText}>{checkoutCtaLabel}</Text>
+            <Ionicons name="arrow-forward" size={15} color="#0A0A0C" />
           </Pressable>
         </View>
       )}
