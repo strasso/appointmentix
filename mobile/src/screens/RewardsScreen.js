@@ -1,24 +1,92 @@
 import React from 'react';
-import { Animated, Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import TopHeader from '../components/TopHeader';
-import { THEME } from '../theme/tokens';
+import { createMowgliTheme } from '../theme/tokens';
+
+function RewardCard({ styles, theme, item, points, onRedeem }) {
+  const canRedeem = points >= item.requiredPoints;
+  const progress = Math.max(0, Math.min(1, points / Math.max(1, item.requiredPoints)));
+  return (
+    <View style={[styles.mowgliRewardCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View style={[styles.mowgliRewardCardVisual, { backgroundColor: theme.page }]}>
+        <Ionicons name="gift-outline" size={34} color={theme.accent} />
+      </View>
+      <View style={styles.mowgliRewardCardBody}>
+        <Text style={[styles.mowgliRewardCardTitle, { color: theme.text }]} numberOfLines={2}>
+          {item.label}
+        </Text>
+        <View style={styles.mowgliRewardCardPointsRow}>
+          <Text style={[styles.mowgliRewardCardPoints, { color: theme.accent }]}>{item.requiredPoints}</Text>
+          <Text style={[styles.mowgliRewardCardPointsMeta, { color: theme.textMuted }]}>Pkt</Text>
+        </View>
+        <View style={[styles.mowgliRewardCardTrack, { backgroundColor: theme.page }]}>
+          <View
+            style={[
+              styles.mowgliRewardCardTrackFill,
+              { backgroundColor: theme.accent, width: `${Math.round(progress * 100)}%` },
+            ]}
+          />
+        </View>
+        <Text style={[styles.mowgliRewardCardProgressLabel, { color: canRedeem ? theme.accent : theme.textMuted }]}>
+          {canRedeem ? 'Einlösbar' : `${points} / ${item.requiredPoints}`}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.mowgliRewardCardButton,
+            {
+              backgroundColor: canRedeem ? theme.primaryButtonBg : theme.surfaceAlt,
+              borderColor: canRedeem ? theme.borderStrong : theme.border,
+            },
+            !canRedeem && styles.ctaDisabled,
+            pressed && canRedeem && styles.mowgliLiftSoft,
+          ]}
+          disabled={!canRedeem}
+          onPress={() => onRedeem(item)}
+        >
+          <Text style={[styles.mowgliRewardCardButtonText, { color: canRedeem ? theme.primaryButtonText : theme.textMuted }]}>
+            {canRedeem ? 'Einlösen' : 'Noch nicht genug'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function HistoryRow({ styles, theme, entry, formatDate, formatPrice }) {
+  const isPoints = 'points' in entry;
+  return (
+    <View style={[styles.mowgliRewardsHistoryRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.mowgliRewardsHistoryIcon,
+          { backgroundColor: theme.input, borderColor: theme.border },
+        ]}
+      >
+        <Ionicons
+          name={isPoints ? (entry.points >= 0 ? 'add-outline' : 'remove-outline') : 'wallet-outline'}
+          size={16}
+          color={isPoints ? theme.accent : theme.textMuted}
+        />
+      </View>
+      <View style={styles.mowgliRewardsHistoryCopy}>
+        <Text style={[styles.mowgliRewardsHistoryTitle, { color: theme.text }]}>{entry.title}</Text>
+        <Text style={[styles.mowgliRewardsHistoryMeta, { color: theme.textMuted }]}>{formatDate(entry.createdAt)}</Text>
+      </View>
+      <Text style={[styles.mowgliRewardsHistoryValue, { color: isPoints ? theme.accent : theme.text }]}>
+        {isPoints ? `${entry.points > 0 ? '+' : ''}${entry.points}` : formatPrice(entry.amount)}
+      </Text>
+    </View>
+  );
+}
 
 export default function RewardsScreen({
   styles,
+  mowgliTheme,
   clinicProfile,
-  cartCount,
-  onSearchPress,
-  onCartPress,
-  liquidShineAnim,
-  floatingAuraAnim,
   points,
   rewardHistoryItems,
-  patientGuestMode,
   walletCents,
   formatPrice,
-  rewardsView,
-  setRewardsView,
   rewardActions,
   rewardActionIcon,
   claimActionPoints,
@@ -26,197 +94,95 @@ export default function RewardsScreen({
   redeemReward,
   formatDate,
 }) {
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
+
   return (
-    <View>
-      <TopHeader
-        styles={styles}
-        title="Vorteile"
-        sectionLabel="Punkte & Wallet"
-        subtitle="Treueprogramm deiner Klinik"
-        clinicShortName={clinicProfile.shortName}
-        clinicName={clinicProfile.name}
-        onSearchPress={onSearchPress}
-        onCartPress={onCartPress}
-        cartCount={cartCount}
-      />
+    <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
+      <View style={styles.mowgliRewardsHeader}>
+        <Text style={[styles.mowgliRewardsHeaderTitle, { color: theme.text }]}>Rewards</Text>
+        <Text style={[styles.mowgliRewardsHeaderSubtitle, { color: theme.textMuted }]}>Verdienen & Einlösen</Text>
+      </View>
 
-      <View style={styles.rewardsBalanceCard}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.rewardsLiquidShine,
-            {
-              transform: [{ translateX: liquidShineAnim }, { rotate: '18deg' }],
-            },
-          ]}
-        />
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.rewardsOrbit,
-            {
-              transform: [
-                {
-                  translateY: floatingAuraAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, -10],
-                  }),
-                },
-                {
-                  translateX: floatingAuraAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0, 6],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.rewardsOrbitCore} />
-          <View style={styles.rewardsOrbitRing} />
-        </Animated.View>
-        <View pointerEvents="none" style={styles.rewardsBalanceGloss} />
-        <View pointerEvents="none" style={styles.rewardsBalancePearl} />
-        <View pointerEvents="none" style={styles.rewardsBalanceGlow} />
-        <View pointerEvents="none" style={styles.rewardsBalanceGlowSecondary} />
-        <View style={styles.rewardsBalanceTopRow}>
-          <View>
-            <Text style={styles.rewardsBalanceEyebrow}>KLINIK WALLET</Text>
-            <Text style={styles.rewardsBalanceLabel}>Treuepunkte & Guthaben</Text>
-          </View>
-          <View style={styles.rewardsBalanceStatusPill}>
-            <Text style={styles.rewardsBalanceStatusText}>{patientGuestMode ? 'Gast' : 'Mitglied'}</Text>
-          </View>
+      <View style={[styles.mowgliRewardsBalancePanel, { backgroundColor: theme.shell, borderColor: theme.border }]}>
+        <View pointerEvents="none" style={[styles.mowgliRewardsBalanceGlow, { backgroundColor: theme.heroGlow }]} />
+        <View style={[styles.mowgliRewardsBalanceIcon, { backgroundColor: theme.accent }]}>
+          <Ionicons name="diamond-outline" size={22} color={theme.primaryButtonText} />
         </View>
-        <Text style={styles.rewardsBalanceLogo}>O</Text>
-        <View style={styles.rewardsCardStatsRow}>
-          <View style={styles.rewardsCardStatItem}>
-            <Text style={styles.rewardsCardStatValue}>{points}</Text>
-            <Text style={styles.rewardsCardStatLabel}>Punkte</Text>
-          </View>
-          <View style={styles.rewardsCardStatItem}>
-            <Text style={styles.rewardsCardStatValue}>{rewardHistoryItems.length}</Text>
-            <Text style={styles.rewardsCardStatLabel}>Aktivitäten</Text>
-          </View>
-        </View>
-        <View style={styles.rewardsBalanceFooter}>
-          <View>
-            <Text style={styles.rewardsBalanceMember}>{patientGuestMode ? 'Gastzugang' : 'Mitgliedschaft aktiv'}</Text>
-            <Text style={styles.rewardsBalanceJoined}>Seit heute verbunden</Text>
-          </View>
-          <View style={styles.rewardsBalanceRight}>
-            <Text style={styles.rewardsBalanceWallet}>{formatPrice(walletCents)}</Text>
-            <Text style={styles.rewardsBalanceCash}>{clinicProfile.shortName || 'APP'} Guthaben</Text>
-          </View>
+        <Text style={[styles.mowgliRewardsBalanceLabel, { color: theme.accent }]}>Ihr Punktestand</Text>
+        <Text style={[styles.mowgliRewardsBalanceValue, { color: theme.text }]}>{points}</Text>
+        <View style={[styles.mowgliRewardsBalanceChip, { backgroundColor: theme.chipBg, borderColor: theme.border }]}>
+          <Text style={[styles.mowgliRewardsBalanceChipText, { color: theme.accent }]}>
+            Wallet {formatPrice(walletCents)} • {clinicProfile.name || 'Klinik'}
+          </Text>
         </View>
       </View>
 
-      <View style={styles.rewardsHeaderRow}>
-        <View>
-          <Text style={styles.sectionEyebrow}>VORTEILE</Text>
-          <Text style={styles.rewardsHeaderTitle}>Punkte, Aktionen und Vorteile</Text>
-        </View>
-        <Pressable onPress={() => setRewardsView('past')}>
-          <Text style={styles.rewardsHeaderLink}>Verlauf öffnen ›</Text>
-        </Pressable>
+      <View style={styles.mowgliSectionHeaderRow}>
+        <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Verfügbar</Text>
       </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mowgliRewardCardRow}>
+        {rewardRedeems.map((item) => (
+          <RewardCard
+            key={item.id}
+            styles={styles}
+            theme={theme}
+            item={item}
+            points={points}
+            onRedeem={redeemReward}
+          />
+        ))}
+      </ScrollView>
 
-      <View style={styles.rewardsSegmentRow}>
-        <Pressable
-          style={[styles.rewardsSegmentBtn, rewardsView === 'active' && styles.rewardsSegmentBtnActive]}
-          onPress={() => setRewardsView('active')}
-        >
-          <Text
-            style={[
-              styles.rewardsSegmentText,
-              rewardsView === 'active' && styles.rewardsSegmentTextActive,
+      <View style={styles.mowgliSectionHeaderRow}>
+        <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Punkte sammeln</Text>
+      </View>
+      <View style={styles.mowgliRewardsActionList}>
+        {rewardActions.map((action) => (
+          <Pressable
+            key={action.id}
+            style={({ pressed }) => [
+              styles.mowgliRewardsActionRow,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+              pressed && styles.mowgliLiftSoft,
             ]}
+            onPress={() => claimActionPoints(action)}
           >
-            Aktiv
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.rewardsSegmentBtn, rewardsView === 'past' && styles.rewardsSegmentBtnActive]}
-          onPress={() => setRewardsView('past')}
-        >
-          <Text
-            style={[
-              styles.rewardsSegmentText,
-              rewardsView === 'past' && styles.rewardsSegmentTextActive,
-            ]}
-          >
-            Vergangen
-          </Text>
-        </Pressable>
+            <View style={[styles.mowgliRewardsActionIcon, { backgroundColor: theme.input, borderColor: theme.border }]}>
+              <Ionicons name={rewardActionIcon(action.id)} size={16} color={theme.accent} />
+            </View>
+            <View style={styles.mowgliRewardsActionCopy}>
+              <Text style={[styles.mowgliRewardsActionTitle, { color: theme.text }]}>{action.label}</Text>
+              <Text style={[styles.mowgliRewardsActionMeta, { color: theme.textMuted }]}>+{action.points} Punkte</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+          </Pressable>
+        ))}
       </View>
 
-      {rewardsView === 'active' && (
-        <View>
-          <Text style={styles.sectionLead}>
-            Sammle Punkte durch Besuche und kleine Aktionen. Löse sie später direkt in Guthaben oder Extras ein.
-          </Text>
-          <Text style={styles.rewardsSectionTitle}>Mehr Punkte sammeln?</Text>
-          {rewardActions.map((action) => (
-            <View key={action.id} style={styles.rewardsActionRow}>
-              <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-              <View style={styles.rewardsActionLeft}>
-                <View style={styles.rewardsActionIconWrap}>
-                  <Ionicons name={rewardActionIcon(action.id)} size={17} color={THEME.brandStrong} />
-                </View>
-                <Text style={styles.rewardsActionLabel}>{action.label}</Text>
-              </View>
-              <Pressable style={styles.rewardsActionBtn} onPress={() => claimActionPoints(action)}>
-                <Text style={styles.rewardsActionBtnText}>+{action.points} Punkte</Text>
-              </Pressable>
-            </View>
-          ))}
-
-          <Text style={styles.rewardsSectionTitle}>Punkte einlösen</Text>
-          {rewardRedeems.map((item) => (
-            <View key={item.id} style={styles.rewardsRedeemRow}>
-              <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-              <View>
-                <Text style={styles.rewardsRedeemLabel}>{item.label}</Text>
-                <Text style={styles.rewardsRedeemHint}>{item.requiredPoints} Punkte</Text>
-              </View>
-              <Pressable
-                style={[
-                  styles.rewardsRedeemBtn,
-                  points < item.requiredPoints && styles.rewardsRedeemBtnDisabled,
-                ]}
-                disabled={points < item.requiredPoints}
-                onPress={() => redeemReward(item)}
-              >
-                <Text style={styles.rewardsRedeemBtnText}>Einlösen</Text>
-              </Pressable>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {rewardsView === 'past' && (
-        <View style={styles.rewardsPastList}>
-          <Text style={styles.sectionLead}>
-            Hier siehst du abgeschlossene Vorteile und Einlösungen deiner letzten Besuche.
-          </Text>
-          {rewardHistoryItems.length === 0 && (
-            <Text style={styles.rewardsPastEmpty}>Keine Vorteile in diesem Bereich.</Text>
-          )}
-          {rewardHistoryItems.map((entry) => (
-            <View key={entry.id} style={styles.rewardsPastItem}>
-              <View pointerEvents="none" style={styles.surfaceGlossStrip} />
-              <Text style={styles.rewardsPastTitle}>{entry.title}</Text>
-              <Text style={styles.rewardsPastMeta}>{formatDate(entry.createdAt)}</Text>
-              {'points' in entry && (
-                <Text style={styles.rewardsPastMeta}>+{entry.points} Punkte</Text>
-              )}
-              {'amount' in entry && (
-                <Text style={styles.rewardsPastMeta}>{formatPrice(entry.amount)}</Text>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
+      <View style={styles.mowgliSectionHeaderRow}>
+        <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Historie</Text>
+      </View>
+      <View style={styles.mowgliRewardsHistoryList}>
+        {rewardHistoryItems.length === 0 && (
+          <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Ionicons name="time-outline" size={18} color={theme.textMuted} />
+            <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Noch keine Rewards-Historie</Text>
+            <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>
+              Sobald Punkte gesammelt oder eingelöst wurden, erscheinen sie hier.
+            </Text>
+          </View>
+        )}
+        {rewardHistoryItems.map((entry) => (
+          <HistoryRow
+            key={entry.id}
+            styles={styles}
+            theme={theme}
+            entry={entry}
+            formatDate={formatDate}
+            formatPrice={formatPrice}
+          />
+        ))}
+      </View>
     </View>
   );
 }

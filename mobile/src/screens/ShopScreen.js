@@ -266,76 +266,124 @@ export default function ShopScreen({
       )}
 
       {shopTab === 'browse' && selectedTreatment && (
-        <View style={[styles.mowgliDetailCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-          <Pressable style={({ pressed }) => [styles.mowgliTextLink, pressed && styles.mowgliLiftSoft]} onPress={() => setSelectedTreatment(null)}>
-            <Text style={[styles.mowgliTextLinkText, { color: theme.accent }]}>Zurück zur Übersicht</Text>
-            <Ionicons name="arrow-back" size={13} color={theme.accent} />
-          </Pressable>
-
-          {preferredTreatmentImage(selectedTreatment) ? (
-            <Image source={{ uri: preferredTreatmentImage(selectedTreatment) }} style={styles.mowgliDetailImage} />
-          ) : (
-            <View style={[styles.mowgliDetailImageFallback, { backgroundColor: theme.input }]}>
-              <Ionicons name="sparkles-outline" size={28} color={theme.accent} />
-            </View>
-          )}
-
-          {Array.isArray(selectedTreatment.galleryUrls) && selectedTreatment.galleryUrls.length > 1 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.mowgliDetailGalleryRow}
-            >
-              {selectedTreatment.galleryUrls.slice(0, 6).map((url) => (
-                <Image key={`${selectedTreatment.id}-${url}`} source={{ uri: url }} style={styles.mowgliDetailThumbImage} />
-              ))}
-            </ScrollView>
-          )}
-
-          <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Treatment</Text>
-          <Text style={[styles.mowgliDetailTitle, { color: theme.text }]}>{selectedTreatment.name}</Text>
-          <Text style={[styles.mowgliDetailBody, { color: theme.textSoft }]}>{selectedTreatment.description}</Text>
-          <Text style={[styles.mowgliDetailMeta, { color: theme.accent }]}>⏱ {selectedTreatment.durationMinutes} Min pro Behandlung</Text>
-
-          <View style={styles.mowgliUnitsRow}>
-            <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => Math.max(1, prev - 1))}>
-              <Text style={[styles.mowgliUnitsButtonText, { color: theme.text }]}>−</Text>
-            </Pressable>
-            <View style={[styles.mowgliUnitsValueWrap, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
-              <Text style={[styles.mowgliUnitsValue, { color: theme.text }]}>{units} Behandlung(en)</Text>
-            </View>
-            <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => prev + 1)}>
-              <Text style={[styles.mowgliUnitsButtonText, { color: theme.text }]}>＋</Text>
-            </Pressable>
-          </View>
-
-          <View style={[styles.mowgliDetailPriceCard, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
-            <Text style={[styles.mowgliDetailPriceMain, { color: theme.text }]}>{formatPrice((selectedTreatment.priceCents || 0) * units)}</Text>
-            <Text style={[styles.mowgliDetailPriceSub, { color: theme.accent }]}>
-              Mitglied: {formatPrice(((selectedTreatment.memberPriceCents ?? selectedTreatment.priceCents) || 0) * units)}
-            </Text>
-            {!hasActiveMembership && (
-              <Text style={[styles.mowgliDetailHint, { color: theme.textMuted }]}>
-                Mit aktiver Mitgliedschaft werden Mitgliedspreise und inkludierte Treatments freigeschaltet.
-              </Text>
+        <View style={styles.mowgliDetailStage}>
+          <View style={styles.mowgliDetailHero}>
+            {preferredTreatmentImage(selectedTreatment) ? (
+              <Image source={{ uri: preferredTreatmentImage(selectedTreatment) }} style={styles.mowgliDetailHeroImage} />
+            ) : (
+              <View style={[styles.mowgliDetailImageFallback, { backgroundColor: theme.input }]}>
+                <Ionicons name="sparkles-outline" size={28} color={theme.accent} />
+              </View>
             )}
+            <View style={[styles.mowgliDetailHeroOverlay, { backgroundColor: theme.mode === 'dark' ? 'rgba(10,10,12,0.44)' : 'rgba(18,14,10,0.18)' }]} />
+            <View style={styles.mowgliDetailHeroNavRow}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.mowgliDetailHeroNavButton,
+                  { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+                  pressed && styles.mowgliLiftSoft,
+                ]}
+                onPress={() => setSelectedTreatment(null)}
+              >
+                <Ionicons name="arrow-back" size={18} color={theme.text} />
+              </Pressable>
+              <View style={[styles.mowgliDetailHeroNavButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+                <Ionicons name="heart-outline" size={18} color={theme.text} />
+              </View>
+            </View>
           </View>
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.mowgliHeroCta,
-              { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong },
-              (cartSyncing || checkoutLoading) && styles.ctaDisabled,
-              pressed && !(cartSyncing || checkoutLoading) && styles.mowgliLiftSoft,
-            ]}
-            disabled={cartSyncing || checkoutLoading}
-            onPress={() => {
-              void addToCart();
-            }}
-          >
-            <Text style={[styles.mowgliHeroCtaText, { color: theme.primaryButtonText }]}>{cartCtaLabel}</Text>
-            <Ionicons name="bag-add-outline" size={15} color={theme.primaryButtonText} />
-          </Pressable>
+          <View style={styles.mowgliDetailContent}>
+            <View style={styles.mowgliDetailHeadingRow}>
+              <Text style={[styles.mowgliDetailTitle, { color: theme.text }]}>{selectedTreatment.name}</Text>
+              <View style={styles.mowgliDetailPriceStack}>
+                <Text style={[styles.mowgliDetailHeroPrice, { color: theme.accent }]}>
+                  {formatPrice(selectedTreatment.priceCents)}
+                </Text>
+                <Text style={[styles.mowgliDetailHeroPriceMeta, { color: theme.textMuted }]}>pro Sitzung</Text>
+              </View>
+            </View>
+
+            <View style={styles.mowgliDetailTagRow}>
+              <View style={[styles.mowgliDetailTagChip, { borderColor: theme.borderStrong }]}>
+                <Ionicons name="time-outline" size={13} color={theme.accent} />
+                <Text style={[styles.mowgliDetailTagText, { color: theme.accent }]}>{selectedTreatment.durationMinutes} Min</Text>
+              </View>
+              <View style={[styles.mowgliDetailTagChip, { borderColor: theme.borderStrong }]}>
+                <Ionicons name="sparkles-outline" size={13} color={theme.accent} />
+                <Text style={[styles.mowgliDetailTagText, { color: theme.accent }]}>
+                  {selectedTreatment.categoryLabel || selectedCategory?.label || 'Treatment'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.mowgliDetailSection}>
+              <Text style={[styles.mowgliDetailSectionTitle, { color: theme.text }]}>Beschreibung</Text>
+              <Text style={[styles.mowgliDetailBody, { color: theme.textSoft }]}>{selectedTreatment.description}</Text>
+            </View>
+
+            <View style={styles.mowgliDetailSection}>
+              <Text style={[styles.mowgliDetailSectionTitle, { color: theme.text }]}>Vorteile</Text>
+              {[
+                'Sichtbarer Premium-Effekt direkt nach der Behandlung',
+                'Ruhiger, klarer Ablauf innerhalb deiner Klinik-App',
+                hasActiveMembership
+                  ? 'Mitgliedsvorteile werden automatisch berücksichtigt'
+                  : 'Mit aktiver Mitgliedschaft werden Mitgliedspreise freigeschaltet',
+              ].map((benefit) => (
+                <View key={benefit} style={styles.mowgliDetailBenefitRow}>
+                  <Ionicons name="checkmark-outline" size={16} color={theme.accent} />
+                  <Text style={[styles.mowgliDetailBenefitText, { color: theme.textSoft }]}>{benefit}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.mowgliUnitsRow}>
+              <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => Math.max(1, prev - 1))}>
+                <Text style={[styles.mowgliUnitsButtonText, { color: theme.text }]}>−</Text>
+              </Pressable>
+              <View style={[styles.mowgliUnitsValueWrap, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+                <Text style={[styles.mowgliUnitsValue, { color: theme.text }]}>{units} Behandlung(en)</Text>
+              </View>
+              <Pressable style={({ pressed }) => [styles.mowgliUnitsButton, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }, pressed && styles.mowgliLiftSoft]} onPress={() => setUnits((prev) => prev + 1)}>
+                <Text style={[styles.mowgliUnitsButtonText, { color: theme.text }]}>＋</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={[styles.mowgliDetailStickyBar, { backgroundColor: theme.page, borderColor: theme.border }]}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.mowgliDetailSecondaryCta,
+                { backgroundColor: theme.secondaryButtonBg, borderColor: theme.secondaryButtonBorder },
+                (cartSyncing || checkoutLoading) && styles.ctaDisabled,
+                pressed && !(cartSyncing || checkoutLoading) && styles.mowgliLiftSoft,
+              ]}
+              disabled={cartSyncing || checkoutLoading}
+              onPress={() => {
+                void addToCart();
+              }}
+            >
+              <Ionicons name="bag-add-outline" size={14} color={theme.secondaryButtonText} />
+              <Text style={[styles.mowgliDetailSecondaryCtaText, { color: theme.secondaryButtonText }]}>
+                In den Warenkorb
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.mowgliHeroCta,
+                { flex: 1, backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong },
+                (cartSyncing || checkoutLoading) && styles.ctaDisabled,
+                pressed && !(cartSyncing || checkoutLoading) && styles.mowgliLiftSoft,
+              ]}
+              disabled={cartSyncing || checkoutLoading}
+              onPress={() => {
+                void addToCart();
+              }}
+            >
+              <Text style={[styles.mowgliHeroCtaText, { color: theme.primaryButtonText }]}>{cartCtaLabel}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { THEME } from '../theme/tokens';
+import { createMowgliTheme } from '../theme/tokens';
 
 export default function HeaderSearchOverlay({
   styles,
+  mowgliTheme,
   closeHeaderSearch,
   headerSearchQuery,
   setHeaderSearchQuery,
@@ -12,6 +13,7 @@ export default function HeaderSearchOverlay({
   searchResultIcon,
   onGlobalSearchSelect,
 }) {
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'light' });
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
 
@@ -56,7 +58,11 @@ export default function HeaderSearchOverlay({
       </Animated.View>
       <Animated.View
         style={[
-          styles.searchOverlayCard,
+          styles.mowgliOverlayCard,
+          {
+            backgroundColor: theme.shell,
+            borderColor: theme.border,
+          },
           {
             opacity: cardAnim,
             transform: [
@@ -70,66 +76,78 @@ export default function HeaderSearchOverlay({
           },
         ]}
       >
-        <View pointerEvents="none" style={styles.surfaceRim} />
-        <View pointerEvents="none" style={styles.overlayCardGloss} />
-        <View style={styles.searchOverlayHeader}>
-          <View style={styles.overlayTitleStack}>
-            <Text style={styles.overlayEyebrow}>SUCHE</Text>
-            <Text style={styles.searchOverlayTitle}>Schnell finden</Text>
+        <View pointerEvents="none" style={[styles.mowgliHeroGlow, { backgroundColor: theme.heroGlow }]} />
+        <View pointerEvents="none" style={[styles.mowgliHeroShimmer, { backgroundColor: theme.borderStrong }]} />
+        <View style={styles.mowgliOverlayHeader}>
+          <View style={styles.mowgliOverlayTitleStack}>
+            <Text style={[styles.mowgliOverlayEyebrow, { color: theme.accent }]}>SUCHE</Text>
+            <Text style={[styles.mowgliOverlayTitle, { color: theme.text }]}>Schnell finden</Text>
           </View>
           <Pressable
-            style={({ pressed }) => [styles.overlayCloseBtn, pressed && styles.tapScaleSoft]}
+            style={({ pressed }) => [
+              styles.mowgliHeaderAction,
+              { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+              pressed && styles.mowgliLiftSoft,
+            ]}
             onPress={closeHeaderSearch}
           >
-            <Ionicons name="close" size={20} color={THEME.inkSoft} />
+            <Ionicons name="close" size={20} color={theme.text} />
           </Pressable>
         </View>
-        <Text style={styles.overlaySubTitle}>Treatments, Mitgliedschaften und Beiträge deiner Klinik an einem Ort.</Text>
-        <View style={styles.overlayHeaderDivider} />
-        <View style={styles.searchOverlayInputShell}>
-          <Ionicons name="search-outline" size={18} color={THEME.mutedSoft} />
+        <Text style={[styles.mowgliOverlaySubtitle, { color: theme.textMuted }]}>
+          Treatments, Mitgliedschaften und Beiträge deiner Klinik an einem Ort.
+        </Text>
+        <View style={[styles.mowgliOverlayDivider, { backgroundColor: theme.border }]} />
+        <View style={[styles.mowgliOverlayInputShell, { backgroundColor: theme.input, borderColor: theme.border }]}>
+          <Ionicons name="search-outline" size={18} color={theme.textMuted} />
           <TextInput
-            style={styles.searchOverlayInput}
+            style={[styles.mowgliOverlayInput, { color: theme.text }]}
             value={headerSearchQuery}
             onChangeText={setHeaderSearchQuery}
             placeholder="Treatments, Mitgliedschaften, Beiträge"
-            placeholderTextColor={THEME.muted}
+            placeholderTextColor={theme.textMuted}
             autoCorrect={false}
             autoCapitalize="none"
+            keyboardAppearance={theme.mode === 'dark' ? 'dark' : 'light'}
+            selectionColor={theme.accent}
           />
         </View>
 
         {!headerSearchQuery.trim() && (
-          <Text style={styles.searchOverlayHint}>
+          <Text style={[styles.mowgliOverlayHint, { color: theme.textMuted }]}>
             Tipp: Suche nach „Laser“, „Mikrodermabrasion“ oder „Silber“.
           </Text>
         )}
 
         {!!headerSearchQuery.trim() && globalSearchResults.length === 0 && (
-          <Text style={styles.searchOverlayHint}>Keine Ergebnisse gefunden.</Text>
+          <Text style={[styles.mowgliOverlayHint, { color: theme.textMuted }]}>Keine Ergebnisse gefunden.</Text>
         )}
 
         {!!headerSearchQuery.trim() && globalSearchResults.length > 0 && (
           <ScrollView
-            style={styles.searchOverlayResults}
-            contentContainerStyle={styles.searchOverlayResultsContent}
+            style={styles.mowgliOverlayResults}
+            contentContainerStyle={styles.mowgliOverlayResultsContent}
             keyboardShouldPersistTaps="handled"
           >
-            <Text style={styles.overlaySectionLabel}>Ergebnisse</Text>
+            <Text style={[styles.mowgliOverlaySectionLabel, { color: theme.textMuted }]}>Ergebnisse</Text>
             {globalSearchResults.map((item) => (
               <Pressable
                 key={`${item.type}-${item.id}`}
-                style={({ pressed }) => [styles.searchOverlayRow, pressed && styles.listRowPressed]}
+                style={({ pressed }) => [
+                  styles.mowgliOverlayResultRow,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  pressed && styles.mowgliLiftSoft,
+                ]}
                 onPress={() => onGlobalSearchSelect(item)}
               >
-                <View style={styles.searchOverlayIconWrap}>
-                  <Ionicons name={searchResultIcon(item.type)} size={16} color={THEME.accent} />
+                <View style={[styles.mowgliOverlayResultIcon, { backgroundColor: theme.input, borderColor: theme.border }]}>
+                  <Ionicons name={searchResultIcon(item.type)} size={16} color={theme.accent} />
                 </View>
-                <View style={styles.searchOverlayMain}>
-                  <Text style={styles.searchOverlayRowTitle}>{item.title}</Text>
-                  <Text style={styles.searchOverlayRowMeta}>{item.subtitle}</Text>
+                <View style={styles.mowgliOverlayResultCopy}>
+                  <Text style={[styles.mowgliOverlayResultTitle, { color: theme.text }]}>{item.title}</Text>
+                  <Text style={[styles.mowgliOverlayResultMeta, { color: theme.textMuted }]}>{item.subtitle}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={THEME.mutedSoft} />
+                <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
               </Pressable>
             ))}
           </ScrollView>

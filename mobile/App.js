@@ -336,6 +336,7 @@ const STORAGE_KEYS = {
   analyticsBaseUrl: 'appointmentix.analyticsBaseUrl',
   clinicName: 'appointmentix.clinicName',
   clinicId: 'appointmentix.clinicId',
+  uiAppearance: 'appointmentix.uiAppearance',
   settingsName: 'appointmentix.settingsName',
   settingsEmail: 'appointmentix.settingsEmail',
   patientPhone: 'appointmentix.patientPhone',
@@ -1119,7 +1120,7 @@ export default function App() {
   const [analyticsConnected, setAnalyticsConnected] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [uiAppearance] = useState('light');
+  const [uiAppearance, setUiAppearance] = useState('dark');
   const [clinicSearchQuery, setClinicSearchQuery] = useState('');
   const [clinicSearchResults, setClinicSearchResults] = useState([]);
   const [clinicSearchLoading, setClinicSearchLoading] = useState(false);
@@ -2760,6 +2761,7 @@ function continueToAccessStep() {
       const storedBaseUrl = normalizeUrl(await readSecureValue(STORAGE_KEYS.analyticsBaseUrl));
       const storedClinicName = String(await readSecureValue(STORAGE_KEYS.clinicName)).trim();
       const storedClinicId = String(await readSecureValue(STORAGE_KEYS.clinicId)).trim();
+      const storedAppearance = String(await readSecureValue(STORAGE_KEYS.uiAppearance)).trim().toLowerCase();
       const storedOnboardingDone = String(await readSecureValue(STORAGE_KEYS.onboardingDone)).trim();
       const storedName = String(await readSecureValue(STORAGE_KEYS.settingsName)).trim();
       const storedEmail = String(await readSecureValue(STORAGE_KEYS.settingsEmail)).trim();
@@ -2771,6 +2773,9 @@ function continueToAccessStep() {
 
       if (!isActive) return;
 
+      if (storedAppearance === 'dark' || storedAppearance === 'light') {
+        setUiAppearance(storedAppearance);
+      }
       if (storedName) setSettingsName(storedName);
       if (storedEmail) setSettingsEmail(storedEmail);
       if (storedPatientPhone) {
@@ -2852,6 +2857,10 @@ function continueToAccessStep() {
     void syncMembershipStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analyticsConnected, settingsEmail]);
+
+  useEffect(() => {
+    void writeSecureValue(STORAGE_KEYS.uiAppearance, uiAppearance);
+  }, [uiAppearance]);
 
   useEffect(() => {
     void writeSecureValue(STORAGE_KEYS.settingsName, settingsName);
@@ -2961,6 +2970,12 @@ function continueToAccessStep() {
     });
   };
 
+  const handleOpenHomeTreatment = (treatment) => {
+    setShopTab('browse');
+    switchMainTab('shop');
+    openTreatment(treatment);
+  };
+
   const handleOpenShopBrowse = () => {
     setShopTab('browse');
     switchMainTab('shop');
@@ -2997,6 +3012,11 @@ function continueToAccessStep() {
             openClinicInMaps={openClinicInMaps}
             callClinicNow={callClinicNow}
             openProfile={() => switchMainTab('profile')}
+            treatments={treatments}
+            preferredTreatmentImage={preferredTreatmentImage}
+            openTreatmentFromHome={handleOpenHomeTreatment}
+            openMembershipTab={handleOpenMembershipTab}
+            formatPrice={formatPrice}
           />
         );
       case 'shop':
@@ -3051,10 +3071,8 @@ function continueToAccessStep() {
         return (
           <ScanScreen
             styles={styles}
+            mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
-            cartCount={cartCount}
-            onSearchPress={openHeaderSearch}
-            onCartPress={openHeaderCart}
             points={points}
             checkInViaScan={checkInViaScan}
           />
@@ -3063,6 +3081,7 @@ function continueToAccessStep() {
         return (
           <RewardsScreen
             styles={styles}
+            mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
             cartCount={cartCount}
             onSearchPress={openHeaderSearch}
@@ -3088,6 +3107,7 @@ function continueToAccessStep() {
         return (
           <ProfileScreen
             styles={styles}
+            mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
             cartCount={cartCount}
             onSearchPress={openHeaderSearch}
@@ -3110,6 +3130,8 @@ function continueToAccessStep() {
             setSettingsName={setSettingsName}
             settingsEmail={settingsEmail}
             setSettingsEmail={setSettingsEmail}
+            uiAppearance={uiAppearance}
+            setUiAppearance={setUiAppearance}
             analyticsConnected={analyticsConnected}
             backendCheckMessage={backendCheckMessage}
             patientGuestMode={patientGuestMode}
@@ -3126,8 +3148,8 @@ function continueToAccessStep() {
 
   if (isBootstrapping) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="dark" />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: mowgliTheme.page }]}>
+        <StatusBar style={uiAppearance === 'dark' ? 'light' : 'dark'} />
         <View style={styles.bootWrap}>
           <ActivityIndicator size="large" color={THEME.brand} />
           <Text style={styles.bootTitle}>Curabo wird geladen ...</Text>
@@ -3192,10 +3214,10 @@ function continueToAccessStep() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: mowgliTheme.page }]}>
+      <StatusBar style={uiAppearance === 'dark' ? 'light' : 'dark'} />
 
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: mowgliTheme.page }]}>
         <AmbientBackground styles={styles} />
         <Animated.View
           style={[
@@ -3226,6 +3248,7 @@ function continueToAccessStep() {
         {headerSearchOpen && (
           <HeaderSearchOverlay
             styles={styles}
+            mowgliTheme={mowgliTheme}
             closeHeaderSearch={closeHeaderSearch}
             headerSearchQuery={headerSearchQuery}
             setHeaderSearchQuery={setHeaderSearchQuery}
@@ -3238,6 +3261,7 @@ function continueToAccessStep() {
         {cartSheetOpen && (
           <CartOverlay
             styles={styles}
+            mowgliTheme={mowgliTheme}
             closeHeaderCart={closeHeaderCart}
             cartItems={cartItems}
             formatPrice={formatPrice}
@@ -3254,7 +3278,7 @@ function continueToAccessStep() {
           />
         )}
 
-        <BottomNavigation styles={styles} mainTab={mainTab} switchMainTab={switchMainTab} />
+        <BottomNavigation styles={styles} mowgliTheme={mowgliTheme} mainTab={mainTab} switchMainTab={switchMainTab} />
       </View>
     </SafeAreaView>
   );
@@ -5079,6 +5103,1309 @@ const styles = StyleSheet.create({
   },
   mowgliCheckoutMethodChipTextActive: {
     color: '#0A0A0C',
+  },
+  mowgliBottomBar: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 28,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  mowgliBottomTab: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  mowgliBottomTabCenter: {
+    marginHorizontal: 4,
+  },
+  mowgliBottomTabActive: {
+    borderWidth: 1,
+  },
+  mowgliBottomTabCenterActive: {
+    borderWidth: 1,
+  },
+  mowgliBottomTabLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliBottomIndicator: {
+    width: 4,
+    height: 4,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  mowgliFeaturedHero: {
+    height: 220,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 22,
+  },
+  mowgliFeaturedHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliFeaturedHeroFallback: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliFeaturedHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliFeaturedHeroContent: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 18,
+    gap: 4,
+  },
+  mowgliFeaturedTag: {
+    fontSize: 10,
+    lineHeight: 12,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliFeaturedTitle: {
+    fontSize: 28,
+    lineHeight: 31,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliFeaturedBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliSectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 12,
+    marginBottom: 12,
+  },
+  mowgliSectionLink: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliPopularRow: {
+    gap: 12,
+    paddingBottom: 8,
+    paddingRight: 12,
+  },
+  mowgliPopularCard: {
+    width: 164,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  mowgliPopularCardImage: {
+    width: '100%',
+    height: 104,
+  },
+  mowgliPopularCardFallback: {
+    width: '100%',
+    height: 104,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliPopularCardBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  mowgliPopularCardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliPopularCardMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mowgliPopularCardMeta: {
+    fontSize: 10,
+    lineHeight: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliPopularCardPrice: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliMembershipPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    marginTop: 16,
+    marginBottom: 22,
+    gap: 10,
+  },
+  mowgliMembershipPanelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  mowgliMembershipPanelTitle: {
+    marginTop: 4,
+    fontSize: 22,
+    lineHeight: 25,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliMembershipPanelBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliActionSquareRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  mowgliActionSquare: {
+    flex: 1,
+    minHeight: 132,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  mowgliActionSquareIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliActionSquareTitle: {
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliKnowledgeList: {
+    gap: 14,
+    marginBottom: 24,
+  },
+  mowgliKnowledgeRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'stretch',
+  },
+  mowgliKnowledgeThumb: {
+    width: 102,
+    height: 102,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliKnowledgeCopy: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+  },
+  mowgliKnowledgeTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '700',
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliKnowledgeBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliMapPreview: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  mowgliScanShell: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 96,
+  },
+  mowgliScanCenter: {
+    alignItems: 'center',
+  },
+  mowgliScanBadge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  mowgliScanTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+    marginBottom: 8,
+  },
+  mowgliScanBody: {
+    maxWidth: 270,
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 24,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliScanQrShell: {
+    width: 256,
+    height: 256,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    shadowColor: '#C8A97E',
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  mowgliScanQrCard: {
+    width: 216,
+    height: 216,
+    backgroundColor: '#FFFFFF',
+    position: 'relative',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliScanQrMark: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliScanManualCard: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  mowgliScanManualLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    fontWeight: '800',
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliScanManualValue: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '700',
+    letterSpacing: 2.2,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliScanManualBody: {
+    textAlign: 'center',
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliScanToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
+  },
+  mowgliScanToggleText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayCard: {
+    position: 'absolute',
+    top: 88,
+    left: 18,
+    right: 18,
+    bottom: 112,
+    borderRadius: 28,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 14,
+  },
+  mowgliOverlayHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  mowgliOverlayTitleStack: {
+    flex: 1,
+    gap: 4,
+  },
+  mowgliOverlayEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 2,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayTitle: {
+    fontSize: 28,
+    lineHeight: 31,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliOverlaySubtitle: {
+    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayDivider: {
+    height: 1,
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  mowgliOverlayInputShell: {
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mowgliOverlayInput: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayHint: {
+    marginTop: 12,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlaySectionLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayResults: {
+    flex: 1,
+    marginTop: 16,
+  },
+  mowgliOverlayResultsContent: {
+    paddingBottom: 10,
+    gap: 10,
+  },
+  mowgliOverlayResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  mowgliOverlayResultIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliOverlayResultCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  mowgliOverlayResultTitle: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayResultMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliOverlayFooterSection: {
+    marginTop: 18,
+  },
+  mowgliCartOverlayRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 14,
+  },
+  mowgliCartOverlayMain: {
+    flex: 1,
+    gap: 6,
+  },
+  mowgliCartOverlayName: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  mowgliCartOverlayStepBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliCartOverlayStepBtnText: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayUnitsText: {
+    minWidth: 18,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginLeft: 'auto',
+  },
+  mowgliCartOverlayRemoveText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayPrice: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayFooter: {
+    marginTop: 18,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mowgliCartOverlayTotalLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliCartOverlayTotalValue: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsBalanceValue: {
+    marginTop: 8,
+    fontSize: 54,
+    lineHeight: 56,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliRewardsBalanceSubtext: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+  },
+  mowgliRewardsStatCard: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 6,
+  },
+  mowgliRewardsStatLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1.4,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsStatValue: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  mowgliRewardsActionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliRewardsActionCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  mowgliRewardsActionTitle: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsActionMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsActionCta: {
+    minWidth: 58,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliRewardsActionCtaText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsRedeemRow: {
+    paddingTop: 4,
+    paddingBottom: 8,
+    paddingRight: 12,
+    gap: 12,
+  },
+  mowgliRewardsRedeemCard: {
+    width: 220,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  mowgliRewardsRedeemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliRewardsRedeemTitle: {
+    fontSize: 18,
+    lineHeight: 21,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliRewardsRedeemPoints: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsRedeemButton: {
+    marginTop: 'auto',
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  mowgliRewardsRedeemButtonText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  mowgliRewardsHistoryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliRewardsHistoryCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  mowgliRewardsHistoryTitle: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsHistoryMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsHistoryValue: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileIdentityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 26,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+  },
+  mowgliProfileAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliProfileAvatarText: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '700',
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliProfileIdentityCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mowgliProfileIdentityName: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliProfileIdentityMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliSettingsCard: {
+    borderRadius: 26,
+    borderWidth: 1,
+    padding: 18,
+    gap: 12,
+  },
+  mowgliSettingsLabel: {
+    marginTop: 2,
+    fontSize: 11,
+    lineHeight: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliSettingsInputShell: {
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  mowgliSettingsInput: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliSettingsInfoText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  mowgliProfileMenuIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliProfileMenuCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  mowgliProfileMenuTitle: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMenuSubtitle: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsHeader: {
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+  mowgliRewardsHeaderTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliRewardsHeaderSubtitle: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsBalancePanel: {
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 22,
+    paddingVertical: 24,
+    overflow: 'hidden',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  mowgliRewardsBalanceGlow: {
+    position: 'absolute',
+    top: -16,
+    right: -8,
+    width: 120,
+    height: 120,
+    borderRadius: 999,
+  },
+  mowgliRewardsBalanceIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  mowgliRewardsBalanceLabel: {
+    fontSize: 12,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsBalanceChip: {
+    marginTop: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  mowgliRewardsBalanceChipText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardCardRow: {
+    gap: 14,
+    paddingBottom: 10,
+    paddingRight: 12,
+    marginBottom: 24,
+  },
+  mowgliRewardCard: {
+    width: 154,
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  mowgliRewardCardVisual: {
+    height: 112,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliRewardCardBody: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  mowgliRewardCardTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardCardPointsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    marginBottom: 8,
+  },
+  mowgliRewardCardPoints: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardCardPointsMeta: {
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardCardTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  mowgliRewardCardTrackFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  mowgliRewardCardProgressLabel: {
+    marginTop: 6,
+    fontSize: 10,
+    lineHeight: 14,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardCardButton: {
+    marginTop: 12,
+    minHeight: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  mowgliRewardCardButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliRewardsActionList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  mowgliRewardsHistoryList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  mowgliProfileHeader: {
+    paddingTop: 18,
+    paddingBottom: 20,
+  },
+  mowgliProfileHeaderTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliProfileTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+    marginBottom: 28,
+  },
+  mowgliProfileAvatarLarge: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliProfileAvatarLargeText: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliProfileTopCopy: {
+    flex: 1,
+  },
+  mowgliProfileTopName: {
+    fontSize: 28,
+    lineHeight: 31,
+    fontFamily: Platform.select({
+      ios: 'Georgia',
+      android: 'serif',
+      default: 'serif',
+    }),
+  },
+  mowgliProfileTopMeta: {
+    marginTop: 3,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileTopBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  mowgliProfileTopBadgeText: {
+    fontSize: 12,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMembershipTeaser: {
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  mowgliProfileMembershipMark: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    width: 96,
+    height: 96,
+    borderRadius: 999,
+  },
+  mowgliProfileMembershipTitle: {
+    fontSize: 17,
+    lineHeight: 21,
+    fontWeight: '700',
+    marginBottom: 4,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMembershipMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMembershipLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  mowgliProfileMembershipLinkText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileHistoryList: {
+    gap: 10,
+    marginBottom: 24,
+  },
+  mowgliProfileThemeToggle: {
+    flexDirection: 'row',
+    borderRadius: 999,
+    borderWidth: 1,
+    padding: 4,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  mowgliProfileThemeButton: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliProfileThemeButtonText: {
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliProfileMenuList: {
+    marginBottom: 24,
+  },
+  mowgliDetailStage: {
+    marginHorizontal: -18,
+    paddingBottom: 120,
+  },
+  mowgliDetailHero: {
+    position: 'relative',
+    height: 348,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  mowgliDetailHeroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mowgliDetailHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mowgliDetailHeroNavRow: {
+    position: 'absolute',
+    top: 22,
+    left: 18,
+    right: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mowgliDetailHeroNavButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mowgliDetailContent: {
+    marginTop: -26,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 22,
+  },
+  mowgliDetailHeadingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 16,
+    marginBottom: 16,
+  },
+  mowgliDetailPriceStack: {
+    alignItems: 'flex-end',
+  },
+  mowgliDetailHeroPrice: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliDetailHeroPriceMeta: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliDetailTagRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 22,
+  },
+  mowgliDetailTagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mowgliDetailTagText: {
+    fontSize: 11,
+    lineHeight: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '800',
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliDetailSection: {
+    marginBottom: 22,
+  },
+  mowgliDetailSectionTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
+    marginBottom: 10,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliDetailBenefitRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 8,
+  },
+  mowgliDetailBenefitText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: UI_FONT_FAMILY,
+  },
+  mowgliDetailStickyBar: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 10,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+    paddingTop: 14,
+    borderTopWidth: 1,
+  },
+  mowgliDetailSecondaryCta: {
+    minWidth: 158,
+    minHeight: 52,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mowgliDetailSecondaryCtaText: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+    fontFamily: UI_FONT_FAMILY,
   },
   scrollContent: {
     paddingHorizontal: 18,
