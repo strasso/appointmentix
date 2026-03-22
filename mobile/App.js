@@ -36,6 +36,7 @@ import {
   SURFACE_TINT,
   BORDER_TINT,
   BORDER_LIGHT,
+  createMowgliTheme,
 } from './src/theme/tokens';
 
 const CLINIC = {
@@ -1118,6 +1119,7 @@ export default function App() {
   const [analyticsConnected, setAnalyticsConnected] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [uiAppearance] = useState('light');
   const [clinicSearchQuery, setClinicSearchQuery] = useState('');
   const [clinicSearchResults, setClinicSearchResults] = useState([]);
   const [clinicSearchLoading, setClinicSearchLoading] = useState(false);
@@ -2903,6 +2905,14 @@ function continueToAccessStep() {
     : otpCountdown > 0
       ? `Code neu senden in ${otpCountdown}s`
       : 'Code neu senden';
+  const mowgliTheme = useMemo(
+    () => createMowgliTheme({
+      mode: uiAppearance,
+      brandColor: clinicProfile?.brandColor,
+      accentColor: clinicProfile?.accentColor,
+    }),
+    [uiAppearance, clinicProfile?.brandColor, clinicProfile?.accentColor]
+  );
   const cartCount = cartItems.length;
 
   const handleClinicSearchChange = (value) => {
@@ -2972,6 +2982,7 @@ function continueToAccessStep() {
         return (
           <HomeScreen
             styles={styles}
+            mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
             cartCount={cartCount}
             onSearchPress={openHeaderSearch}
@@ -2992,6 +3003,7 @@ function continueToAccessStep() {
         return (
           <ShopScreen
             styles={styles}
+            mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
             cartCount={cartCount}
             onSearchPress={openHeaderSearch}
@@ -3129,6 +3141,7 @@ function continueToAccessStep() {
     return (
       <OnboardingScreen
         styles={styles}
+        mowgliTheme={mowgliTheme}
         liquidShineAnim={liquidShineAnim}
         onboardingStep={onboardingStep}
         showTechnicalSetup={showTechnicalSetup}
