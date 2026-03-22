@@ -25,6 +25,17 @@ function MenuRow({ styles, theme, icon, title, subtitle, onPress, destructive = 
   );
 }
 
+function IdentityBadge({ styles, theme, label, value }) {
+  return (
+    <View style={[styles.mowgliProfileIdentityBadge, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      <Text style={[styles.mowgliProfileIdentityBadgeLabel, { color: theme.textMuted }]}>{label}</Text>
+      <Text style={[styles.mowgliProfileIdentityBadgeValue, { color: theme.text }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 export default function ProfileScreen({
   styles,
   mowgliTheme,
@@ -55,33 +66,49 @@ export default function ProfileScreen({
 }) {
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const recentHistory = Array.isArray(history) ? history.slice(0, 3) : [];
+  const displayName = String(settingsName || 'Patient:in').trim() || 'Patient:in';
+  const displayInitial = displayName.slice(0, 1).toUpperCase() || 'P';
+  const clinicName = String(clinicProfile.name || 'Deine Klinik').trim();
 
   return (
     <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
       <View style={styles.mowgliProfileHeader}>
+        <Text style={[styles.mowgliHeaderSmallLabel, { color: theme.textMuted }]}>Account</Text>
         <Text style={[styles.mowgliProfileHeaderTitle, { color: theme.text }]}>Profil</Text>
       </View>
 
-      <View style={styles.mowgliProfileTopRow}>
-        <View style={[styles.mowgliProfileAvatarLarge, { backgroundColor: theme.surface, borderColor: theme.borderStrong }]}>
-          <Text style={[styles.mowgliProfileAvatarLargeText, { color: theme.accent }]}>
-            {String(settingsName || clinicProfile.shortName || 'C').trim().slice(0, 1).toUpperCase() || 'C'}
-          </Text>
-        </View>
-        <View style={styles.mowgliProfileTopCopy}>
-          <Text style={[styles.mowgliProfileTopName, { color: theme.text }]}>{settingsName || 'Patient:in'}</Text>
-          <Text style={[styles.mowgliProfileTopMeta, { color: theme.textMuted }]}>{settingsEmail || 'Keine E-Mail hinterlegt'}</Text>
-          <View style={styles.mowgliProfileTopBadgeRow}>
-            <Ionicons name="diamond-outline" size={14} color={theme.accent} />
-            <Text style={[styles.mowgliProfileTopBadgeText, { color: theme.accent }]}>
-              {hasActiveMembership ? currentMembership?.name || membershipStatusText : 'Gastzugang'}
-            </Text>
+      <View style={[styles.mowgliProfileIdentityShell, { backgroundColor: theme.shell, borderColor: theme.borderStrong }]}>
+        <View pointerEvents="none" style={[styles.mowgliProfileIdentityGlow, { backgroundColor: theme.heroGlow }]} />
+        <View style={styles.mowgliProfileTopRow}>
+          <View style={[styles.mowgliProfileAvatarLarge, { backgroundColor: theme.surface, borderColor: theme.borderStrong }]}>
+            <Text style={[styles.mowgliProfileAvatarLargeText, { color: theme.accent }]}>{displayInitial}</Text>
           </View>
+          <View style={styles.mowgliProfileTopCopy}>
+            <Text style={[styles.mowgliProfileTopName, { color: theme.text }]}>{displayName}</Text>
+            <Text style={[styles.mowgliProfileTopMeta, { color: theme.textMuted }]}>{settingsEmail || 'Keine E-Mail hinterlegt'}</Text>
+            <View style={styles.mowgliProfileTopBadgeRow}>
+              <Ionicons name="diamond-outline" size={14} color={theme.accent} />
+              <Text style={[styles.mowgliProfileTopBadgeText, { color: theme.accent }]}>
+                {hasActiveMembership ? currentMembership?.name || membershipStatusText : 'Gastzugang'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.mowgliProfileIdentityBadgeRow}>
+          <IdentityBadge styles={styles} theme={theme} label="MedSpa" value={clinicName || 'Nicht gesetzt'} />
+          <IdentityBadge
+            styles={styles}
+            theme={theme}
+            label="Modus"
+            value={patientGuestMode ? 'Gast' : patientPhone ? patientPhone : 'Unbekannt'}
+          />
         </View>
       </View>
 
       <View style={[styles.mowgliProfileMembershipTeaser, { backgroundColor: theme.shell, borderColor: theme.borderStrong }]}>
         <View pointerEvents="none" style={[styles.mowgliProfileMembershipMark, { backgroundColor: theme.heroGlow }]} />
+        <Text style={[styles.mowgliSectionEyebrow, { color: theme.accent }]}>Mitgliedschaft</Text>
         <Text style={[styles.mowgliProfileMembershipTitle, { color: theme.text }]}>
           {hasActiveMembership ? currentMembership?.name || 'Aktive Mitgliedschaft' : 'Keine aktive Mitgliedschaft'}
         </Text>
@@ -90,10 +117,7 @@ export default function ProfileScreen({
         </Text>
         {hasActiveMembership ? (
           <Pressable
-            style={({ pressed }) => [
-              styles.mowgliProfileMembershipLink,
-              pressed && styles.mowgliLiftSoft,
-            ]}
+            style={({ pressed }) => [styles.mowgliProfileMembershipLink, pressed && styles.mowgliLiftSoft]}
             disabled={membershipSyncing}
             onPress={() => {
               void cancelMembership();
@@ -113,7 +137,7 @@ export default function ProfileScreen({
       </View>
 
       <View style={styles.mowgliSectionHeaderRow}>
-        <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Zuletzt</Text>
+        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Zuletzt</Text>
       </View>
       <View style={styles.mowgliProfileHistoryList}>
         {recentHistory.length === 0 && (
@@ -140,7 +164,7 @@ export default function ProfileScreen({
       </View>
 
       <View style={styles.mowgliSectionHeaderRow}>
-        <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Einstellungen</Text>
+        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Einstellungen</Text>
       </View>
       <View style={[styles.mowgliSettingsCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
         <View style={[styles.mowgliSettingsInputShell, { backgroundColor: theme.input, borderColor: theme.border }]}>
@@ -192,17 +216,11 @@ export default function ProfileScreen({
           </Pressable>
         </View>
         <Text style={[styles.mowgliSettingsInfoText, { color: theme.textSoft }]}>
-          MedSpa: {clinicProfile.name || 'Nicht gesetzt'}
-        </Text>
-        <Text style={[styles.mowgliSettingsInfoText, { color: theme.textSoft }]}>
           {analyticsConnected ? 'MedSpa-Daten sind verbunden.' : 'MedSpa-Daten sind aktuell nicht verbunden.'}
         </Text>
         {!!backendCheckMessage && (
           <Text style={[styles.mowgliSettingsInfoText, { color: theme.textMuted }]}>{backendCheckMessage}</Text>
         )}
-        <Text style={[styles.mowgliSettingsInfoText, { color: theme.textSoft }]}>
-          Modus: {patientGuestMode ? 'Gast' : patientPhone ? `Telefon ${patientPhone}` : 'Unbekannt'}
-        </Text>
       </View>
 
       <View style={styles.mowgliProfileMenuList}>
