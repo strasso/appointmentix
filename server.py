@@ -2008,6 +2008,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "title": "Warum juckt meine Kopfhaut?",
         "body": "Trockene Kopfhaut kann auf Irritationen oder fehlende Feuchtigkeit hinweisen. Unsere PRP + Mesohair-Kombi unterstützt die Regeneration.",
         "tag": "Education",
+        "hideImage": True,
       },
       {
         "id": "art-2",

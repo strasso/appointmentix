@@ -173,6 +173,10 @@ function resolveClinicHeroImage(clinicProfile, fallbackImage) {
 }
 
 function resolveArticleImage(article, fallbackImage) {
+  const safeTitle = String(article?.title || '').trim().toLowerCase();
+  if (article?.hideImage === true || safeTitle === 'warum juckt meine kopfhaut?') {
+    return '';
+  }
   const candidates = [
     article?.imageUrl,
     article?.heroImageUrl,

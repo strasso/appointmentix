@@ -125,6 +125,7 @@ const HOME_ARTICLES = [
     title: 'Warum juckt meine Kopfhaut?',
     body: 'Trockene Kopfhaut kann auf Irritationen oder fehlende Feuchtigkeit hinweisen. Unsere PRP + Mesohair-Kombi unterstützt die Regeneration.',
     tag: 'Education',
+    hideImage: true,
   },
   {
     id: 'art-2',
