@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import FaceContourIcon from '../components/FaceContourIcon';
 import HairFollicleIcon from '../components/HairFollicleIcon';
 import InjectableIcon from '../components/InjectableIcon';
+import { createMowgliTheme } from '../theme/tokens';
 
 function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
   return (
@@ -25,7 +26,7 @@ function ShopTab({ styles, theme, label, active, onPress }) {
   return (
     <Pressable style={({ pressed }) => [
       styles.mowgliShopTab,
-      { backgroundColor: active ? theme.surfaceAlt : 'transparent' },
+      { backgroundColor: active ? theme.accentSurface : 'transparent', borderColor: active ? theme.accentBorder : 'transparent' },
       active && styles.mowgliShopTabActive,
       pressed && !active && styles.mowgliLiftSoft,
     ]} onPress={onPress}>
@@ -49,25 +50,25 @@ function CategoryPill({ styles, theme, cat, active, onPress, categoryIconName })
       style={({ pressed }) => [
         styles.mowgliCategoryPill,
         {
-          backgroundColor: active ? theme.primaryButtonBg : theme.surface,
-          borderColor: active ? theme.borderStrong : theme.border,
+          backgroundColor: active ? theme.accentSurfaceStrong : theme.surface,
+          borderColor: active ? theme.accentBorderStrong : theme.border,
         },
         active && styles.mowgliCategoryPillActive,
         pressed && styles.mowgliLiftSoft,
       ]}
       onPress={onPress}
     >
-      <View style={[styles.mowgliCategoryIconWrap, { backgroundColor: active ? theme.chipBg : theme.input, borderColor: theme.border }, active && styles.mowgliCategoryIconWrapActive]}>
+      <View style={[styles.mowgliCategoryIconWrap, { backgroundColor: active ? theme.accentSurface : theme.input, borderColor: active ? theme.accentBorder : theme.border }, active && styles.mowgliCategoryIconWrapActive]}>
         <CategoryIcon catId={cat.id} active={active} />
         {!['gesicht', 'haare', 'injectables'].includes(String(cat.id || '').toLowerCase()) && (
           <Ionicons
             name={fallbackIcon}
             size={17}
-            color={active ? theme.primaryButtonText : theme.accent}
+            color={active ? theme.accentText : theme.accent}
           />
         )}
       </View>
-      <Text style={[styles.mowgliCategoryPillText, { color: active ? theme.primaryButtonText : theme.text }, active && styles.mowgliCategoryPillTextActive]}>
+      <Text style={[styles.mowgliCategoryPillText, { color: active ? theme.accentText : theme.text }, active && styles.mowgliCategoryPillTextActive]}>
         {cat.label}
       </Text>
     </Pressable>
@@ -148,29 +149,7 @@ export default function ShopScreen({
   checkoutCtaLabel,
   openMembershipTreatment,
 }) {
-  const theme = mowgliTheme || {
-    accent: '#C8A97E',
-    page: '#0B0B0D',
-    header: '#0E0E10',
-    shell: '#121214',
-    shellAlt: '#151518',
-    surface: '#151518',
-    surfaceAlt: '#18181B',
-    input: '#101013',
-    border: 'rgba(200,169,126,0.14)',
-    borderStrong: 'rgba(200,169,126,0.24)',
-    text: '#F2ECE3',
-    textSoft: '#A59A8E',
-    textMuted: '#8F8579',
-    chipBg: 'rgba(200,169,126,0.08)',
-    chipText: '#E8D8BE',
-    heroGlow: 'rgba(200,169,126,0.10)',
-    primaryButtonBg: '#F2ECE3',
-    primaryButtonText: '#0A0A0C',
-    secondaryButtonBg: '#18181B',
-    secondaryButtonText: '#F2ECE3',
-    secondaryButtonBorder: 'rgba(200,169,126,0.16)',
-  };
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const membershipTabLabel = shopMembershipTabLabel === 'Membership' ? 'Mitgliedschaft' : shopMembershipTabLabel;
   const displayName = String(clinicProfile.name || 'Deine Klinik').trim();
 
@@ -189,7 +168,7 @@ export default function ShopScreen({
         </View>
       </View>
 
-      <View style={[styles.mowgliShopTabsRow, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
+        <View style={[styles.mowgliShopTabsRow, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
         <ShopTab styles={styles} theme={theme} label="Treatments" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
         <ShopTab styles={styles} theme={theme} label={membershipTabLabel} active={shopTab === 'membership'} onPress={() => setShopTab('membership')} />
         <ShopTab styles={styles} theme={theme} label="Katalog" active={shopTab === 'treatments'} onPress={() => setShopTab('treatments')} />

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { createMowgliTheme } from '../theme/tokens';
 
 function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
   return (
@@ -225,30 +226,7 @@ export default function HomeScreen({
   openArticle,
   closeArticle,
 }) {
-  const theme = mowgliTheme || {
-    mode: 'dark',
-    accent: '#C8A97E',
-    page: '#0B0B0D',
-    header: '#0E0E10',
-    shell: '#121214',
-    shellAlt: '#151518',
-    surface: '#151518',
-    surfaceAlt: '#18181B',
-    input: '#101013',
-    border: 'rgba(200,169,126,0.14)',
-    borderStrong: 'rgba(200,169,126,0.24)',
-    text: '#F2ECE3',
-    textSoft: '#A59A8E',
-    textMuted: '#8F8579',
-    chipBg: 'rgba(200,169,126,0.08)',
-    chipText: '#E8D8BE',
-    heroGlow: 'rgba(200,169,126,0.10)',
-    primaryButtonBg: '#F2ECE3',
-    primaryButtonText: '#0A0A0C',
-    secondaryButtonBg: '#18181B',
-    secondaryButtonText: '#F2ECE3',
-    secondaryButtonBorder: 'rgba(200,169,126,0.16)',
-  };
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
 
   const featuredTreatment = Array.isArray(treatments) ? treatments[0] : null;
   const fallbackImage = featuredTreatment ? preferredTreatmentImage(featuredTreatment) : '';

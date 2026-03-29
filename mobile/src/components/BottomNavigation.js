@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { createMowgliTheme } from '../theme/tokens';
 
 const TAB_SPECS = [
   { id: 'home', activeIcon: 'home', icon: 'home-outline' },
@@ -11,17 +12,7 @@ const TAB_SPECS = [
 ];
 
 export default function BottomNavigation({ styles, mowgliTheme, mainTab, switchMainTab }) {
-  const theme = mowgliTheme || {
-    shell: '#121214',
-    surfaceAlt: '#18181B',
-    border: 'rgba(200,169,126,0.14)',
-    borderStrong: 'rgba(200,169,126,0.24)',
-    text: '#F2ECE3',
-    textMuted: '#8F8579',
-    accent: '#C8A97E',
-    primaryButtonBg: '#F2ECE3',
-    primaryButtonText: '#0A0A0C',
-  };
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
 
   return (
     <View style={[
@@ -40,7 +31,7 @@ export default function BottomNavigation({ styles, mowgliTheme, mainTab, switchM
             style={({ pressed }) => [
               styles.mowgliBottomTab,
               isCenter && styles.mowgliBottomTabCenter,
-              active && !isCenter && [styles.mowgliBottomTabActive, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }],
+              active && !isCenter && [styles.mowgliBottomTabActive, { backgroundColor: theme.accentSurface, borderColor: theme.accentBorder }],
               active && isCenter && [styles.mowgliBottomTabCenterActive, { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong }],
               pressed && styles.mowgliLiftSoft,
             ]}

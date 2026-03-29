@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { createMowgliTheme } from '../theme/tokens';
 
 const ONBOARDING_KEYBOARD_ACCESSORY_ID = 'curabo-onboarding-keyboard';
 
@@ -68,14 +69,14 @@ function ClinicResultCard({ styles, theme, clinic, isSelected, onPress, isLast }
         isSelected && styles.onboardingClinicCardSelected,
         isLast && styles.onboardingClinicCardLast,
         {
-          backgroundColor: isSelected ? theme.chipBg : theme.surfaceAlt,
-          borderColor: isSelected ? theme.borderStrong : theme.border,
+          backgroundColor: isSelected ? theme.accentSurface : theme.surfaceAlt,
+          borderColor: isSelected ? theme.accentBorderStrong : theme.border,
         },
         pressed && styles.onboardingClinicCardPressed,
       ]}
       onPress={onPress}
     >
-      <View style={[styles.onboardingClinicLogo, { backgroundColor: theme.input, borderColor: isSelected ? theme.borderStrong : theme.border }]}>
+      <View style={[styles.onboardingClinicLogo, { backgroundColor: isSelected ? theme.accentSurface : theme.input, borderColor: isSelected ? theme.accentBorderStrong : theme.border }]}>
         <Ionicons
           name={isSelected ? 'checkmark-circle' : 'business-outline'}
           size={18}
@@ -86,7 +87,7 @@ function ClinicResultCard({ styles, theme, clinic, isSelected, onPress, isLast }
         <Text style={[styles.onboardingClinicName, { color: theme.text }]}>{clinicName}</Text>
         <Text style={[styles.onboardingClinicMeta, { color: theme.textMuted }]}>{clinicMeta}</Text>
       </View>
-      <View style={[styles.onboardingClinicSwatch, { backgroundColor: clinicAccent, borderColor: isSelected ? theme.borderStrong : theme.border }]} />
+      <View style={[styles.onboardingClinicSwatch, { backgroundColor: clinicAccent, borderColor: isSelected ? theme.accentBorderStrong : theme.border }]} />
     </Pressable>
   );
 }
@@ -146,32 +147,7 @@ export default function OnboardingScreen({
     && !clinicSearchLoading
     && clinicSuggestionResults.length === 0;
   const selectedPhone = String(patientPhone || '').trim();
-  const theme = mowgliTheme || {
-    mode: 'dark',
-    accent: '#C8A97E',
-    page: '#0B0B0D',
-    header: '#0E0E10',
-    shell: '#121214',
-    shellAlt: '#151518',
-    surface: '#151518',
-    surfaceAlt: '#18181B',
-    input: '#101013',
-    border: 'rgba(200,169,126,0.14)',
-    borderStrong: 'rgba(200,169,126,0.24)',
-    text: '#F2ECE3',
-    textSoft: '#A59A8E',
-    textMuted: '#8F8579',
-    chipBg: 'rgba(200,169,126,0.08)',
-    chipText: '#E8D8BE',
-    heroGlow: 'rgba(200,169,126,0.10)',
-    primaryButtonBg: '#F2ECE3',
-    primaryButtonText: '#0A0A0C',
-    secondaryButtonBg: '#18181B',
-    secondaryButtonText: '#F2ECE3',
-    secondaryButtonBorder: 'rgba(200,169,126,0.16)',
-    keyboardBar: '#141416',
-    keyboardHandle: 'rgba(200,169,126,0.26)',
-  };
+  const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const inputAccessoryViewID = Platform.OS === 'ios' ? ONBOARDING_KEYBOARD_ACCESSORY_ID : undefined;
 
   return (
@@ -216,7 +192,7 @@ export default function OnboardingScreen({
                 ? 'Wähle deine Klinik aus und starte in eine ruhige, klinikspezifische Experience mit eigenem Branding, Treatments und Wissen.'
                 : 'Bestätige deine Telefonnummer per SMS oder fahre als Gast fort. Danach öffnet sich direkt dein persönlicher Klinikbereich.'}
             </Text>
-            <View style={[styles.onboardingStepBadge, { borderColor: theme.border, backgroundColor: theme.chipBg, alignSelf: 'center', marginTop: 18 }]}>
+            <View style={[styles.onboardingStepBadge, { borderColor: theme.accentBorder, backgroundColor: theme.accentSurface, alignSelf: 'center', marginTop: 18 }]}>
               <Text style={[styles.onboardingStepBadgeText, { color: theme.accent }]}>
                 {onboardingStep === 'clinic' ? 'Schritt 1 von 2' : 'Schritt 2 von 2'}
               </Text>
