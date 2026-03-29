@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import FaceContourIcon from '../components/FaceContourIcon';
 import HairFollicleIcon from '../components/HairFollicleIcon';
@@ -24,13 +24,24 @@ function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
 
 function ShopTab({ styles, theme, label, active, onPress }) {
   return (
-    <Pressable style={({ pressed }) => [
-      styles.mowgliShopTab,
-      { backgroundColor: active ? theme.accentSurface : 'transparent', borderColor: active ? theme.accentBorder : 'transparent' },
-      active && styles.mowgliShopTabActive,
-      pressed && !active && styles.mowgliLiftSoft,
-    ]} onPress={onPress}>
-      <Text style={[styles.mowgliShopTabText, { color: active ? theme.text : theme.textMuted }, active && styles.mowgliShopTabTextActive]}>{label}</Text>
+    <Pressable
+      style={({ pressed }) => [
+        styles.mowgliShopTab,
+        { backgroundColor: active ? theme.surface : 'transparent', borderColor: active ? theme.borderStrong : 'transparent' },
+        active && styles.mowgliShopTabActive,
+        pressed && !active && styles.mowgliLiftSoft,
+      ]}
+      onPress={onPress}
+    >
+      <Text
+        style={[
+          styles.mowgliShopTabText,
+          { color: active ? theme.accent : theme.textMuted },
+          active && styles.mowgliShopTabTextActive,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -50,32 +61,43 @@ function CategoryPill({ styles, theme, cat, active, onPress, categoryIconName })
       style={({ pressed }) => [
         styles.mowgliCategoryPill,
         {
-          backgroundColor: active ? theme.accentSurfaceStrong : theme.surface,
-          borderColor: active ? theme.accentBorderStrong : theme.border,
+          backgroundColor: active ? theme.surface : theme.surfaceAlt,
+          borderColor: active ? theme.borderStrong : theme.border,
         },
         active && styles.mowgliCategoryPillActive,
         pressed && styles.mowgliLiftSoft,
       ]}
       onPress={onPress}
     >
-      <View style={[styles.mowgliCategoryIconWrap, { backgroundColor: active ? theme.accentSurface : theme.input, borderColor: active ? theme.accentBorder : theme.border }, active && styles.mowgliCategoryIconWrapActive]}>
+      <View
+        style={[
+          styles.mowgliCategoryIconWrap,
+          {
+            backgroundColor: active ? theme.accentSurface : theme.input,
+            borderColor: active ? theme.accentBorder : theme.border,
+          },
+          active && styles.mowgliCategoryIconWrapActive,
+        ]}
+      >
         <CategoryIcon catId={cat.id} active={active} />
         {!['gesicht', 'haare', 'injectables'].includes(String(cat.id || '').toLowerCase()) && (
-          <Ionicons
-            name={fallbackIcon}
-            size={17}
-            color={active ? theme.accentText : theme.accent}
-          />
+          <Ionicons name={fallbackIcon} size={17} color={active ? theme.accent : theme.textMuted} />
         )}
       </View>
-      <Text style={[styles.mowgliCategoryPillText, { color: active ? theme.accentText : theme.text }, active && styles.mowgliCategoryPillTextActive]}>
+      <Text
+        style={[
+          styles.mowgliCategoryPillText,
+          { color: active ? theme.text : theme.textSoft },
+          active && styles.mowgliCategoryPillTextActive,
+        ]}
+      >
         {cat.label}
       </Text>
     </Pressable>
   );
 }
 
-function ProductCard({ styles, theme, item, onPress, formatPrice, getImageUrl }) {
+function ProductCard({ styles, theme, item, onPress, formatPrice, getImageUrl, categoryLabel }) {
   const imageUrl = getImageUrl(item);
   return (
     <Pressable
@@ -87,19 +109,34 @@ function ProductCard({ styles, theme, item, onPress, formatPrice, getImageUrl })
       onPress={() => onPress(item)}
     >
       {imageUrl ? (
-        <Image source={{ uri: imageUrl }} style={styles.mowgliProductImage} />
+        <Image source={{ uri: imageUrl }} style={[styles.mowgliProductImage, { height: 180 }]} />
       ) : (
-        <View style={[styles.mowgliProductImageFallback, { backgroundColor: theme.input }]}>
+        <View style={[styles.mowgliProductImageFallback, { backgroundColor: theme.input, height: 180 }]}>
           <Ionicons name="sparkles-outline" size={22} color={theme.accent} />
         </View>
       )}
       <View style={styles.mowgliProductBody}>
         <View style={styles.mowgliProductMetaRow}>
-          <Text style={[styles.mowgliProductMeta, { color: theme.accent }]}>{item.durationMinutes} Min</Text>
-          <Text style={[styles.mowgliProductPrice, { color: theme.text }]}>ab {formatPrice(item.priceCents)}</Text>
+          <Text style={[styles.mowgliProductMeta, { color: theme.accent }]}>{categoryLabel}</Text>
+          <Text style={[styles.mowgliProductPrice, { color: theme.text }]}>{formatPrice(item.priceCents)}</Text>
         </View>
-        <Text style={[styles.mowgliProductTitle, { color: theme.text }]} numberOfLines={2}>{item.name}</Text>
-        <Text style={[styles.mowgliProductDescription, { color: theme.textMuted }]} numberOfLines={2}>{item.description}</Text>
+        <Text style={[styles.mowgliProductTitle, { color: theme.text }]} numberOfLines={2}>
+          {item.name}
+        </Text>
+        <View
+          style={{
+            marginTop: 14,
+            minHeight: 36,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: theme.accentBorder,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: theme.mode === 'dark' ? theme.surfaceAlt : theme.shellAlt,
+          }}
+        >
+          <Text style={{ color: theme.text, fontSize: 12, fontWeight: '600' }}>Ansehen</Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -108,20 +145,17 @@ function ProductCard({ styles, theme, item, onPress, formatPrice, getImageUrl })
 export default function ShopScreen({
   styles,
   mowgliTheme,
-  clinicProfile,
   cartCount,
   onSearchPress,
   onCartPress,
   shopTab,
   setShopTab,
-  shopMembershipTabLabel,
   selectedTreatment,
   treatmentCategories,
   categoryId,
   setCategoryId,
   categoryIconName,
   selectedCategory,
-  selectedCategoryMeta,
   browseItems,
   openTreatment,
   preferredTreatmentImage,
@@ -150,17 +184,31 @@ export default function ShopScreen({
   openMembershipTreatment,
 }) {
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
-  const membershipTabLabel = shopMembershipTabLabel === 'Membership' ? 'Mitgliedschaft' : shopMembershipTabLabel;
-  const displayName = String(clinicProfile.name || 'Deine Klinik').trim();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortMode, setSortMode] = useState('featured');
+
+  const sortedBrowseItems = useMemo(() => {
+    const items = [...browseItems];
+    if (sortMode === 'price') return items.sort((a, b) => (a.priceCents || 0) - (b.priceCents || 0));
+    if (sortMode === 'duration') return items.sort((a, b) => (a.durationMinutes || 0) - (b.durationMinutes || 0));
+    return items;
+  }, [browseItems, sortMode]);
+
+  const sortLabel = sortMode === 'featured' ? 'Sortieren' : sortMode === 'price' ? 'Preis' : 'Dauer';
+
+  const cycleSortMode = () => {
+    setSortMode((prev) => {
+      if (prev === 'featured') return 'price';
+      if (prev === 'price') return 'duration';
+      return 'featured';
+    });
+  };
 
   return (
     <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
-      <View style={styles.mowgliHeaderMinimal}>
-        <View style={styles.mowgliHeaderMinimalCopy}>
-          <Text style={[styles.mowgliHeaderSmallLabel, { color: theme.textMuted }]}>Shop</Text>
-          <Text style={[styles.mowgliHeaderClinicName, { color: theme.text }]} numberOfLines={2}>
-            {displayName}
-          </Text>
+      <View style={[styles.mowgliHeader, { backgroundColor: theme.header, borderColor: theme.border }]}>
+        <View style={styles.mowgliHeaderCopy}>
+          <Text style={[styles.mowgliHeaderTitle, { color: theme.text }]}>Shop</Text>
         </View>
         <View style={styles.mowgliHeaderActions}>
           <HeaderAction styles={styles} theme={theme} icon="search-outline" onPress={onSearchPress} />
@@ -168,48 +216,49 @@ export default function ShopScreen({
         </View>
       </View>
 
-        <View style={[styles.mowgliShopTabsRow, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
+      <View style={[styles.mowgliShopTabsRow, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
         <ShopTab styles={styles} theme={theme} label="Treatments" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
-        <ShopTab styles={styles} theme={theme} label={membershipTabLabel} active={shopTab === 'membership'} onPress={() => setShopTab('membership')} />
+        <ShopTab styles={styles} theme={theme} label="Memberships" active={shopTab === 'membership'} onPress={() => setShopTab('membership')} />
         <ShopTab styles={styles} theme={theme} label="Katalog" active={shopTab === 'treatments'} onPress={() => setShopTab('treatments')} />
       </View>
 
       {shopTab === 'browse' && !selectedTreatment && (
         <View style={styles.mowgliShopSection}>
-          <View style={styles.mowgliSectionHead}>
-            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Treatments & Vorteile</Text>
-            <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Wähle, was zu dir passt.</Text>
-            <Text style={[styles.mowgliShopLead, { color: theme.textMuted }]}>
-              Filtere nach Bereichen und öffne einzelne Treatments in einer ruhigeren, detailreichen Ansicht.
-            </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 }}>
+            <Pressable
+              onPress={() => setFiltersOpen((prev) => !prev)}
+              style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+            >
+              <Ionicons name="options-outline" size={16} color={theme.textMuted} />
+              <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>Filter</Text>
+            </Pressable>
+            <Pressable
+              onPress={cycleSortMode}
+              style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+            >
+              <Ionicons name="swap-vertical-outline" size={16} color={theme.textMuted} />
+              <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>{sortLabel}</Text>
+            </Pressable>
           </View>
 
-          <View style={styles.mowgliSectionHead}>
-            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Kategorien</Text>
-            <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>{selectedCategory?.label || 'Treatments filtern'}</Text>
-          </View>
-          <View style={styles.mowgliCategoryPillRow}>
-            {treatmentCategories.map((cat) => (
-              <CategoryPill
-                key={cat.id}
-                styles={styles}
-                theme={theme}
-                cat={cat}
-                active={categoryId === cat.id}
-                categoryIconName={categoryIconName}
-                onPress={() => setCategoryId(cat.id)}
-              />
-            ))}
-          </View>
-
-          <View style={styles.mowgliSectionHeadCompact}>
-            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Auswahl</Text>
-            <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Für {selectedCategory?.label || categoryId}</Text>
-            <Text style={[styles.mowgliShopLead, { color: theme.textMuted }]}>{selectedCategoryMeta.description}</Text>
-          </View>
+          {filtersOpen && (
+            <View style={styles.mowgliCategoryPillRow}>
+              {treatmentCategories.map((cat) => (
+                <CategoryPill
+                  key={cat.id}
+                  styles={styles}
+                  theme={theme}
+                  cat={cat}
+                  active={categoryId === cat.id}
+                  categoryIconName={categoryIconName}
+                  onPress={() => setCategoryId(cat.id)}
+                />
+              ))}
+            </View>
+          )}
 
           <View style={styles.mowgliProductGrid}>
-            {browseItems.map((item) => (
+            {sortedBrowseItems.map((item) => (
               <ProductCard
                 key={item.id}
                 styles={styles}
@@ -218,15 +267,16 @@ export default function ShopScreen({
                 onPress={openTreatment}
                 getImageUrl={preferredTreatmentImage}
                 formatPrice={formatPrice}
+                categoryLabel={selectedCategory?.label || item.category || 'Treatment'}
               />
             ))}
           </View>
 
-          {browseItems.length === 0 && (
+          {sortedBrowseItems.length === 0 && (
             <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Ionicons name="search-outline" size={18} color={theme.textMuted} />
               <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Keine Treatments in dieser Kategorie</Text>
-              <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>Passe später den Katalog im Backend an oder wähle eine andere Kategorie.</Text>
+              <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>Passe den Filter an oder wähle eine andere Kategorie.</Text>
             </View>
           )}
         </View>
@@ -264,9 +314,7 @@ export default function ShopScreen({
             <View style={styles.mowgliDetailHeadingRow}>
               <Text style={[styles.mowgliDetailTitle, { color: theme.text }]}>{selectedTreatment.name}</Text>
               <View style={styles.mowgliDetailPriceStack}>
-                <Text style={[styles.mowgliDetailHeroPrice, { color: theme.accent }]}>
-                  {formatPrice(selectedTreatment.priceCents)}
-                </Text>
+                <Text style={[styles.mowgliDetailHeroPrice, { color: theme.accent }]}>{formatPrice(selectedTreatment.priceCents)}</Text>
                 <Text style={[styles.mowgliDetailHeroPriceMeta, { color: theme.textMuted }]}>pro Sitzung</Text>
               </View>
             </View>
@@ -332,9 +380,7 @@ export default function ShopScreen({
               }}
             >
               <Ionicons name="bag-add-outline" size={14} color={theme.secondaryButtonText} />
-              <Text style={[styles.mowgliDetailSecondaryCtaText, { color: theme.secondaryButtonText }]}>
-                In den Warenkorb
-              </Text>
+              <Text style={[styles.mowgliDetailSecondaryCtaText, { color: theme.secondaryButtonText }]}>In den Warenkorb</Text>
             </Pressable>
             <Pressable
               style={({ pressed }) => [
@@ -356,10 +402,7 @@ export default function ShopScreen({
 
       {shopTab === 'membership' && (
         <View style={styles.mowgliShopSection}>
-          <View style={styles.mowgliSectionHead}>
-            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Mitgliedschaften</Text>
-            <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Monatliche Vorteile mit Substanz</Text>
-          </View>
+          <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Memberships</Text>
 
           {memberships.map((plan) => {
             const active = membershipStatus?.status === 'active' && membershipStatus?.membershipId === plan.id;
@@ -368,14 +411,14 @@ export default function ShopScreen({
             const planIncludedIds = Array.isArray(plan.includedTreatmentIds) ? plan.includedTreatmentIds : [];
             const includedTreatments = treatments.filter((item) => planIncludedIds.includes(item.id)).slice(0, 3);
             return (
-              <View key={plan.id} style={[
-                styles.mowgliMembershipPlanCard,
-                active && styles.mowgliMembershipPlanCardActive,
-                {
-                  backgroundColor: active ? theme.chipBg : theme.shell,
-                  borderColor: active ? theme.borderStrong : theme.border,
-                },
-              ]}>
+              <View
+                key={plan.id}
+                style={[
+                  styles.mowgliMembershipPlanCard,
+                  active && styles.mowgliMembershipPlanCardActive,
+                  { backgroundColor: active ? theme.chipBg : theme.shell, borderColor: active ? theme.borderStrong : theme.border },
+                ]}
+              >
                 <View style={styles.mowgliMembershipPlanTopRow}>
                   <View style={styles.mowgliMembershipPlanCopy}>
                     <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Mitgliedschaft</Text>
@@ -426,10 +469,12 @@ export default function ShopScreen({
                     void activateMembership(plan.id);
                   }}
                 >
-                  <Text style={[
-                    active ? styles.mowgliMembershipCtaTextActive : styles.mowgliMembershipCtaText,
-                    { color: active ? theme.secondaryButtonText : theme.primaryButtonText },
-                  ]}>
+                  <Text
+                    style={[
+                      active ? styles.mowgliMembershipCtaTextActive : styles.mowgliMembershipCtaText,
+                      { color: active ? theme.secondaryButtonText : theme.primaryButtonText },
+                    ]}
+                  >
                     {active
                       ? 'Aktiv'
                       : recovering
@@ -447,10 +492,7 @@ export default function ShopScreen({
 
       {shopTab === 'treatments' && (
         <View style={styles.mowgliShopSection}>
-          <View style={styles.mowgliSectionHead}>
-            <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Katalog</Text>
-            <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Alle Treatments im Überblick</Text>
-          </View>
+          <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Katalog</Text>
           {treatments.map((item) => (
             <View key={item.id} style={[styles.mowgliCatalogRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.mowgliCatalogCopy}>
@@ -493,11 +535,13 @@ export default function ShopScreen({
                   ]}
                   onPress={() => setSelectedCheckoutMethod(option.id)}
                 >
-                  <Text style={[
-                    styles.mowgliCheckoutMethodChipText,
-                    { color: active ? theme.primaryButtonText : theme.text },
-                    active && styles.mowgliCheckoutMethodChipTextActive,
-                  ]}>
+                  <Text
+                    style={[
+                      styles.mowgliCheckoutMethodChipText,
+                      { color: active ? theme.primaryButtonText : theme.text },
+                      active && styles.mowgliCheckoutMethodChipTextActive,
+                    ]}
+                  >
                     {option.label}
                   </Text>
                 </Pressable>

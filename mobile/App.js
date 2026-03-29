@@ -3066,12 +3066,14 @@ function continueToAccessStep() {
             styles={styles}
             mowgliTheme={mowgliTheme}
             clinicProfile={clinicProfile}
+            settingsName={settingsName}
             cartCount={cartCount}
             onSearchPress={openHeaderSearch}
             onCartPress={openHeaderCart}
             liquidShineAnim={liquidShineAnim}
             floatingAuraAnim={floatingAuraAnim}
             activeMembershipName={activeMembershipName}
+            currentMembership={currentMembership}
             onViewOffers={handleOpenOffers}
             homeArticles={homeArticles}
             clinicMapRegion={clinicMapRegion}

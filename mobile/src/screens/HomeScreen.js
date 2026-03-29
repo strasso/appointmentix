@@ -53,37 +53,54 @@ function PopularCard({ styles, theme, treatment, imageUrl, formatPrice, onPress 
   );
 }
 
-function OverviewCard({ styles, theme, eyebrow, title, body, icon, onPress, primary = false }) {
+function MembershipCard({ styles, theme, membershipLabel, currentMembership, onPress }) {
+  const perks = Array.isArray(currentMembership?.perks) ? currentMembership.perks.slice(0, 2) : [];
+  return (
+    <View style={[styles.mowgliMembershipCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
+      <View pointerEvents="none" style={[styles.mowgliMembershipGlow, { backgroundColor: theme.heroGlow }]} />
+      <View style={styles.mowgliMembershipTopRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.mowgliFeaturedTag, { color: theme.accent }]}>Active Membership</Text>
+          <Text style={[styles.mowgliMembershipTitle, { color: theme.text }]}>
+            {membershipLabel}
+          </Text>
+        </View>
+        <View style={[styles.mowgliMembershipIcon, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+          <Ionicons name="diamond-outline" size={18} color={theme.accent} />
+        </View>
+      </View>
+      <Text style={[styles.mowgliMembershipBody, { color: theme.textSoft }]}>
+        {perks.length > 0
+          ? perks.join('\n')
+          : 'Vorteile, bevorzugte Slots und freigeschaltete Konditionen für deine Klinik in einem Ort.'}
+      </Text>
+      <Pressable onPress={onPress} style={({ pressed }) => [styles.mowgliTextLink, pressed && styles.mowgliLiftSoft]}>
+        <Text style={[styles.mowgliTextLinkText, { color: theme.accent }]}>Mehr erfahren</Text>
+        <Ionicons name="arrow-forward" size={13} color={theme.accent} />
+      </Pressable>
+    </View>
+  );
+}
+
+function QuickAction({ styles, theme, title, caption, icon, onPress }) {
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.mowgliOverviewCard,
+        styles.mowgliActionSquare,
         {
-          backgroundColor: primary ? theme.shellAlt : theme.surface,
-          borderColor: primary ? theme.borderStrong : theme.border,
+          backgroundColor: theme.surface,
+          borderColor: theme.border,
         },
         pressed && styles.mowgliLiftSoft,
       ]}
       onPress={onPress}
     >
-      <View style={styles.mowgliOverviewCardRow}>
-        <View style={styles.mowgliOverviewCardCopy}>
-          <Text style={[styles.mowgliSectionEyebrow, { color: primary ? theme.accent : theme.textMuted }]}>
-            {eyebrow}
-          </Text>
-          <Text style={[styles.mowgliOverviewCardTitle, { color: theme.text }]}>{title}</Text>
-          <Text style={[styles.mowgliOverviewCardBody, { color: theme.textSoft }]} numberOfLines={2}>
-            {body}
-          </Text>
-        </View>
-        <View
-          style={[
-            styles.mowgliOverviewCardIcon,
-            { backgroundColor: theme.input, borderColor: primary ? theme.borderStrong : theme.border },
-          ]}
-        >
-          <Ionicons name={icon} size={18} color={theme.accent} />
-        </View>
+      <View style={[styles.mowgliActionSquareIcon, { backgroundColor: theme.accentSurface, borderColor: theme.accentBorder }]}>
+        <Ionicons name={icon} size={20} color={theme.accent} />
+      </View>
+      <View>
+        <Text style={[styles.mowgliActionSquareTitle, { color: theme.text }]}>{title}</Text>
+        <Text style={[styles.mowgliQuickActionCaption, { color: theme.textMuted }]}>{caption}</Text>
       </View>
     </Pressable>
   );
@@ -158,6 +175,31 @@ function ArticleRow({ styles, theme, article, imageUrl, onPress }) {
   );
 }
 
+function KnowledgeRow({ styles, theme, article, imageUrl, onPress }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.mowgliKnowledgeRow, pressed && styles.mowgliLiftSoft]}
+      onPress={() => onPress(article)}
+    >
+      {imageUrl ? (
+        <Image source={{ uri: imageUrl }} style={styles.mowgliKnowledgeThumb} />
+      ) : (
+        <View style={[styles.mowgliKnowledgeThumb, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+          <Ionicons name="reader-outline" size={22} color={theme.accent} />
+        </View>
+      )}
+      <View style={[styles.mowgliKnowledgeCopy, { borderLeftColor: theme.accentBorderStrong }]}>
+        <Text style={[styles.mowgliKnowledgeTitle, { color: theme.text }]} numberOfLines={2}>
+          {article.title}
+        </Text>
+        <Text style={[styles.mowgliKnowledgeBody, { color: theme.textMuted }]} numberOfLines={3}>
+          {article.summary || article.body}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function resolveClinicHeroImage(clinicProfile, fallbackImage) {
   const candidates = [
     clinicProfile?.heroImageUrl,
@@ -207,10 +249,12 @@ export default function HomeScreen({
   styles,
   mowgliTheme,
   clinicProfile,
+  settingsName,
   cartCount,
   onSearchPress,
   onCartPress,
   activeMembershipName,
+  currentMembership,
   onViewOffers,
   homeArticles,
   clinicCoordinates,
@@ -233,13 +277,14 @@ export default function HomeScreen({
   const clinicHeroImage = resolveClinicHeroImage(clinicProfile, fallbackImage);
   const popularTreatments = Array.isArray(treatments) ? treatments.slice(0, 4) : [];
   const articles = Array.isArray(homeArticles) ? homeArticles.slice(0, 3) : [];
-  const featuredArticle = articles[0] || null;
-  const secondaryArticles = articles.slice(1);
   const displayName = String(clinicProfile.name || 'Deine Klinik').trim();
   const membershipLabel = String(activeMembershipName || 'Gastzugang').trim() || 'Gastzugang';
   const articleBody = selectedArticle ? splitArticleBody(selectedArticle) : [];
   const articleHeroImage = selectedArticle ? resolveArticleImage(selectedArticle, clinicHeroImage) : '';
-  const clinicAddress = [clinicProfile.address, clinicProfile.city].filter(Boolean).join(', ');
+  const firstName = String(settingsName || '').trim().split(/\s+/)[0] || '';
+  const hour = new Date().getHours();
+  const greeting = hour < 11 ? 'Guten Morgen' : hour < 18 ? 'Guten Tag' : 'Guten Abend';
+  const greetingText = firstName ? `${greeting}, ${firstName}` : greeting;
 
   if (selectedArticle) {
     return (
@@ -308,10 +353,14 @@ export default function HomeScreen({
 
   return (
     <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
-      <View style={styles.mowgliHeaderMinimal}>
-        <View style={styles.mowgliHeaderMinimalCopy}>
-          <Text style={[styles.mowgliHeaderClinicName, { color: theme.text }]} numberOfLines={2}>
-            {displayName}
+      <View style={[styles.mowgliHeader, { backgroundColor: theme.header, borderColor: theme.border }]}>
+        <View style={styles.mowgliHeaderCopy}>
+          <View style={styles.mowgliHeaderBrandRow}>
+            <Ionicons name="sparkles-outline" size={16} color={theme.accent} />
+            <Text style={[styles.mowgliHeaderBrandText, { color: theme.accent }]}>Curabo</Text>
+          </View>
+          <Text style={[styles.mowgliHeaderTitle, { color: theme.text }]} numberOfLines={2}>
+            {greetingText}
           </Text>
         </View>
         <View style={styles.mowgliHeaderActions}>
@@ -320,69 +369,44 @@ export default function HomeScreen({
         </View>
       </View>
 
-      <View style={styles.mowgliWelcomeBlock}>
-        <Text style={[styles.mowgliSectionEyebrow, { color: theme.accent }]}>Patient App</Text>
-        <Text style={[styles.mowgliWelcomeTitle, { color: theme.text }]}>Willkommen zurück</Text>
-        <Text style={[styles.mowgliWelcomeBody, { color: theme.textSoft }]}>
-          Treatments, Vorteile und aktuelle Klinikbeiträge bleiben an einem Ort ruhig organisiert.
-        </Text>
-      </View>
-
       <Pressable
         style={({ pressed }) => [
-          styles.mowgliClinicHeroCard,
+          styles.mowgliFeaturedHero,
           { backgroundColor: theme.shell, borderColor: theme.border },
           pressed && styles.mowgliLiftSoft,
         ]}
         onPress={() => {
-          if (clinicCoordinates) {
-            void openClinicInMaps();
+          if (featuredTreatment) {
+            openTreatmentFromHome(featuredTreatment);
+          } else {
+            onViewOffers();
           }
         }}
       >
-        {clinicHeroImage ? (
-          <Image source={{ uri: clinicHeroImage }} style={styles.mowgliClinicHeroImage} />
+        {fallbackImage || clinicHeroImage ? (
+          <Image source={{ uri: fallbackImage || clinicHeroImage }} style={styles.mowgliFeaturedHeroImage} />
         ) : (
-          <View style={[styles.mowgliClinicHeroFallback, { backgroundColor: theme.surfaceAlt }]}>
-            <Ionicons name="business-outline" size={28} color={theme.accent} />
+          <View style={[styles.mowgliFeaturedHeroFallback, { backgroundColor: theme.surfaceAlt }]}>
+            <Ionicons name="sparkles-outline" size={30} color={theme.accent} />
           </View>
         )}
         <View
           style={[
-            styles.mowgliClinicHeroOverlay,
-            { backgroundColor: theme.mode === 'dark' ? 'rgba(10,10,12,0.42)' : 'rgba(18,14,10,0.12)' },
+            styles.mowgliFeaturedHeroOverlay,
+            { backgroundColor: theme.mode === 'dark' ? 'rgba(10,10,12,0.68)' : 'rgba(18,14,10,0.26)' },
           ]}
         />
-        <View style={styles.mowgliClinicHeroContent}>
-          <Text style={[styles.mowgliArticleTag, { color: theme.accent }]}>Klinik & Empfang</Text>
-          <Text style={[styles.mowgliClinicHeroTitle, { color: theme.text }]}>{displayName}</Text>
-          <Text style={[styles.mowgliClinicHeroBody, { color: theme.textSoft }]} numberOfLines={2}>
-            {clinicAddress || 'Ruhige Umgebung, persönlicher Empfang und alle Informationen direkt in deiner App.'}
+        <View pointerEvents="none" style={[styles.mowgliHeroShimmer, { backgroundColor: theme.accentHalo }]} />
+        <View style={styles.mowgliFeaturedHeroContent}>
+          <Text style={[styles.mowgliFeaturedTag, { color: theme.accent }]}>Featured</Text>
+          <Text style={[styles.mowgliFeaturedTitle, { color: theme.text }]} numberOfLines={2}>
+            {featuredTreatment?.name || displayName}
+          </Text>
+          <Text style={[styles.mowgliFeaturedBody, { color: theme.textSoft }]} numberOfLines={2}>
+            {featuredTreatment?.description || 'Premium-Treatments und kuratierte Vorteile direkt in deiner Klinik-App.'}
           </Text>
         </View>
       </Pressable>
-
-      <View style={styles.mowgliOverviewRail}>
-        <OverviewCard
-          styles={styles}
-          theme={theme}
-          eyebrow="Mitgliedschaft"
-          title={membershipLabel}
-          body="Vorteile, Preise und wiederkehrende Leistungen im Überblick."
-          icon="diamond-outline"
-          onPress={openMembershipTab}
-          primary
-        />
-        <OverviewCard
-          styles={styles}
-          theme={theme}
-          eyebrow="Shop"
-          title="Treatments entdecken"
-          body={`${popularTreatments.length || 0} sichtbare Leistungen in deiner Klinik.`}
-          icon="sparkles-outline"
-          onPress={onViewOffers}
-        />
-      </View>
 
       {popularTreatments.length > 0 && (
         <>
@@ -409,87 +433,56 @@ export default function HomeScreen({
         </>
       )}
 
-      <View style={styles.mowgliSectionHeaderRow}>
-        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Wissen & Tipps</Text>
-      </View>
+      <MembershipCard
+        styles={styles}
+        theme={theme}
+        membershipLabel={membershipLabel}
+        currentMembership={currentMembership}
+        onPress={openMembershipTab}
+      />
 
-      {!!featuredArticle && (
-        <FeaturedArticleCard
+      <View style={styles.mowgliActionSquareRow}>
+        <QuickAction
           styles={styles}
           theme={theme}
-          article={featuredArticle}
-          imageUrl={resolveArticleImage(featuredArticle, clinicHeroImage)}
-          onPress={openArticle}
+          icon="calendar-outline"
+          title="Treatments"
+          caption="Alle Leistungen ansehen"
+          onPress={onViewOffers}
         />
-      )}
-
-      <View style={styles.mowgliArticleList}>
-        {secondaryArticles.map((article) => (
-          <ArticleRow
-            key={article.id}
-            styles={styles}
-            theme={theme}
-            article={article}
-            imageUrl={resolveArticleImage(article, clinicHeroImage)}
-            onPress={openArticle}
-          />
-        ))}
+        <QuickAction
+          styles={styles}
+          theme={theme}
+          icon="star-outline"
+          title="Membership"
+          caption="Vorteile freischalten"
+          onPress={openMembershipTab}
+        />
+        <QuickAction
+          styles={styles}
+          theme={theme}
+          icon="call-outline"
+          title="Kontakt"
+          caption="Klinik direkt erreichen"
+          onPress={() => {
+            void callClinicNow();
+          }}
+        />
       </View>
 
-      <View style={[styles.mowgliClinicCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-        <View style={styles.mowgliSectionHeadCompact}>
-          <Text style={[styles.mowgliSectionEyebrow, { color: theme.textMuted }]}>Standort & Kontakt</Text>
-          <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>{displayName}</Text>
-        </View>
-        <Pressable
-          style={({ pressed }) => [styles.mowgliMapWrap, pressed && styles.mowgliLiftSoft]}
-          onPress={() => {
-            void openClinicInMaps();
-          }}
-        >
-          <View pointerEvents="none" style={[styles.mowgliMapPreview, { backgroundColor: theme.input, borderColor: theme.border }]} />
-          <View style={[styles.mowgliMapHint, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
-            <Ionicons name="map-outline" size={13} color={theme.text} />
-            <Text style={[styles.mowgliMapHintText, { color: theme.text }]}>In Maps öffnen</Text>
-          </View>
-        </Pressable>
-        <View style={styles.mowgliClinicMetaList}>
-          <View style={styles.mowgliClinicMetaRow}>
-            <Ionicons name="location-outline" size={14} color={theme.accent} />
-            <Text style={[styles.mowgliClinicMetaText, { color: theme.textSoft }]}>
-              {clinicProfile.address || clinicProfile.city || 'Standortdaten folgen'}
-            </Text>
-          </View>
-          <View style={styles.mowgliClinicMetaRow}>
-            <Ionicons name="time-outline" size={14} color={theme.accent} />
-            <Text style={[styles.mowgliClinicMetaText, { color: theme.textSoft }]}>
-              {clinicProfile.openingHours || 'Mo - Sa, 09:00 - 17:00'}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.mowgliClinicActionRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.mowgliClinicPrimary,
-              { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong },
-              pressed && styles.mowgliLiftSoft,
-            ]}
-            onPress={() => {
-              void callClinicNow();
-            }}
-          >
-            <Text style={[styles.mowgliClinicPrimaryText, { color: theme.primaryButtonText }]}>Klinik anrufen</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.mowgliClinicSecondary,
-              { backgroundColor: theme.secondaryButtonBg, borderColor: theme.secondaryButtonBorder },
-              pressed && styles.mowgliLiftSoft,
-            ]}
-            onPress={openProfile}
-          >
-            <Text style={[styles.mowgliClinicSecondaryText, { color: theme.secondaryButtonText }]}>Profil öffnen</Text>
-          </Pressable>
+      <View style={styles.mowgliSectionBlock}>
+        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Wissen & Tipps</Text>
+        <View style={styles.mowgliKnowledgeList}>
+          {articles.map((article) => (
+            <KnowledgeRow
+              key={article.id}
+              styles={styles}
+              theme={theme}
+              article={article}
+              imageUrl={resolveArticleImage(article, clinicHeroImage)}
+              onPress={openArticle}
+            />
+          ))}
         </View>
       </View>
     </View>
