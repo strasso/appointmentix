@@ -1,48 +1,39 @@
-import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createMowgliTheme } from '../theme/tokens';
 
-function MenuRow({ styles, theme, icon, title, subtitle, onPress, destructive = false }) {
+const DEFAULT_AVATAR = require('../../_mowgli_export/screens/images/avatar-female.jpg');
+
+function MenuRow({ theme, icon, title, subtitle, onPress, destructive = false, noBorder = false }) {
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.mowgliProfileMenuRow,
-        { backgroundColor: theme.surface, borderColor: theme.border },
-        pressed && styles.mowgliLiftSoft,
-      ]}
       onPress={onPress}
+      style={({ pressed }) => [
+        profileStyles.menuRow,
+        {
+          backgroundColor: theme.surfaceAlt,
+          borderBottomColor: noBorder ? 'transparent' : theme.border,
+        },
+        pressed && profileStyles.pressed,
+      ]}
     >
-      <View style={[styles.mowgliProfileMenuIcon, { backgroundColor: theme.input, borderColor: theme.border }]}>
-        <Ionicons name={icon} size={16} color={destructive ? '#B86A5D' : theme.textMuted} />
+      <View style={profileStyles.menuLeft}>
+        <Ionicons name={icon} size={18} color={destructive ? '#B86A5D' : theme.textMuted} />
+        <View>
+          <Text style={[profileStyles.menuTitle, { color: destructive ? '#B86A5D' : theme.text }]}>{title}</Text>
+          {!!subtitle && <Text style={[profileStyles.menuSubtitle, { color: theme.textMuted }]}>{subtitle}</Text>}
+        </View>
       </View>
-      <View style={styles.mowgliProfileMenuCopy}>
-        <Text style={[styles.mowgliProfileMenuTitle, { color: destructive ? '#B86A5D' : theme.text }]}>{title}</Text>
-        {!!subtitle && <Text style={[styles.mowgliProfileMenuSubtitle, { color: theme.textMuted }]}>{subtitle}</Text>}
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={theme.textMuted} />
+      <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
     </Pressable>
   );
 }
 
-function IdentityBadge({ styles, theme, label, value }) {
-  return (
-    <View style={[styles.mowgliProfileIdentityBadge, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <Text style={[styles.mowgliProfileIdentityBadgeLabel, { color: theme.textMuted }]}>{label}</Text>
-      <Text style={[styles.mowgliProfileIdentityBadgeValue, { color: theme.text }]} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
 export default function ProfileScreen({
-  styles,
   mowgliTheme,
   clinicProfile,
-  history,
   formatDate,
-  formatPrice,
   openShopBrowse,
   hasActiveMembership,
   currentMembership,
@@ -65,193 +56,454 @@ export default function ProfileScreen({
   disconnectClinicSession,
 }) {
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
-  const recentHistory = Array.isArray(history) ? history.slice(0, 3) : [];
+  const [showClinicChangeWarning, setShowClinicChangeWarning] = useState(false);
   const displayName = String(settingsName || 'Patient:in').trim() || 'Patient:in';
-  const displayInitial = displayName.slice(0, 1).toUpperCase() || 'P';
-  const clinicName = String(clinicProfile.name || 'Deine Klinik').trim();
+  const clinicName = String(clinicProfile.name || 'Deine Klinik').trim() || 'Deine Klinik';
+  const membershipName = hasActiveMembership ? currentMembership?.name || membershipStatusText : 'Gastzugang';
+  const membershipMeta = membershipStatus?.nextChargeAt
+    ? `Nächste Abrechnung: ${formatDate(membershipStatus.nextChargeAt)}`
+    : membershipStatusText;
+  const displayMeta = useMemo(() => {
+    if (settingsEmail) return settingsEmail;
+    if (patientGuestMode) return 'Gastzugang';
+    if (patientPhone) return patientPhone;
+    return 'Keine Kontaktdaten hinterlegt';
+  }, [patientGuestMode, patientPhone, settingsEmail]);
 
   return (
-    <View style={[styles.mowgliScreenShell, { backgroundColor: theme.page }]}>
-      <View style={styles.mowgliProfileHeader}>
-        <Text style={[styles.mowgliHeaderSmallLabel, { color: theme.textMuted }]}>Account</Text>
-        <Text style={[styles.mowgliProfileHeaderTitle, { color: theme.text }]}>Profil</Text>
+    <View style={[profileStyles.screen, { backgroundColor: theme.page }]}>
+      <View style={profileStyles.header}>
+        <Text style={[profileStyles.headerTitle, { color: theme.text }]}>Profil</Text>
       </View>
 
-      <View style={[styles.mowgliProfileIdentityShell, { backgroundColor: theme.shell, borderColor: theme.borderStrong }]}>
-        <View pointerEvents="none" style={[styles.mowgliProfileIdentityGlow, { backgroundColor: theme.heroGlow }]} />
-        <View style={styles.mowgliProfileTopRow}>
-          <View style={[styles.mowgliProfileAvatarLarge, { backgroundColor: theme.surface, borderColor: theme.borderStrong }]}>
-            <Text style={[styles.mowgliProfileAvatarLargeText, { color: theme.accent }]}>{displayInitial}</Text>
-          </View>
-          <View style={styles.mowgliProfileTopCopy}>
-            <Text style={[styles.mowgliProfileTopName, { color: theme.text }]}>{displayName}</Text>
-            <Text style={[styles.mowgliProfileTopMeta, { color: theme.textMuted }]}>{settingsEmail || 'Keine E-Mail hinterlegt'}</Text>
-            <View style={styles.mowgliProfileTopBadgeRow}>
-              <Ionicons name="diamond-outline" size={14} color={theme.accent} />
-              <Text style={[styles.mowgliProfileTopBadgeText, { color: theme.accent }]}>
-                {hasActiveMembership ? currentMembership?.name || membershipStatusText : 'Gastzugang'}
-              </Text>
-            </View>
-          </View>
+      <View style={profileStyles.userSection}>
+        <View style={[profileStyles.avatarFrame, { borderColor: theme.accent }]}>
+          <Image source={DEFAULT_AVATAR} style={profileStyles.avatarImage} />
         </View>
-
-        <View style={styles.mowgliProfileIdentityBadgeRow}>
-          <IdentityBadge styles={styles} theme={theme} label="MedSpa" value={clinicName || 'Nicht gesetzt'} />
-          <IdentityBadge
-            styles={styles}
-            theme={theme}
-            label="Modus"
-            value={patientGuestMode ? 'Gast' : patientPhone ? patientPhone : 'Unbekannt'}
-          />
+        <View style={profileStyles.userCopy}>
+          <Text style={[profileStyles.userName, { color: theme.text }]}>{displayName}</Text>
+          <Text style={[profileStyles.userMeta, { color: theme.textMuted }]}>{displayMeta}</Text>
+          <View style={profileStyles.memberRow}>
+            <Ionicons name="diamond-outline" size={15} color={theme.accent} />
+            <Text style={[profileStyles.memberText, { color: theme.accent }]}>
+              {membershipName}
+            </Text>
+          </View>
         </View>
       </View>
 
-      <View style={[styles.mowgliProfileMembershipTeaser, { backgroundColor: theme.shell, borderColor: theme.borderStrong }]}>
-        <View pointerEvents="none" style={[styles.mowgliProfileMembershipMark, { backgroundColor: theme.heroGlow }]} />
-        <Text style={[styles.mowgliSectionEyebrow, { color: theme.accent }]}>Mitgliedschaft</Text>
-        <Text style={[styles.mowgliProfileMembershipTitle, { color: theme.text }]}>
-          {hasActiveMembership ? currentMembership?.name || 'Aktive Mitgliedschaft' : 'Keine aktive Mitgliedschaft'}
+      <View style={[profileStyles.membershipCard, { backgroundColor: theme.surfaceAlt, borderColor: theme.borderStrong }]}>
+        <View style={[profileStyles.membershipMark, { backgroundColor: theme.heroGlow }]} />
+        <Text style={[profileStyles.membershipTitle, { color: theme.text }]}>
+          {hasActiveMembership ? membershipName : 'Keine aktive Mitgliedschaft'}
         </Text>
-        <Text style={[styles.mowgliProfileMembershipMeta, { color: theme.textMuted }]}>
-          {membershipStatus?.nextChargeAt ? `Nächste Abrechnung: ${formatDate(membershipStatus.nextChargeAt)}` : membershipStatusText}
-        </Text>
-        {hasActiveMembership ? (
-          <Pressable
-            style={({ pressed }) => [styles.mowgliProfileMembershipLink, pressed && styles.mowgliLiftSoft]}
-            disabled={membershipSyncing}
-            onPress={() => {
+        <Text style={[profileStyles.membershipMeta, { color: theme.textMuted }]}>{membershipMeta}</Text>
+        <Pressable
+          onPress={() => {
+            if (hasActiveMembership) {
               void cancelMembership();
-            }}
-          >
-            <Text style={[styles.mowgliProfileMembershipLinkText, { color: theme.accent }]}>
-              {membershipSyncing ? 'Wird verarbeitet ...' : 'Verwalten'}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={theme.accent} />
-          </Pressable>
-        ) : (
-          <Pressable style={styles.mowgliProfileMembershipLink} onPress={openShopBrowse}>
-            <Text style={[styles.mowgliProfileMembershipLinkText, { color: theme.accent }]}>Shop öffnen</Text>
-            <Ionicons name="chevron-forward" size={14} color={theme.accent} />
-          </Pressable>
-        )}
+              return;
+            }
+            openShopBrowse();
+          }}
+          disabled={membershipSyncing}
+          style={({ pressed }) => [profileStyles.membershipLink, pressed && profileStyles.pressed]}
+        >
+          <Text style={[profileStyles.membershipLinkText, { color: theme.accent }]}>
+            {hasActiveMembership ? (membershipSyncing ? 'Wird verarbeitet ...' : 'Verwalten') : 'Shop öffnen'}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={theme.accent} />
+        </Pressable>
       </View>
 
-      <View style={styles.mowgliSectionHeaderRow}>
-        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Zuletzt</Text>
-      </View>
-      <View style={styles.mowgliProfileHistoryList}>
-        {recentHistory.length === 0 && (
-          <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Ionicons name="receipt-outline" size={18} color={theme.textMuted} />
-            <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Noch keine Käufe</Text>
-            <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>Sobald Treatments gekauft werden, erscheinen sie hier.</Text>
-          </View>
-        )}
-        {recentHistory.map((entry) => (
-          <View key={entry.id} style={[styles.mowgliRewardsHistoryRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={[styles.mowgliRewardsHistoryIcon, { backgroundColor: theme.input, borderColor: theme.border }]}>
-              <Ionicons name={'amount' in entry ? 'bag-check-outline' : 'gift-outline'} size={16} color={theme.accent} />
-            </View>
-            <View style={styles.mowgliRewardsHistoryCopy}>
-              <Text style={[styles.mowgliRewardsHistoryTitle, { color: theme.text }]}>{entry.title}</Text>
-              <Text style={[styles.mowgliRewardsHistoryMeta, { color: theme.textMuted }]}>{formatDate(entry.createdAt)}</Text>
-            </View>
-            <Text style={[styles.mowgliRewardsHistoryValue, { color: theme.text }]}>
-              {'amount' in entry ? formatPrice(entry.amount) : `+${entry.points}`}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.mowgliSectionHeaderRow}>
-        <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Einstellungen</Text>
-      </View>
-      <View style={[styles.mowgliSettingsCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-        <View style={[styles.mowgliSettingsInputShell, { backgroundColor: theme.input, borderColor: theme.border }]}>
-          <TextInput
-            style={[styles.mowgliSettingsInput, { color: theme.text }]}
-            value={settingsName}
-            onChangeText={setSettingsName}
-            placeholder="Name"
-            placeholderTextColor={theme.textMuted}
-            keyboardAppearance={theme.mode === 'dark' ? 'dark' : 'light'}
-            selectionColor={theme.accent}
-          />
-        </View>
-        <View style={[styles.mowgliSettingsInputShell, { backgroundColor: theme.input, borderColor: theme.border }]}>
-          <TextInput
-            style={[styles.mowgliSettingsInput, { color: theme.text }]}
-            value={settingsEmail}
-            onChangeText={setSettingsEmail}
-            placeholder="E-Mail"
-            placeholderTextColor={theme.textMuted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            keyboardAppearance={theme.mode === 'dark' ? 'dark' : 'light'}
-            selectionColor={theme.accent}
-          />
-        </View>
-        <View style={[styles.mowgliProfileThemeToggle, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
-          <Pressable
-            style={[
-              styles.mowgliProfileThemeButton,
-              { backgroundColor: uiAppearance === 'light' ? theme.primaryButtonBg : 'transparent' },
-            ]}
-            onPress={() => setUiAppearance('light')}
-          >
-            <Text style={[styles.mowgliProfileThemeButtonText, { color: uiAppearance === 'light' ? theme.primaryButtonText : theme.textMuted }]}>
-              White Mode
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.mowgliProfileThemeButton,
-              { backgroundColor: uiAppearance === 'dark' ? theme.surface : 'transparent' },
-            ]}
-            onPress={() => setUiAppearance('dark')}
-          >
-            <Text style={[styles.mowgliProfileThemeButtonText, { color: uiAppearance === 'dark' ? theme.text : theme.textMuted }]}>
-              Dark Mode
-            </Text>
-          </Pressable>
-        </View>
-        <Text style={[styles.mowgliSettingsInfoText, { color: theme.textSoft }]}>
-          {analyticsConnected ? 'MedSpa-Daten sind verbunden.' : 'MedSpa-Daten sind aktuell nicht verbunden.'}
-        </Text>
-        {!!backendCheckMessage && (
-          <Text style={[styles.mowgliSettingsInfoText, { color: theme.textMuted }]}>{backendCheckMessage}</Text>
-        )}
-      </View>
-
-      <View style={styles.mowgliProfileMenuList}>
+      <View style={profileStyles.menuSection}>
         <MenuRow
-          styles={styles}
           theme={theme}
-          icon="refresh-outline"
-          title="MedSpa-Daten neu laden"
-          subtitle="Clinic Bundle erneut vom Backend holen"
+          icon="business-outline"
+          title="Aktive Klinik"
+          subtitle={clinicName}
           onPress={reloadClinicBundle}
         />
         <MenuRow
-          styles={styles}
           theme={theme}
-          icon="construct-outline"
-          title="Klinik wechseln"
-          subtitle="Klinik-Auswahl und Setup erneut öffnen"
-          onPress={openOnboardingSetup}
+          icon="diamond-outline"
+          title="Mitgliedschaft"
+          subtitle={hasActiveMembership ? membershipName : 'Shop öffnen'}
+          onPress={openShopBrowse}
         />
         <MenuRow
-          styles={styles}
+          theme={theme}
+          icon="refresh-outline"
+          title="MedSpa-Daten neu laden"
+          subtitle="Aktuelle Inhalte und Branding synchronisieren"
+          onPress={reloadClinicBundle}
+        />
+        <MenuRow
+          theme={theme}
+          icon="shuffle-outline"
+          title="Klinik wechseln"
+          subtitle="Zur Klinikauswahl zurückkehren"
+          onPress={() => setShowClinicChangeWarning(true)}
+        />
+        <MenuRow
           theme={theme}
           icon="log-out-outline"
           title="Von MedSpa abmelden"
-          subtitle="Aktuelle Sitzung und Klinikverbindung beenden"
+          subtitle="Sitzung und Klinikverbindung beenden"
           onPress={() => {
             void disconnectClinicSession();
           }}
           destructive
+          noBorder
         />
       </View>
+
+      <View style={[profileStyles.settingsCard, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+        <Text style={[profileStyles.settingsLabel, { color: theme.accent }]}>Darstellung & Profil</Text>
+        <View style={[profileStyles.inputShell, { backgroundColor: theme.page, borderColor: theme.border }]}>
+          <TextInput
+            style={[profileStyles.input, { color: theme.text }]}
+            value={settingsName}
+            onChangeText={setSettingsName}
+            placeholder="Name"
+            placeholderTextColor={theme.textMuted}
+            selectionColor={theme.accent}
+            keyboardAppearance={theme.mode === 'dark' ? 'dark' : 'light'}
+          />
+        </View>
+        <View style={[profileStyles.inputShell, { backgroundColor: theme.page, borderColor: theme.border }]}>
+          <TextInput
+            style={[profileStyles.input, { color: theme.text }]}
+            value={settingsEmail}
+            onChangeText={setSettingsEmail}
+            placeholder="E-Mail"
+            placeholderTextColor={theme.textMuted}
+            selectionColor={theme.accent}
+            keyboardAppearance={theme.mode === 'dark' ? 'dark' : 'light'}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+        </View>
+
+        <View style={[profileStyles.modeToggle, { backgroundColor: theme.page, borderColor: theme.border }]}>
+          <Pressable
+            onPress={() => setUiAppearance('light')}
+            style={[
+              profileStyles.modeButton,
+              {
+                backgroundColor: uiAppearance === 'light' ? theme.primaryButtonBg : 'transparent',
+              },
+            ]}
+          >
+            <Text style={[profileStyles.modeButtonText, { color: uiAppearance === 'light' ? theme.primaryButtonText : theme.textMuted }]}>
+              White Mode
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setUiAppearance('dark')}
+            style={[
+              profileStyles.modeButton,
+              {
+                backgroundColor: uiAppearance === 'dark' ? theme.shell : 'transparent',
+              },
+            ]}
+          >
+            <Text style={[profileStyles.modeButtonText, { color: uiAppearance === 'dark' ? theme.text : theme.textMuted }]}>
+              Dark Mode
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text style={[profileStyles.infoText, { color: theme.textSoft }]}>
+          {analyticsConnected ? 'MedSpa-Daten sind verbunden.' : 'MedSpa-Daten sind aktuell nicht verbunden.'}
+        </Text>
+        {!!backendCheckMessage && (
+          <Text style={[profileStyles.infoText, { color: theme.textMuted }]}>{backendCheckMessage}</Text>
+        )}
+      </View>
+
+      {showClinicChangeWarning && (
+        <View style={profileStyles.modalBackdrop}>
+          <View style={[profileStyles.modalCard, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
+            <View style={[profileStyles.modalIconWrap, { backgroundColor: theme.accentSurface, borderColor: theme.accentBorder }]}>
+              <Ionicons name="shuffle-outline" size={30} color={theme.accent} />
+            </View>
+            <Text style={[profileStyles.modalTitle, { color: theme.text }]}>Klinik wirklich wechseln?</Text>
+            <Text style={[profileStyles.modalBody, { color: theme.textMuted }]}>
+              Dies beendet deine aktuelle Sitzung. Punkte und Mitgliedschaften bleiben an die aktuelle Klinik gebunden.
+            </Text>
+            <Pressable
+              onPress={() => {
+                setShowClinicChangeWarning(false);
+                openOnboardingSetup();
+              }}
+              style={({ pressed }) => [
+                profileStyles.modalPrimary,
+                { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong },
+                pressed && profileStyles.pressed,
+              ]}
+            >
+              <Text style={[profileStyles.modalPrimaryText, { color: theme.primaryButtonText }]}>Ja, wechseln</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowClinicChangeWarning(false)}
+              style={({ pressed }) => [profileStyles.modalSecondary, pressed && profileStyles.pressed]}
+            >
+              <Text style={[profileStyles.modalSecondaryText, { color: theme.textMuted }]}>Abbrechen</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
+
+const profileStyles = StyleSheet.create({
+  screen: {
+    paddingTop: 20,
+    paddingBottom: 120,
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 22,
+  },
+  headerTitle: {
+    fontSize: 30,
+    lineHeight: 34,
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
+    fontWeight: '600',
+  },
+  userSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 28,
+    gap: 18,
+  },
+  avatarFrame: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 2,
+    padding: 3,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 36,
+  },
+  userCopy: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 28,
+    lineHeight: 32,
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  userMeta: {
+    fontSize: 14,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  memberText: {
+    fontSize: 12,
+    lineHeight: 16,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '800',
+  },
+  membershipCard: {
+    marginHorizontal: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    marginBottom: 28,
+    overflow: 'hidden',
+  },
+  membershipMark: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 82,
+    height: 82,
+    borderRadius: 999,
+  },
+  membershipTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  membershipMeta: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  membershipLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  membershipLinkText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  menuSection: {
+    marginHorizontal: 24,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  menuRow: {
+    minHeight: 64,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flex: 1,
+    marginRight: 14,
+  },
+  menuTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  menuSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  settingsCard: {
+    marginHorizontal: 24,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  settingsLabel: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1.6,
+  },
+  inputShell: {
+    minHeight: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  input: {
+    fontSize: 14,
+    paddingVertical: 12,
+  },
+  modeToggle: {
+    flexDirection: 'row',
+    borderRadius: 999,
+    borderWidth: 1,
+    padding: 4,
+  },
+  modeButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeButtonText: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  infoText: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(10,10,12,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 24,
+    paddingTop: 28,
+    paddingBottom: 20,
+    alignItems: 'center',
+  },
+  modalIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  modalTitle: {
+    fontSize: 25,
+    lineHeight: 30,
+    fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
+    fontWeight: '400',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalBody: {
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 22,
+  },
+  modalPrimary: {
+    width: '100%',
+    minHeight: 54,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  modalPrimaryText: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  modalSecondary: {
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  modalSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.94,
+    transform: [{ translateY: -1 }],
+  },
+});

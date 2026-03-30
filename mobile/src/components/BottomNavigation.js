@@ -15,13 +15,15 @@ export default function BottomNavigation({ styles, mowgliTheme, mainTab, switchM
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
 
   return (
-    <View style={[
-      styles.mowgliBottomBar,
-      {
-        backgroundColor: theme.shell,
-        borderColor: theme.border,
-      },
-    ]}>
+    <View
+      style={[
+        styles.mowgliBottomBar,
+        {
+          backgroundColor: theme.page,
+          borderTopColor: theme.border,
+        },
+      ]}
+    >
       {TAB_SPECS.map((tab) => {
         const active = mainTab === tab.id;
         const isCenter = Boolean(tab.center);
@@ -31,8 +33,17 @@ export default function BottomNavigation({ styles, mowgliTheme, mainTab, switchM
             style={({ pressed }) => [
               styles.mowgliBottomTab,
               isCenter && styles.mowgliBottomTabCenter,
-              active && !isCenter && [styles.mowgliBottomTabActive, { backgroundColor: theme.accentSurface, borderColor: theme.accentBorder }],
-              active && isCenter && [styles.mowgliBottomTabCenterActive, { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong }],
+              active && !isCenter && styles.mowgliBottomTabActive,
+              isCenter && {
+                backgroundColor: active ? theme.accent : theme.accentSurface,
+                borderColor: active ? theme.accentBorderStrong : theme.accentBorder,
+                borderWidth: 1,
+                shadowColor: theme.accent,
+                shadowOpacity: active ? 0.3 : 0.14,
+                shadowRadius: active ? 18 : 10,
+                shadowOffset: { width: 0, height: 10 },
+                elevation: active ? 8 : 5,
+              },
               pressed && styles.mowgliLiftSoft,
             ]}
             onPress={() => switchMainTab(tab.id)}
@@ -41,7 +52,7 @@ export default function BottomNavigation({ styles, mowgliTheme, mainTab, switchM
               name={active ? tab.activeIcon : tab.icon}
               size={isCenter ? 22 : 22}
               color={isCenter
-                ? (active ? theme.primaryButtonText : theme.text)
+                ? (active ? theme.textInverse : theme.accent)
                 : (active ? theme.accent : theme.textMuted)}
             />
             {!isCenter && active && <View style={[styles.mowgliBottomIndicator, { backgroundColor: theme.accent }]} />}
