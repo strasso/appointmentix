@@ -139,19 +139,23 @@ export default function RewardsScreen({
       <View style={[rewardsStyles.balanceCard, { backgroundColor: theme.shell, borderColor: theme.borderStrong }]}>
         <View style={[rewardsStyles.balanceGlow, { backgroundColor: theme.heroGlow }]} />
         <View style={[rewardsStyles.balanceIcon, { backgroundColor: theme.accent }]}>
-          <Ionicons name="diamond-outline" size={24} color={theme.primaryButtonText} />
+          <Ionicons name="sparkles-outline" size={24} color={theme.primaryButtonText} />
         </View>
         <Text style={[rewardsStyles.balanceLabel, { color: theme.accent }]}>Ihr Punktestand</Text>
         <Text style={[rewardsStyles.balanceValue, { color: theme.text }]}>{formatPoints(points)}</Text>
+        <Text style={[rewardsStyles.balanceSubtext, { color: theme.textMuted }]}>
+          {clinicProfile.name || 'Klinik'} • Wallet {formatPrice(walletCents)}
+        </Text>
         <View style={[rewardsStyles.balanceChip, { backgroundColor: theme.accentSurface, borderColor: theme.accentBorder }]}>
           <Text style={[rewardsStyles.balanceChipText, { color: theme.accent }]}>
-            {clinicProfile.name || 'Klinik'} • Wallet {formatPrice(walletCents)}
+            1€ = 1 Punkt
           </Text>
         </View>
       </View>
 
       <View style={rewardsStyles.sectionHeader}>
         <Text style={[rewardsStyles.sectionTitle, { color: theme.text }]}>Verfügbar</Text>
+        <Text style={[rewardsStyles.sectionLink, { color: theme.accent }]}>Alle</Text>
       </View>
       {rewards.length > 0 ? (
         <ScrollView
@@ -182,6 +186,7 @@ export default function RewardsScreen({
 
       <View style={rewardsStyles.sectionHeader}>
         <Text style={[rewardsStyles.sectionTitle, { color: theme.text }]}>Historie</Text>
+        <Text style={[rewardsStyles.sectionLink, { color: theme.accent }]}>Alle</Text>
       </View>
       <View style={rewardsStyles.historyList}>
         {history.length === 0 ? (
@@ -238,8 +243,8 @@ const rewardsStyles = StyleSheet.create({
     paddingBottom: 22,
   },
   headerTitle: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
     fontWeight: '600',
     marginBottom: 4,
@@ -287,6 +292,12 @@ const rewardsStyles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -1.2,
   },
+  balanceSubtext: {
+    marginTop: 8,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
   balanceChip: {
     marginTop: 16,
     borderRadius: 999,
@@ -299,14 +310,22 @@ const rewardsStyles = StyleSheet.create({
     fontWeight: '600',
   },
   sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
     marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 26,
-    lineHeight: 30,
+    fontSize: 24,
+    lineHeight: 28,
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
     fontWeight: '300',
+  },
+  sectionLink: {
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
   },
   rewardRow: {
     paddingLeft: 24,

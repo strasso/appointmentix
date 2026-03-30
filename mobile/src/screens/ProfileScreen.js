@@ -269,8 +269,8 @@ const profileStyles = StyleSheet.create({
     paddingBottom: 22,
   },
   headerTitle: {
-    fontSize: 30,
-    lineHeight: 34,
+    fontSize: 28,
+    lineHeight: 32,
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
     fontWeight: '600',
   },

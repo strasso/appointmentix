@@ -11,7 +11,7 @@ function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
     <Pressable
       style={({ pressed }) => [
         styles.mowgliHeaderAction,
-        { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+        { backgroundColor: 'transparent', borderColor: 'transparent' },
         pressed && styles.mowgliLiftSoft,
       ]}
       onPress={onPress}
@@ -219,7 +219,7 @@ export default function ShopScreen({
       <View style={[styles.mowgliShopTabsRow, { backgroundColor: theme.shellAlt, borderColor: theme.border }]}>
         <ShopTab styles={styles} theme={theme} label="Treatments" active={shopTab === 'browse'} onPress={() => setShopTab('browse')} />
         <ShopTab styles={styles} theme={theme} label="Memberships" active={shopTab === 'membership'} onPress={() => setShopTab('membership')} />
-        <ShopTab styles={styles} theme={theme} label="Katalog" active={shopTab === 'treatments'} onPress={() => setShopTab('treatments')} />
+        <ShopTab styles={styles} theme={theme} label="Gutscheine" active={shopTab === 'treatments'} onPress={() => setShopTab('treatments')} />
       </View>
 
       {shopTab === 'browse' && !selectedTreatment && (

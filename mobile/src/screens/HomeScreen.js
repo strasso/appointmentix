@@ -3,12 +3,25 @@ import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createMowgliTheme } from '../theme/tokens';
 
+const HERO_IMAGE_FALLBACK = require('../../_mowgli_export/screens/images/hero-spa-treatment.jpg');
+const POPULAR_IMAGE_FALLBACKS = [
+  require('../../_mowgli_export/screens/images/treatment-facial.jpg'),
+  require('../../_mowgli_export/screens/images/treatment-massage.jpg'),
+  require('../../_mowgli_export/screens/images/treatment-laser.jpg'),
+  require('../../_mowgli_export/screens/images/treatment-laser-facial.jpg'),
+];
+const ARTICLE_IMAGE_FALLBACKS = [
+  require('../../_mowgli_export/screens/images/article-skincare.jpg'),
+  require('../../_mowgli_export/screens/images/article-hydration.jpg'),
+  require('../../_mowgli_export/screens/images/article-relaxation.jpg'),
+];
+
 function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
   return (
     <Pressable
       style={({ pressed }) => [
         styles.mowgliHeaderAction,
-        { backgroundColor: theme.surfaceAlt, borderColor: theme.border },
+        { backgroundColor: 'transparent', borderColor: 'transparent' },
         pressed && styles.mowgliLiftSoft,
       ]}
       onPress={onPress}
@@ -19,7 +32,7 @@ function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
   );
 }
 
-function PopularCard({ styles, theme, treatment, imageUrl, formatPrice, onPress }) {
+function PopularCard({ styles, theme, treatment, imageUrl, fallbackSource, formatPrice, onPress }) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -31,6 +44,8 @@ function PopularCard({ styles, theme, treatment, imageUrl, formatPrice, onPress 
     >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.mowgliPopularCardImage} />
+      ) : fallbackSource ? (
+        <Image source={fallbackSource} style={styles.mowgliPopularCardImage} />
       ) : (
         <View style={[styles.mowgliPopularCardFallback, { backgroundColor: theme.input }]}>
           <Ionicons name="sparkles-outline" size={22} color={theme.accent} />
@@ -106,7 +121,7 @@ function QuickAction({ styles, theme, title, caption, icon, onPress }) {
   );
 }
 
-function FeaturedArticleCard({ styles, theme, article, imageUrl, onPress }) {
+function FeaturedArticleCard({ styles, theme, article, imageUrl, fallbackSource, onPress }) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -118,6 +133,8 @@ function FeaturedArticleCard({ styles, theme, article, imageUrl, onPress }) {
     >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.mowgliArticleFeaturedImage} />
+      ) : fallbackSource ? (
+        <Image source={fallbackSource} style={styles.mowgliArticleFeaturedImage} />
       ) : (
         <View style={[styles.mowgliArticleFeaturedFallback, { backgroundColor: theme.surfaceAlt }]}>
           <Ionicons name="reader-outline" size={26} color={theme.accent} />
@@ -175,7 +192,7 @@ function ArticleRow({ styles, theme, article, imageUrl, onPress }) {
   );
 }
 
-function KnowledgeRow({ styles, theme, article, imageUrl, onPress }) {
+function KnowledgeRow({ styles, theme, article, imageUrl, fallbackSource, onPress }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.mowgliKnowledgeRow, pressed && styles.mowgliLiftSoft]}
@@ -183,6 +200,8 @@ function KnowledgeRow({ styles, theme, article, imageUrl, onPress }) {
     >
       {imageUrl ? (
         <Image source={{ uri: imageUrl }} style={styles.mowgliKnowledgeThumb} />
+      ) : fallbackSource ? (
+        <Image source={fallbackSource} style={styles.mowgliKnowledgeThumb} />
       ) : (
         <View style={[styles.mowgliKnowledgeThumb, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
           <Ionicons name="reader-outline" size={22} color={theme.accent} />
@@ -383,12 +402,10 @@ export default function HomeScreen({
           }
         }}
       >
-        {fallbackImage || clinicHeroImage ? (
-          <Image source={{ uri: fallbackImage || clinicHeroImage }} style={styles.mowgliFeaturedHeroImage} />
+        {clinicHeroImage ? (
+          <Image source={{ uri: clinicHeroImage }} style={styles.mowgliFeaturedHeroImage} />
         ) : (
-          <View style={[styles.mowgliFeaturedHeroFallback, { backgroundColor: theme.surfaceAlt }]}>
-            <Ionicons name="sparkles-outline" size={30} color={theme.accent} />
-          </View>
+          <Image source={HERO_IMAGE_FALLBACK} style={styles.mowgliFeaturedHeroImage} />
         )}
         <View
           style={[
@@ -418,13 +435,14 @@ export default function HomeScreen({
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mowgliPopularRow}>
-            {popularTreatments.map((item) => (
+            {popularTreatments.map((item, index) => (
               <PopularCard
                 key={item.id}
                 styles={styles}
                 theme={theme}
                 treatment={item}
                 imageUrl={preferredTreatmentImage(item)}
+                fallbackSource={POPULAR_IMAGE_FALLBACKS[index % POPULAR_IMAGE_FALLBACKS.length]}
                 formatPrice={formatPrice}
                 onPress={openTreatmentFromHome}
               />
@@ -473,13 +491,14 @@ export default function HomeScreen({
       <View style={styles.mowgliSectionBlock}>
         <Text style={[styles.mowgliSectionTitleSmall, { color: theme.text }]}>Wissen & Tipps</Text>
         <View style={styles.mowgliKnowledgeList}>
-          {articles.map((article) => (
+          {articles.map((article, index) => (
             <KnowledgeRow
               key={article.id}
               styles={styles}
               theme={theme}
               article={article}
               imageUrl={resolveArticleImage(article, clinicHeroImage)}
+              fallbackSource={ARTICLE_IMAGE_FALLBACKS[index % ARTICLE_IMAGE_FALLBACKS.length]}
               onPress={openArticle}
             />
           ))}
