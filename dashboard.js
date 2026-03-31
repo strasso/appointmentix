@@ -119,6 +119,8 @@ const runDueCampaignsBtn = document.getElementById("runDueCampaignsBtn");
 const auditLogsBody = document.getElementById("auditLogsBody");
 const refreshAuditBtn = document.getElementById("refreshAuditBtn");
 const sideNavItems = Array.from(document.querySelectorAll(".side-nav-item[data-nav-target]"));
+let metricsResizeTimer = null;
+let metricsResizeFrame = null;
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -866,6 +868,21 @@ function renderMetricsDashboard() {
       rows: topTeamRows.map((row) => [row.name, row.salesCents, (row.salesCents / 100).toFixed(2)]),
     },
   };
+}
+
+function scheduleMetricsRender() {
+  if (metricsResizeTimer) {
+    window.clearTimeout(metricsResizeTimer);
+  }
+  metricsResizeTimer = window.setTimeout(() => {
+    if (metricsResizeFrame) {
+      window.cancelAnimationFrame(metricsResizeFrame);
+    }
+    metricsResizeFrame = window.requestAnimationFrame(() => {
+      renderMetricsDashboard();
+      metricsResizeFrame = null;
+    });
+  }, 120);
 }
 
 function scrollToDashboardTarget(targetId) {
@@ -1817,9 +1834,7 @@ function bindEvents() {
       scrollToDashboardTarget(targetId);
     });
   });
-  window.addEventListener("resize", () => {
-    renderMetricsDashboard();
-  });
+  window.addEventListener("resize", scheduleMetricsRender);
   dashboardSection.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
