@@ -41,6 +41,7 @@ export default function ProfileScreen({
   membershipStatus,
   membershipSyncing,
   cancelMembership,
+  openAppointments,
   settingsName,
   setSettingsName,
   settingsEmail,
@@ -130,6 +131,13 @@ export default function ProfileScreen({
           title="Mitgliedschaft"
           subtitle={hasActiveMembership ? membershipName : 'Shop öffnen'}
           onPress={openShopBrowse}
+        />
+        <MenuRow
+          theme={theme}
+          icon="calendar-clear-outline"
+          title="Meine Termine"
+          subtitle="Kommende und vergangene Besuche"
+          onPress={openAppointments}
         />
         <MenuRow
           theme={theme}

@@ -22,6 +22,8 @@ import ShopScreen from './src/screens/ShopScreen';
 import ScanScreen from './src/screens/ScanScreen';
 import RewardsScreen from './src/screens/RewardsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import AppointmentsScreen from './src/screens/AppointmentsScreen';
+import AppointmentDetailScreen from './src/screens/AppointmentDetailScreen';
 import AmbientBackground from './src/components/AmbientBackground';
 import BottomNavigation from './src/components/BottomNavigation';
 import HeaderSearchOverlay from './src/overlays/HeaderSearchOverlay';
@@ -331,6 +333,49 @@ const REWARD_REDEEMS = [
   { id: 'r15', label: '15 EUR Guthaben', requiredPoints: 250, valueCents: 1500 },
   { id: 'r35', label: '35 EUR Guthaben', requiredPoints: 500, valueCents: 3500 },
   { id: 'r80', label: '80 EUR Guthaben', requiredPoints: 1000, valueCents: 8000 },
+];
+
+const DEMO_APPOINTMENTS = [
+  {
+    id: 'demo-appointment-1',
+    clinicId: 'demo-clinic',
+    patientEmail: 'anna@muster.at',
+    patientName: 'Anna Muster',
+    treatmentId: 't-basic-glow',
+    treatmentName: 'Basic Glow',
+    treatmentDurationMinutes: 60,
+    practitionerName: 'Dr. Milani',
+    startsAt: new Date(Date.now() + (1000 * 60 * 60 * 24 * 7)).toISOString(),
+    endsAt: new Date(Date.now() + (1000 * 60 * 60 * 24 * 7) + (1000 * 60 * 60)).toISOString(),
+    locationLabel: CLINIC.name,
+    locationAddress: CLINIC.address,
+    status: 'confirmed',
+    notes: 'Bitte komme 10 Minuten früher zum Check-in.',
+    orderId: 'demo-order-1',
+    createdAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 2)).toISOString(),
+    updatedAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 2)).toISOString(),
+    segment: 'upcoming',
+  },
+  {
+    id: 'demo-appointment-2',
+    clinicId: 'demo-clinic',
+    patientEmail: 'anna@muster.at',
+    patientName: 'Anna Muster',
+    treatmentId: 't-prp',
+    treatmentName: 'PRP Mesohair',
+    treatmentDurationMinutes: 60,
+    practitionerName: 'Dr. Moser',
+    startsAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 18)).toISOString(),
+    endsAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 18) + (1000 * 60 * 60)).toISOString(),
+    locationLabel: CLINIC.name,
+    locationAddress: CLINIC.address,
+    status: 'completed',
+    notes: 'Nachsorge mit mildem Shampoo für 24 Stunden empfohlen.',
+    orderId: 'demo-order-2',
+    createdAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 24)).toISOString(),
+    updatedAt: new Date(Date.now() - (1000 * 60 * 60 * 24 * 18)).toISOString(),
+    segment: 'past',
+  },
 ];
 
 const STORAGE_KEYS = {
@@ -677,6 +722,40 @@ function formatDate(ts) {
 
 function formatClock(ts) {
   return new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+}
+
+function appointmentSegmentValue(appointment) {
+  const normalizedStatus = String(appointment?.status || '').trim().toLowerCase();
+  const startsAt = appointment?.startsAt ? new Date(appointment.startsAt) : null;
+  if (normalizedStatus === 'completed' || normalizedStatus === 'canceled') return 'past';
+  if (startsAt && !Number.isNaN(startsAt.getTime()) && startsAt.getTime() < Date.now()) return 'past';
+  return 'upcoming';
+}
+
+function normalizeAppointmentList(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  return safeItems
+    .map((item) => ({
+      ...item,
+      segment: item?.segment || appointmentSegmentValue(item),
+    }))
+    .sort((left, right) => {
+      const leftSegment = left.segment || appointmentSegmentValue(left);
+      const rightSegment = right.segment || appointmentSegmentValue(right);
+      if (leftSegment !== rightSegment) {
+        return leftSegment === 'upcoming' ? -1 : 1;
+      }
+
+      const leftTime = left?.startsAt ? new Date(left.startsAt).getTime() : 0;
+      const rightTime = right?.startsAt ? new Date(right.startsAt).getTime() : 0;
+      const leftCreated = left?.createdAt ? new Date(left.createdAt).getTime() : 0;
+      const rightCreated = right?.createdAt ? new Date(right.createdAt).getTime() : 0;
+
+      if (leftSegment === 'upcoming') {
+        return (leftTime || leftCreated || 0) - (rightTime || rightCreated || 0);
+      }
+      return (rightTime || rightCreated || 0) - (leftTime || leftCreated || 0);
+    });
 }
 
 async function fetchClinicBundle(baseUrl, clinicName, clinicId = '') {
@@ -1052,6 +1131,47 @@ async function completeMobileCheckout(baseUrl, payload) {
   return parseJsonPayload(text) || {};
 }
 
+async function fetchPatientAppointments(baseUrl, clinicName, memberEmail) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const safeClinicName = String(clinicName || '').trim();
+  const safeEmail = String(memberEmail || '').trim().toLowerCase();
+  const query = `?clinicName=${encodeURIComponent(safeClinicName)}&memberEmail=${encodeURIComponent(safeEmail)}`;
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/appointments${query}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  }, { timeoutMs: 9000, retries: 1, retryDelayMs: 450 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Termine konnten nicht geladen werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
+async function updatePatientAppointment(baseUrl, appointmentId, action, payload) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const safeAction = String(action || '').trim().toLowerCase();
+  const endpoint = safeAction === 'cancel'
+    ? `${safeBaseUrl}/api/mobile/appointments/${appointmentId}/cancel`
+    : `${safeBaseUrl}/api/mobile/appointments/${appointmentId}/reschedule-request`;
+  const response = await fetchWithRetry(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload || {}),
+  }, { timeoutMs: 12000, retries: 1, retryDelayMs: 500 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Termin konnte nicht aktualisiert werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
 function membershipStatusLabel(status) {
   switch (String(status || '').toLowerCase()) {
     case 'active':
@@ -1102,11 +1222,13 @@ function categoryIconName(categoryId) {
 export default function App() {
   const [mainTab, setMainTab] = useState('home');
   const [shopTab, setShopTab] = useState('browse');
-  const [profileTab, setProfileTab] = useState('behandlungen');
+  const [profileTab, setProfileTab] = useState('overview');
   const [rewardsView, setRewardsView] = useState('active');
+  const [appointmentSegment, setAppointmentSegment] = useState('upcoming');
   const [categoryId, setCategoryId] = useState('gesicht');
   const [selectedTreatment, setSelectedTreatment] = useState(null);
   const [selectedHomeArticle, setSelectedHomeArticle] = useState(null);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [units, setUnits] = useState(1);
 
   const [clinicProfile, setClinicProfile] = useState(CLINIC);
@@ -1116,6 +1238,9 @@ export default function App() {
   const [memberships, setMemberships] = useState(MEMBERSHIPS);
   const [rewardActions, setRewardActions] = useState(REWARD_ACTIONS);
   const [rewardRedeems, setRewardRedeems] = useState(REWARD_REDEEMS);
+  const [appointments, setAppointments] = useState(() => normalizeAppointmentList(DEMO_APPOINTMENTS));
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
+  const [appointmentActionLoading, setAppointmentActionLoading] = useState(false);
 
   const [activeMembership, setActiveMembership] = useState('silber');
   const [membershipStatus, setMembershipStatus] = useState(null);
@@ -1191,6 +1316,12 @@ export default function App() {
     () => treatments.filter((item) => item.category === categoryId),
     [categoryId, treatments]
   );
+
+  const selectedAppointmentImageUrl = useMemo(() => {
+    if (!selectedAppointment?.treatmentId) return '';
+    const match = treatments.find((item) => String(item.id || '') === String(selectedAppointment.treatmentId || ''));
+    return preferredTreatmentImage(match);
+  }, [selectedAppointment, treatments]);
 
   const globalSearchResults = useMemo(() => {
     const q = String(headerSearchQuery || '').trim().toLowerCase();
@@ -1454,6 +1585,10 @@ export default function App() {
         useNativeDriver: true,
       }),
     ]).start();
+    if (nextTab !== 'profile') {
+      setSelectedAppointment(null);
+      setProfileTab('overview');
+    }
     setMainTab(nextTab);
   }
 
@@ -1547,6 +1682,38 @@ export default function App() {
     }
   }
 
+  async function syncPatientAppointments(nextBaseUrl = '', nextClinicName = '', nextEmail = '') {
+    const normalized = normalizeUrl(nextBaseUrl || analyticsBaseUrl);
+    const resolvedClinicName = String(nextClinicName || clinicLookupName || clinicProfile.name || '').trim();
+    const resolvedEmail = String(nextEmail || settingsEmail || '').trim().toLowerCase();
+
+    if (!normalized) {
+      setAppointments(normalizeAppointmentList(DEMO_APPOINTMENTS));
+      return;
+    }
+    if (patientGuestMode || !normalized || !resolvedClinicName || !resolvedEmail || !resolvedEmail.includes('@')) {
+      setAppointments([]);
+      setSelectedAppointment(null);
+      return;
+    }
+
+    setAppointmentsLoading(true);
+    try {
+      const response = await fetchPatientAppointments(normalized, resolvedClinicName, resolvedEmail);
+      const rows = normalizeAppointmentList(response.appointments || []);
+      setAppointments(rows);
+      setSelectedAppointment((prev) => {
+        if (!prev) return null;
+        return rows.find((item) => String(item.id) === String(prev.id)) || null;
+      });
+    } catch {
+      setAppointments([]);
+      setSelectedAppointment(null);
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }
+
   async function loadClinicBundle(nextBaseUrl = '', nextClinicName = '', nextClinicId = '', nextEmail = '', options = {}) {
     const silentFailure = options.silentFailure === true;
     const normalized = normalizeUrl(nextBaseUrl || analyticsBaseUrl);
@@ -1606,6 +1773,8 @@ export default function App() {
     setRewardRedeems(nextRewardRedeems);
     setHomeArticles(nextHomeArticles.length > 0 ? nextHomeArticles : HOME_ARTICLES);
     setSelectedHomeArticle(null);
+    setSelectedAppointment(null);
+    setProfileTab('overview');
 
     if (clinic && typeof clinic === 'object') {
       setClinicProfile((prev) => ({
@@ -1626,6 +1795,7 @@ export default function App() {
     setOnboardingBaseUrl(normalized);
     setAnalyticsConnected(true);
     await syncMembershipStatus(normalized, clinic.name || resolvedClinicName || clinicLookupName, nextEmail || settingsEmail);
+    await syncPatientAppointments(normalized, clinic.name || resolvedClinicName || clinicLookupName, nextEmail || settingsEmail);
     track(`MedSpa-Daten geladen: ${clinic.name || clinicLookupName}`);
     return clinic;
   }
@@ -2423,8 +2593,11 @@ function continueToAccessStep() {
     setClinicSearchResults([]);
     setClinicLookupId('');
     setSelectedTreatment(null);
+    setSelectedAppointment(null);
+    setProfileTab('overview');
     setCartItems([]);
     setMembershipStatus(null);
+    setAppointments(normalizeAppointmentList(DEMO_APPOINTMENTS));
     setAnalyticsConnected(false);
     setPatientPhone('');
     setPatientGuestMode(false);
@@ -2440,6 +2613,7 @@ function continueToAccessStep() {
     setPatientGuestMode(true);
     await writeSecureValue(STORAGE_KEYS.onboardingDone, '1');
     await writeSecureValue(STORAGE_KEYS.patientGuestMode, '1');
+    setAppointments(normalizeAppointmentList(DEMO_APPOINTMENTS));
     setShowOnboarding(false);
   }
 
@@ -2562,7 +2736,8 @@ function continueToAccessStep() {
       try {
         const payload = await completeMobileCheckout(normalized, {
           clinicName: resolvedClinicName,
-          memberEmail: String(settingsEmail || '').trim().toLowerCase(),
+          memberEmail: patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase(),
+          memberName: patientGuestMode ? '' : String(settingsName || '').trim(),
           sessionId: appSessionId,
           paymentStatus,
           paymentMethod,
@@ -2589,11 +2764,15 @@ function continueToAccessStep() {
         ]);
 
         const nextMembership = payload?.membership || null;
+        const createdAppointments = normalizeAppointmentList(payload?.appointments || []);
         if (nextMembership) {
           setMembershipStatus(nextMembership);
           if (nextMembership.membershipId) {
             setActiveMembership(nextMembership.membershipId);
           }
+        }
+        if (createdAppointments.length > 0) {
+          setAppointments((prev) => normalizeAppointmentList([...createdAppointments, ...prev]));
         }
 
         setCartItems([]);
@@ -2604,7 +2783,7 @@ function continueToAccessStep() {
         track(`Kauf abgeschlossen (${paymentMethodText}): ${formatPrice(spentCents)} | +${earnedPoints} Punkte`);
         Alert.alert(
           'Kauf erfolgreich',
-          `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}`
+          `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}${createdAppointments.length > 0 ? `\nTerminwunsch: ${createdAppointments.length}x in Meine Termine gespeichert.` : ''}`
         );
       } catch (error) {
         Alert.alert('Checkout fehlgeschlagen', String(error?.message || error));
@@ -2616,6 +2795,31 @@ function continueToAccessStep() {
 
     const spentCents = totalCartCents;
     const earnedPoints = Math.round(spentCents / 100);
+    const createdAppointments = normalizeAppointmentList(
+      cartItems.map((item, index) => {
+        const treatment = treatments.find((entry) => String(entry.id || '') === String(item.treatmentId || item.id || '')) || {};
+        return {
+          id: `demo-checkout-${Date.now()}-${index}`,
+          clinicId: 'offline-demo',
+          patientEmail: String(settingsEmail || '').trim().toLowerCase(),
+          patientName: String(settingsName || '').trim(),
+          treatmentId: String(item.treatmentId || item.id || ''),
+          treatmentName: String(item.name || treatment.name || 'Treatment'),
+          treatmentDurationMinutes: Number(treatment.durationMinutes || 0),
+          practitionerName: '',
+          startsAt: '',
+          endsAt: '',
+          locationLabel: clinicProfile.name || CLINIC.name,
+          locationAddress: clinicProfile.address || CLINIC.address,
+          status: 'pending_confirmation',
+          notes: 'Die Klinik bestätigt deinen Termin separat.',
+          orderId: `demo-order-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          segment: 'upcoming',
+        };
+      })
+    );
 
     setPoints((prev) => prev + earnedPoints);
     setHistory((prev) => [
@@ -2628,6 +2832,9 @@ function continueToAccessStep() {
       },
       ...prev,
     ]);
+    if (createdAppointments.length > 0) {
+      setAppointments((prev) => normalizeAppointmentList([...createdAppointments, ...prev]));
+    }
 
     setCartItems([]);
     setSelectedTreatment(null);
@@ -2641,7 +2848,7 @@ function continueToAccessStep() {
     });
     Alert.alert(
       'Kauf erfolgreich',
-      `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\n\nFür Tests kannst du im Stripe-Checkout die Karte 4242 4242 4242 4242 nutzen.`
+      `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}${createdAppointments.length > 0 ? `\nTerminwunsch: ${createdAppointments.length}x in Meine Termine gespeichert.` : ''}\n\nFür Tests kannst du im Stripe-Checkout die Karte 4242 4242 4242 4242 nutzen.`
     );
   }
 
@@ -2823,6 +3030,7 @@ function continueToAccessStep() {
       if (storedPatientGuestMode) {
         setPatientGuestMode(true);
       }
+      setAppointments(normalizeAppointmentList(DEMO_APPOINTMENTS));
       const initialCandidates = prioritizeApiCandidates(
         resolveApiCandidates(storedBaseUrl, defaultBaseUrl, expoDetectedBaseUrl),
         { preferPublic: PREFER_PUBLIC_BACKENDS_DEFAULT }
@@ -2896,6 +3104,20 @@ function continueToAccessStep() {
     void syncMembershipStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analyticsConnected, settingsEmail]);
+
+  useEffect(() => {
+    if (!analyticsConnected) {
+      setAppointments(normalizeAppointmentList(DEMO_APPOINTMENTS));
+      return;
+    }
+    if (patientGuestMode) {
+      setAppointments([]);
+      setSelectedAppointment(null);
+      return;
+    }
+    void syncPatientAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyticsConnected, settingsEmail, patientGuestMode]);
 
   useEffect(() => {
     void writeSecureValue(STORAGE_KEYS.uiAppearance, uiAppearance);
@@ -3058,6 +3280,82 @@ function continueToAccessStep() {
     openTreatment(item);
   };
 
+  const handleOpenAppointments = () => {
+    setProfileTab('appointments');
+    setAppointmentSegment('upcoming');
+    setSelectedAppointment(null);
+    switchMainTab('profile');
+    void syncPatientAppointments();
+  };
+
+  const handleCloseAppointments = () => {
+    setSelectedAppointment(null);
+    setProfileTab('overview');
+  };
+
+  const handleOpenAppointment = (appointment) => {
+    if (!appointment) return;
+    mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
+    setProfileTab('appointments');
+    setSelectedAppointment(appointment);
+    switchMainTab('profile');
+    track(`Termin geöffnet: ${appointment.treatmentName || 'Termin'}`, 'offer_view', {
+      treatmentId: appointment.treatmentId || '',
+      metadata: { screen: 'appointments' },
+    });
+  };
+
+  const handleRequestAppointmentUpdate = async (appointment, action) => {
+    if (!appointment) return;
+    if (!analyticsConnected) {
+      const nextStatus = action === 'cancel' ? 'canceled' : 'reschedule_requested';
+      const nextRows = normalizeAppointmentList(
+        appointments.map((item) => (
+          String(item.id) === String(appointment.id)
+            ? { ...item, status: nextStatus, updatedAt: new Date().toISOString(), segment: appointmentSegmentValue({ ...item, status: nextStatus }) }
+            : item
+        ))
+      );
+      setAppointments(nextRows);
+      setSelectedAppointment(nextRows.find((item) => String(item.id) === String(appointment.id)) || null);
+      return;
+    }
+
+    const normalized = normalizeUrl(analyticsBaseUrl);
+    const resolvedClinicName = String(clinicProfile.name || clinicLookupName || clinicSearchQuery || '').trim();
+    const memberEmail = patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase();
+    if (!normalized || !resolvedClinicName || !memberEmail) {
+      Alert.alert('Daten fehlen', 'Für Terminaktionen muss dein Profil mit einer E-Mail und einer MedSpa verbunden sein.');
+      return;
+    }
+
+    setAppointmentActionLoading(true);
+    try {
+      const payload = await updatePatientAppointment(normalized, appointment.id, action, {
+        clinicName: resolvedClinicName,
+        memberEmail,
+      });
+      const updatedRow = payload?.appointment || null;
+      if (updatedRow) {
+        const nextRows = normalizeAppointmentList(
+          appointments.map((item) => (String(item.id) === String(updatedRow.id) ? updatedRow : item))
+        );
+        setAppointments(nextRows);
+        setSelectedAppointment(nextRows.find((item) => String(item.id) === String(updatedRow.id)) || updatedRow);
+      }
+      Alert.alert(
+        action === 'cancel' ? 'Termin storniert' : 'Verschiebung angefragt',
+        action === 'cancel'
+          ? 'Der Termin wurde storniert.'
+          : 'Die Klinik wurde über deinen Verschiebungswunsch informiert.'
+      );
+    } catch (error) {
+      Alert.alert('Aktion fehlgeschlagen', String(error?.message || error));
+    } finally {
+      setAppointmentActionLoading(false);
+    }
+  };
+
   const renderMainTabScreen = () => {
     switch (mainTab) {
       case 'home':
@@ -3176,6 +3474,35 @@ function continueToAccessStep() {
           />
         );
       case 'profile':
+        if (selectedAppointment) {
+          return (
+            <AppointmentDetailScreen
+              mowgliTheme={mowgliTheme}
+              appointment={selectedAppointment}
+              onBack={() => setSelectedAppointment(null)}
+              onOpenMaps={openClinicInMaps}
+              onCallClinic={callClinicNow}
+              onRequestReschedule={() => handleRequestAppointmentUpdate(selectedAppointment, 'reschedule-request')}
+              onCancelAppointment={() => handleRequestAppointmentUpdate(selectedAppointment, 'cancel')}
+              actionLoading={appointmentActionLoading}
+              treatmentImageUrl={selectedAppointmentImageUrl}
+            />
+          );
+        }
+        if (profileTab === 'appointments') {
+          return (
+            <AppointmentsScreen
+              mowgliTheme={mowgliTheme}
+              appointments={appointments}
+              appointmentsLoading={appointmentsLoading}
+              appointmentSegment={appointmentSegment}
+              setAppointmentSegment={setAppointmentSegment}
+              openAppointment={handleOpenAppointment}
+              backToProfile={handleCloseAppointments}
+              openShopBrowse={handleOpenShopBrowse}
+            />
+          );
+        }
         return (
           <ProfileScreen
             styles={styles}
@@ -3197,6 +3524,7 @@ function continueToAccessStep() {
             treatments={treatments}
             membershipSyncing={membershipSyncing}
             cancelMembership={cancelMembership}
+            openAppointments={handleOpenAppointments}
             openMembershipTab={handleOpenMembershipTab}
             settingsName={settingsName}
             setSettingsName={setSettingsName}
@@ -3350,7 +3678,7 @@ function continueToAccessStep() {
           />
         )}
 
-        {!(mainTab === 'home' && selectedHomeArticle) && !(mainTab === 'shop' && selectedTreatment) && (
+        {!(mainTab === 'home' && selectedHomeArticle) && !(mainTab === 'shop' && selectedTreatment) && !(mainTab === 'profile' && selectedAppointment) && (
           <BottomNavigation styles={styles} mowgliTheme={mowgliTheme} mainTab={mainTab} switchMainTab={switchMainTab} />
         )}
       </View>

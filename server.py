@@ -133,6 +133,14 @@ PATIENT_CHECKOUT_PAYMENT_METHODS = {
   "paypal",
   "klarna",
 }
+PATIENT_APPOINTMENT_STATUSES = {
+  "pending_confirmation",
+  "confirmed",
+  "reschedule_requested",
+  "rescheduled",
+  "completed",
+  "canceled",
+}
 STRIPE_TO_ADMIN_SUBSCRIPTION_STATUS = {
   "active": "active",
   "trialing": "trialing",
@@ -828,6 +836,32 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_memberships_clinic_status ON patient_memberships(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_memberships_email ON patient_memberships(patient_email);
 
+        CREATE TABLE IF NOT EXISTS patient_appointments (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          patient_email TEXT NOT NULL,
+          patient_name TEXT NOT NULL DEFAULT '',
+          treatment_id TEXT NOT NULL DEFAULT '',
+          treatment_name TEXT NOT NULL DEFAULT '',
+          treatment_duration_minutes INTEGER NOT NULL DEFAULT 0,
+          practitioner_name TEXT NOT NULL DEFAULT '',
+          starts_at TEXT,
+          ends_at TEXT,
+          location_label TEXT NOT NULL DEFAULT '',
+          location_address TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'pending_confirmation',
+          notes TEXT NOT NULL DEFAULT '',
+          order_id TEXT NOT NULL DEFAULT '',
+          canceled_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_email ON patient_appointments(clinic_id, patient_email);
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
+
         CREATE TABLE IF NOT EXISTS clinic_campaigns (
           id BIGSERIAL PRIMARY KEY,
           clinic_id BIGINT NOT NULL,
@@ -1084,6 +1118,32 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_memberships_clinic_status ON patient_memberships(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_memberships_email ON patient_memberships(patient_email);
 
+        CREATE TABLE IF NOT EXISTS patient_appointments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          patient_email TEXT NOT NULL,
+          patient_name TEXT NOT NULL DEFAULT '',
+          treatment_id TEXT NOT NULL DEFAULT '',
+          treatment_name TEXT NOT NULL DEFAULT '',
+          treatment_duration_minutes INTEGER NOT NULL DEFAULT 0,
+          practitioner_name TEXT NOT NULL DEFAULT '',
+          starts_at TEXT,
+          ends_at TEXT,
+          location_label TEXT NOT NULL DEFAULT '',
+          location_address TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'pending_confirmation',
+          notes TEXT NOT NULL DEFAULT '',
+          order_id TEXT NOT NULL DEFAULT '',
+          canceled_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_email ON patient_appointments(clinic_id, patient_email);
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
+        CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
+
         CREATE TABLE IF NOT EXISTS clinic_campaigns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           clinic_id INTEGER NOT NULL,
@@ -1233,6 +1293,26 @@ def init_db() -> None:
         "next_charge_at": "TEXT",
         "canceled_at": "TEXT",
         "last_payment_status": "TEXT NOT NULL DEFAULT 'pending'",
+      },
+    )
+
+    ensure_columns(
+      conn,
+      "patient_appointments",
+      {
+        "patient_name": "TEXT NOT NULL DEFAULT ''",
+        "treatment_id": "TEXT NOT NULL DEFAULT ''",
+        "treatment_name": "TEXT NOT NULL DEFAULT ''",
+        "treatment_duration_minutes": "INTEGER NOT NULL DEFAULT 0",
+        "practitioner_name": "TEXT NOT NULL DEFAULT ''",
+        "starts_at": "TEXT",
+        "ends_at": "TEXT",
+        "location_label": "TEXT NOT NULL DEFAULT ''",
+        "location_address": "TEXT NOT NULL DEFAULT ''",
+        "status": "TEXT NOT NULL DEFAULT 'pending_confirmation'",
+        "notes": "TEXT NOT NULL DEFAULT ''",
+        "order_id": "TEXT NOT NULL DEFAULT ''",
+        "canceled_at": "TEXT",
       },
     )
 
@@ -2570,6 +2650,23 @@ def normalize_patient_checkout_method(value: object, fallback: str = "card") -> 
   return "card"
 
 
+def normalize_patient_appointment_status(value: object, fallback: str = "pending_confirmation") -> str:
+  candidate = str(value or "").strip().lower()
+  if candidate in PATIENT_APPOINTMENT_STATUSES:
+    return candidate
+  return fallback
+
+
+def normalize_optional_datetime_value(value: object) -> str | None:
+  raw = str(value or "").strip()
+  if not raw:
+    return None
+  parsed = parse_datetime_utc(raw)
+  if not parsed:
+    return None
+  return parsed.isoformat()
+
+
 def resolve_catalog_membership_plan(clinic_row, membership_id: str) -> dict | None:
   target_membership_id = str(membership_id or "").strip()
   if not target_membership_id:
@@ -3060,6 +3157,291 @@ def list_patient_memberships_by_clinic(clinic_id: int, limit: int = 200) -> list
       (clinic_id, safe_limit),
     ).fetchall()
   return list(rows)
+
+
+def appointment_segment_for_row(row) -> str:
+  status = normalize_patient_appointment_status(row["status"], "pending_confirmation")
+  starts_at = parse_datetime_utc(row["starts_at"])
+  now_dt = utc_now()
+  if status in {"completed", "canceled"}:
+    return "past"
+  if starts_at and starts_at < now_dt:
+    return "past"
+  return "upcoming"
+
+
+def serialize_patient_appointment_row(row) -> dict:
+  segment = appointment_segment_for_row(row)
+  return {
+    "id": row["id"],
+    "clinicId": row["clinic_id"],
+    "patientEmail": row["patient_email"],
+    "patientName": row["patient_name"],
+    "treatmentId": row["treatment_id"],
+    "treatmentName": row["treatment_name"],
+    "treatmentDurationMinutes": int(row["treatment_duration_minutes"] or 0),
+    "practitionerName": row["practitioner_name"] or "",
+    "startsAt": row["starts_at"],
+    "endsAt": row["ends_at"],
+    "locationLabel": row["location_label"] or "",
+    "locationAddress": row["location_address"] or "",
+    "status": row["status"] or "pending_confirmation",
+    "notes": row["notes"] or "",
+    "orderId": row["order_id"] or "",
+    "canceledAt": row["canceled_at"],
+    "createdAt": row["created_at"],
+    "updatedAt": row["updated_at"],
+    "segment": segment,
+  }
+
+
+def get_patient_appointment_row(clinic_id: int, patient_email: str, appointment_id: int):
+  safe_email = sanitize_patient_email(patient_email)
+  if not safe_email or appointment_id <= 0:
+    return None
+  with get_db() as conn:
+    row = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        treatment_id,
+        treatment_name,
+        treatment_duration_minutes,
+        practitioner_name,
+        starts_at,
+        ends_at,
+        location_label,
+        location_address,
+        status,
+        notes,
+        order_id,
+        canceled_at,
+        created_at,
+        updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND patient_email = ? AND id = ?
+      LIMIT 1
+      """,
+      (clinic_id, safe_email, appointment_id),
+    ).fetchone()
+  return row
+
+
+def list_patient_appointments(clinic_id: int, patient_email: str, limit: int = 80) -> list:
+  safe_email = sanitize_patient_email(patient_email)
+  if not safe_email:
+    return []
+  safe_limit = max(1, min(limit, 200))
+  with get_db() as conn:
+    rows = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        treatment_id,
+        treatment_name,
+        treatment_duration_minutes,
+        practitioner_name,
+        starts_at,
+        ends_at,
+        location_label,
+        location_address,
+        status,
+        notes,
+        order_id,
+        canceled_at,
+        created_at,
+        updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND patient_email = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+      """,
+      (clinic_id, safe_email, safe_limit),
+    ).fetchall()
+
+  def sort_key(row):
+    segment = appointment_segment_for_row(row)
+    starts_at = parse_datetime_utc(row["starts_at"])
+    created_at = parse_datetime_utc(row["created_at"]) or utc_now()
+    if segment == "upcoming":
+      return (0, starts_at or created_at, int(row["id"]))
+    base_dt = starts_at or created_at
+    return (1, -base_dt.timestamp(), -int(row["id"]))
+
+  sorted_rows = sorted(list(rows), key=sort_key)
+  return sorted_rows
+
+
+def create_patient_appointments_from_checkout(
+  clinic_row,
+  patient_email: str,
+  patient_name: str,
+  line_items: list[dict],
+  payment_status: str,
+  order_id: str,
+) -> list[dict]:
+  clinic_id = int(clinic_row["id"])
+  safe_email = sanitize_patient_email(patient_email)
+  if not safe_email:
+    return []
+
+  safe_name = sanitize_patient_name(patient_name) or safe_email.split("@")[0]
+  clinic_profile = serialize_public_clinic(clinic_row)
+  location_label = str(clinic_profile.get("name") or clinic_row["name"] or "").strip()
+  location_address = str(clinic_profile.get("address") or "").strip()
+  now_iso = utc_now_iso()
+  inserted_rows = []
+
+  with get_db() as conn:
+    for item in line_items:
+      treatment_id = str(item.get("treatmentId") or "").strip()
+      treatment_name = str(item.get("name") or treatment_id or "Treatment").strip()
+      duration_minutes = max(0, min(int(item.get("durationMinutes") or 0), 600))
+      starts_at = normalize_optional_datetime_value(
+        item.get("startsAt") or item.get("scheduledAt") or item.get("appointmentAt")
+      )
+      ends_at = normalize_optional_datetime_value(item.get("endsAt"))
+      if starts_at and not ends_at and duration_minutes > 0:
+        parsed_start = parse_datetime_utc(starts_at)
+        if parsed_start:
+          ends_at = (parsed_start + timedelta(minutes=duration_minutes)).isoformat()
+      quantity = max(1, min(int(item.get("units") or 1), 20))
+      item_notes = str(item.get("notes") or "").strip()
+      if not item_notes:
+        item_notes = (
+          "Die Klinik bestätigt deinen Termin separat."
+          if not starts_at
+          else "Bitte komme 10 Minuten vor dem Termin zum Check-in."
+        )
+      if quantity > 1:
+        item_notes = f"{item_notes}\nGebuchte Einheiten: {quantity}"
+
+      status = normalize_patient_appointment_status(
+        item.get("appointmentStatus") or ("confirmed" if starts_at and payment_status == "paid" else "pending_confirmation"),
+        "pending_confirmation",
+      )
+
+      appointment_id = insert_and_get_id(
+        conn,
+        """
+        INSERT INTO patient_appointments (
+          clinic_id,
+          patient_email,
+          patient_name,
+          treatment_id,
+          treatment_name,
+          treatment_duration_minutes,
+          practitioner_name,
+          starts_at,
+          ends_at,
+          location_label,
+          location_address,
+          status,
+          notes,
+          order_id,
+          canceled_at,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+          clinic_id,
+          safe_email,
+          safe_name,
+          treatment_id,
+          treatment_name,
+          duration_minutes,
+          str(item.get("practitionerName") or "").strip(),
+          starts_at,
+          ends_at,
+          location_label,
+          location_address,
+          status,
+          item_notes,
+          order_id,
+          now_iso if status == "canceled" else None,
+          now_iso,
+          now_iso,
+        ),
+      )
+      if appointment_id > 0:
+        row = get_patient_appointment_row(clinic_id, safe_email, appointment_id)
+        if row:
+          inserted_rows.append(serialize_patient_appointment_row(row))
+
+  return inserted_rows
+
+
+def update_patient_appointment_status(
+  clinic_id: int,
+  patient_email: str,
+  appointment_id: int,
+  status: str,
+  note_append: str = "",
+):
+  safe_email = sanitize_patient_email(patient_email)
+  if not safe_email or appointment_id <= 0:
+    return None
+
+  normalized_status = normalize_patient_appointment_status(status, "pending_confirmation")
+  now_iso = utc_now_iso()
+
+  with get_db() as conn:
+    existing = conn.execute(
+      """
+      SELECT
+        id,
+        notes,
+        status,
+        canceled_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND patient_email = ? AND id = ?
+      LIMIT 1
+      """,
+      (clinic_id, safe_email, appointment_id),
+    ).fetchone()
+    if not existing:
+      return None
+
+    existing_notes = str(existing["notes"] or "").strip()
+    appended_note = str(note_append or "").strip()
+    next_notes = existing_notes
+    if appended_note:
+      next_notes = f"{existing_notes}\n{appended_note}".strip() if existing_notes else appended_note
+
+    canceled_at = existing["canceled_at"]
+    if normalized_status == "canceled":
+      canceled_at = canceled_at or now_iso
+    elif normalized_status not in {"canceled"}:
+      canceled_at = None
+
+    conn.execute(
+      """
+      UPDATE patient_appointments
+      SET
+        status = ?,
+        notes = ?,
+        canceled_at = ?,
+        updated_at = ?
+      WHERE id = ?
+      """,
+      (
+        normalized_status,
+        next_notes,
+        canceled_at,
+        now_iso,
+        existing["id"],
+      ),
+    )
+
+  return get_patient_appointment_row(clinic_id, safe_email, appointment_id)
 
 
 def summarize_patient_memberships(rows: list) -> dict:
@@ -6816,6 +7198,101 @@ def mobile_membership_mark_past_due():
   )
 
 
+@app.get("/api/mobile/appointments")
+def mobile_appointments():
+  clinic_name = str(request.args.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(request.args.get("memberEmail") or request.args.get("email"))
+
+  if len(clinic_name) < 2:
+    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if not patient_email:
+    return jsonify({"appointments": [], "summary": {"upcoming": 0, "past": 0}})
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  rows = list_patient_appointments(int(clinic_row["id"]), patient_email)
+  serialized = [serialize_patient_appointment_row(row) for row in rows]
+  summary = {
+    "upcoming": sum(1 for row in serialized if row.get("segment") == "upcoming"),
+    "past": sum(1 for row in serialized if row.get("segment") == "past"),
+  }
+  return jsonify({"appointments": serialized, "summary": summary})
+
+
+@app.post("/api/mobile/appointments/<int:appointment_id>/cancel")
+def mobile_cancel_appointment(appointment_id: int):
+  payload = request.get_json(silent=True) or {}
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
+  if len(clinic_name) < 2:
+    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if not patient_email:
+    return jsonify({"error": "memberEmail ist erforderlich."}), 400
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  appointment_row = update_patient_appointment_status(
+    clinic_id=int(clinic_row["id"]),
+    patient_email=patient_email,
+    appointment_id=appointment_id,
+    status="canceled",
+    note_append="Stornierung vom Patienten angefragt.",
+  )
+  if not appointment_row:
+    return jsonify({"error": "Termin nicht gefunden."}), 404
+
+  create_audit_log(
+    clinic_id=int(clinic_row["id"]),
+    actor_user_id=None,
+    action="mobile.appointment_canceled",
+    entity_type="patient_appointment",
+    entity_id=str(appointment_id),
+    metadata={"patientEmail": patient_email},
+  )
+
+  return jsonify({"success": True, "appointment": serialize_patient_appointment_row(appointment_row)})
+
+
+@app.post("/api/mobile/appointments/<int:appointment_id>/reschedule-request")
+def mobile_request_appointment_reschedule(appointment_id: int):
+  payload = request.get_json(silent=True) or {}
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
+  if len(clinic_name) < 2:
+    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if not patient_email:
+    return jsonify({"error": "memberEmail ist erforderlich."}), 400
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  appointment_row = update_patient_appointment_status(
+    clinic_id=int(clinic_row["id"]),
+    patient_email=patient_email,
+    appointment_id=appointment_id,
+    status="reschedule_requested",
+    note_append="Terminverschiebung vom Patienten angefragt.",
+  )
+  if not appointment_row:
+    return jsonify({"error": "Termin nicht gefunden."}), 404
+
+  create_audit_log(
+    clinic_id=int(clinic_row["id"]),
+    actor_user_id=None,
+    action="mobile.appointment_reschedule_requested",
+    entity_type="patient_appointment",
+    entity_id=str(appointment_id),
+    metadata={"patientEmail": patient_email},
+  )
+
+  return jsonify({"success": True, "appointment": serialize_patient_appointment_row(appointment_row)})
+
+
 @app.post("/api/mobile/cart/add")
 def mobile_cart_add():
   payload = request.get_json(silent=True) or {}
@@ -6940,6 +7417,15 @@ def mobile_checkout_complete():
     unit_price_cents = int(pricing["unitPriceCents"] or 0)
     line_total_cents = max(0, unit_price_cents * units)
     total_cents += line_total_cents
+    starts_at = normalize_optional_datetime_value(
+      entry.get("startsAt") or entry.get("scheduledAt") or entry.get("appointmentAt")
+    )
+    ends_at = normalize_optional_datetime_value(entry.get("endsAt"))
+    duration_minutes = max(0, min(int(treatment.get("durationMinutes") or 0), 600))
+    if starts_at and not ends_at and duration_minutes > 0:
+      parsed_start = parse_datetime_utc(starts_at)
+      if parsed_start:
+        ends_at = (parsed_start + timedelta(minutes=duration_minutes)).isoformat()
     line_items.append(
       {
         "treatmentId": treatment_id,
@@ -6948,6 +7434,11 @@ def mobile_checkout_complete():
         "unitCents": unit_price_cents,
         "totalCents": line_total_cents,
         "priceSource": pricing["priceSource"],
+        "durationMinutes": duration_minutes,
+        "startsAt": starts_at,
+        "endsAt": ends_at,
+        "notes": str(entry.get("notes") or "").strip(),
+        "appointmentStatus": str(entry.get("appointmentStatus") or "").strip(),
       }
     )
 
@@ -6956,6 +7447,15 @@ def mobile_checkout_complete():
 
   earned_points = max(0, int(round(total_cents / 100)))
   order_id = f"ord_{secrets.token_hex(6)}"
+  patient_name = sanitize_patient_name(payload.get("memberName") or payload.get("name"))
+  created_appointments = create_patient_appointments_from_checkout(
+    clinic_row,
+    patient_email=patient_email,
+    patient_name=patient_name,
+    line_items=line_items,
+    payment_status=payment_status,
+    order_id=order_id,
+  )
 
   create_analytics_event(
     clinic_id=int(clinic_row["id"]),
@@ -6971,6 +7471,7 @@ def mobile_checkout_complete():
       "paymentStatus": payment_status,
       "paymentMethod": payment_method,
       "orderId": order_id,
+      "appointmentsCreated": len(created_appointments),
       "lineItems": line_items[:20],
     },
     event_source="patient_app_checkout",
@@ -6988,6 +7489,7 @@ def mobile_checkout_complete():
       "items": len(line_items),
       "paymentMethod": payment_method,
       "paymentStatus": payment_status,
+      "appointmentsCreated": len(created_appointments),
     },
   )
 
@@ -7012,6 +7514,7 @@ def mobile_checkout_complete():
       "paymentMethod": payment_method,
       "paymentStatus": payment_status,
       "lineItems": line_items,
+      "appointments": created_appointments,
       "membership": serialize_patient_membership_row(updated_membership) if updated_membership else None,
     }
   )
