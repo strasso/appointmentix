@@ -172,6 +172,15 @@ function showToast(message) {
   }, 2600);
 }
 
+function humanizeImportError(message) {
+  const normalized = String(message || "").trim();
+  if (!normalized) return "Serveranfrage fehlgeschlagen";
+  if (normalized.includes("HTTP 403")) {
+    return "Die Website blockiert automatische Imports gerade per Cloudflare/403. Dafür brauchen wir einen Browser-Fallback.";
+  }
+  return normalized;
+}
+
 function normalizeHexColorForUi(value, fallback = "#8A5A2F") {
   const candidate = String(value || "").trim();
   return /^#[0-9A-Fa-f]{6}$/.test(candidate) ? candidate : fallback;
@@ -1499,7 +1508,7 @@ async function importCatalogFromWebsite() {
     showToast(`${Number(response.websiteSync?.importedTreatments || 0)} Treatments von der Website übernommen`);
     await maybeAdoptWebsiteBranding(response.websiteSync);
   } catch (error) {
-    showToast(error.message || "Website-Import fehlgeschlagen");
+    showToast(humanizeImportError(error.message || "Website-Import fehlgeschlagen"));
   } finally {
     importCatalogBtn.disabled = false;
   }
@@ -1779,13 +1788,13 @@ async function handleSettingsSave(event) {
     }
 
     if (response.websiteSync?.error) {
-      showToast(`Einstellungen gespeichert · Import fehlgeschlagen: ${response.websiteSync.error}`);
+      showToast(`Einstellungen gespeichert · ${humanizeImportError(response.websiteSync.error)}`);
       return;
     }
 
     showToast("Einstellungen gespeichert");
   } catch (error) {
-    showToast(error.message);
+    showToast(humanizeImportError(error.message));
   } finally {
     saveSettingsBtn.disabled = false;
   }
