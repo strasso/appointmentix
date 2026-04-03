@@ -6,21 +6,13 @@
   <title>Curabo Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/">
-      <span class="dot"></span>
-      <span>CURABO</span>
-    </a>
-    <div class="topbar-actions">
-      <span id="sessionLabel" class="session-label">Nicht angemeldet</span>
-      <button id="logoutBtn" class="btn ghost hidden" type="button">Abmelden</button>
-    </div>
-  </header>
-
+  <div class="dashboard-ghost-session" aria-hidden="true">
+    <span id="sessionLabel">Nicht angemeldet</span>
+  </div>
   <main class="shell">
     <section id="authSection" class="card auth-card">
       <h1>Web Dashboard Login</h1>
@@ -66,7 +58,7 @@
           <div class="analytics-layout">
             <aside class="analytics-sidebar">
               <div class="analytics-logo">
-                <span class="dot"></span>
+                <img class="brand-mark brand-mark-sidebar" src="/assets/curabo-icon.png" alt="Curabo Logo">
                 <strong>CURABO</strong>
               </div>
               <p class="sidebar-caption">Umsatz, Mitglieder und Kampagnen in einer ruhigen Arbeitsfläche für den Klinikbetrieb.</p>
@@ -76,6 +68,9 @@
               <button class="side-nav-item" type="button" data-nav-target="membershipsSection">Mitgliedschaften</button>
               <button class="side-nav-item" type="button" data-nav-target="appBuilderSection">App-Builder</button>
               <button class="side-nav-item" type="button" data-nav-target="campaignsSection">Kampagnen</button>
+              <div class="sidebar-actions">
+                <button id="logoutBtn" class="btn ghost sidebar-logout hidden" type="button">Abmelden</button>
+              </div>
             </aside>
 
             <div id="dashboardTop" class="analytics-main">
@@ -186,26 +181,6 @@
                   <div id="revenueSourcesBody" class="source-list"></div>
                 </section>
 
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">LTV pro App-Nutzer</p>
-                    <button class="icon-btn" type="button" data-export-kind="appUserLtv" title="CSV exportieren" aria-label="LTV pro App-Nutzer als CSV exportieren">⤓</button>
-                  </div>
-                  <p id="metricAppUserLTVValue" class="tile-value">€0.00</p>
-                  <p id="metricAppUserLTVDelta" class="delta-inline hidden">+0.0%</p>
-                  <canvas id="chartAppUserLTV" height="110"></canvas>
-                </section>
-
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">Kunden-LTV</p>
-                    <button class="icon-btn" type="button" data-export-kind="clientLtv" title="CSV exportieren" aria-label="Kunden-LTV als CSV exportieren">⤓</button>
-                  </div>
-                  <p id="metricClientLTVValue" class="tile-value">€0.00</p>
-                  <p id="metricClientLTVDelta" class="delta-inline hidden">+0.0%</p>
-                  <canvas id="chartClientLTV" height="110"></canvas>
-                </section>
-
                 <section id="clinicProfilesSection" class="analytics-tile">
                   <div class="tile-top">
                     <p class="tile-label">Top-Kunden</p>
@@ -242,43 +217,73 @@
                   </div>
                 </section>
 
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">App-Nutzer</p>
-                    <button class="icon-btn" type="button" data-export-kind="appUsers" title="CSV exportieren" aria-label="App-Nutzer als CSV exportieren">⤓</button>
+                <section class="analytics-tile analytics-metric-cluster">
+                  <div class="cluster-head">
+                    <div>
+                      <p class="tile-label">Weitere Kennzahlen</p>
+                      <p class="tile-note">LTV, App-Nutzung und Reichweite in einer verdichteten Übersicht statt einzelner Mini-Karten.</p>
+                    </div>
                   </div>
-                  <p id="metricAppUsersValue" class="tile-value">0</p>
-                  <p id="metricAppUsersDelta" class="delta-inline hidden">+0.0%</p>
-                  <canvas id="chartAppUsers" height="110"></canvas>
-                </section>
+                  <div class="metric-cluster-grid">
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">LTV pro App-Nutzer</p>
+                        <button class="icon-btn" type="button" data-export-kind="appUserLtv" title="CSV exportieren" aria-label="LTV pro App-Nutzer als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricAppUserLTVValue" class="tile-value">€0.00</p>
+                      <p id="metricAppUserLTVDelta" class="delta-inline hidden">+0.0%</p>
+                      <canvas id="chartAppUserLTV" height="110"></canvas>
+                    </div>
 
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">Empfehlungen</p>
-                    <button class="icon-btn" type="button" data-export-kind="referrals" title="CSV exportieren" aria-label="Empfehlungen als CSV exportieren">⤓</button>
-                  </div>
-                  <p id="metricReferralsValue" class="tile-value">0</p>
-                  <p id="metricReferralsDelta" class="delta-inline hidden">+0.0%</p>
-                  <canvas id="chartReferrals" height="110"></canvas>
-                </section>
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">Kunden-LTV</p>
+                        <button class="icon-btn" type="button" data-export-kind="clientLtv" title="CSV exportieren" aria-label="Kunden-LTV als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricClientLTVValue" class="tile-value">€0.00</p>
+                      <p id="metricClientLTVDelta" class="delta-inline hidden">+0.0%</p>
+                      <canvas id="chartClientLTV" height="110"></canvas>
+                    </div>
 
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">Besuche</p>
-                    <button class="icon-btn" type="button" data-export-kind="visits" title="CSV exportieren" aria-label="Besuche als CSV exportieren">⤓</button>
-                  </div>
-                  <p id="metricVisitsValue" class="tile-value">0</p>
-                  <p id="metricVisitsDelta" class="delta-inline hidden">+0.0%</p>
-                  <canvas id="chartVisits" height="110"></canvas>
-                </section>
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">App-Nutzer</p>
+                        <button class="icon-btn" type="button" data-export-kind="appUsers" title="CSV exportieren" aria-label="App-Nutzer als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricAppUsersValue" class="tile-value">0</p>
+                      <p id="metricAppUsersDelta" class="delta-inline hidden">+0.0%</p>
+                      <canvas id="chartAppUsers" height="110"></canvas>
+                    </div>
 
-                <section class="analytics-tile">
-                  <div class="tile-top">
-                    <p class="tile-label">Google-Bewertungen</p>
-                    <button class="icon-btn" type="button" data-export-kind="reviews" title="CSV exportieren" aria-label="Google-Bewertungen als CSV exportieren">⤓</button>
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">Empfehlungen</p>
+                        <button class="icon-btn" type="button" data-export-kind="referrals" title="CSV exportieren" aria-label="Empfehlungen als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricReferralsValue" class="tile-value">0</p>
+                      <p id="metricReferralsDelta" class="delta-inline hidden">+0.0%</p>
+                      <canvas id="chartReferrals" height="110"></canvas>
+                    </div>
+
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">Besuche</p>
+                        <button class="icon-btn" type="button" data-export-kind="visits" title="CSV exportieren" aria-label="Besuche als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricVisitsValue" class="tile-value">0</p>
+                      <p id="metricVisitsDelta" class="delta-inline hidden">+0.0%</p>
+                      <canvas id="chartVisits" height="110"></canvas>
+                    </div>
+
+                    <div class="analytics-mini-tile">
+                      <div class="tile-top">
+                        <p class="tile-label">Google-Bewertungen</p>
+                        <button class="icon-btn" type="button" data-export-kind="reviews" title="CSV exportieren" aria-label="Google-Bewertungen als CSV exportieren">⤓</button>
+                      </div>
+                      <p id="metricReviewsValue" class="tile-value">0</p>
+                      <canvas id="chartReviews" height="110"></canvas>
+                    </div>
                   </div>
-                  <p id="metricReviewsValue" class="tile-value">0</p>
-                  <canvas id="chartReviews" height="110"></canvas>
                 </section>
               </div>
             </div>
@@ -321,7 +326,7 @@
               </label>
             </div>
             <label>Schriftart
-              <input name="fontFamily" type="text" placeholder="Manrope, sans-serif">
+              <input name="fontFamily" type="text" placeholder="Inter, sans-serif">
             </label>
             <input name="designPreset" type="hidden" value="clean">
             <label>Calendly URL
