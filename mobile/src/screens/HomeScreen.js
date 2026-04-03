@@ -72,7 +72,6 @@ function MembershipCard({ styles, theme, membershipLabel, currentMembership, onP
   const perks = Array.isArray(currentMembership?.perks) ? currentMembership.perks.slice(0, 2) : [];
   return (
     <View style={[styles.mowgliMembershipCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-      <View pointerEvents="none" style={[styles.mowgliMembershipGlow, { backgroundColor: theme.heroGlow }]} />
       <View style={styles.mowgliMembershipTopRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.mowgliFeaturedTag, { color: theme.accent }]}>Active Membership</Text>
@@ -87,7 +86,7 @@ function MembershipCard({ styles, theme, membershipLabel, currentMembership, onP
       <Text style={[styles.mowgliMembershipBody, { color: theme.textSoft }]}>
         {perks.length > 0
           ? perks.join('\n')
-          : 'Vorteile, bevorzugte Slots und freigeschaltete Konditionen für deine Klinik in einem Ort.'}
+          : 'Vorteile und freigeschaltete Konditionen direkt in deiner Klinik-App.'}
       </Text>
       <Pressable onPress={onPress} style={({ pressed }) => [styles.mowgliTextLink, pressed && styles.mowgliLiftSoft]}>
         <Text style={[styles.mowgliTextLinkText, { color: theme.accent }]}>Mehr erfahren</Text>
@@ -114,8 +113,12 @@ function QuickAction({ styles, theme, title, caption, icon, onPress }) {
         <Ionicons name={icon} size={20} color={theme.accent} />
       </View>
       <View>
-        <Text style={[styles.mowgliActionSquareTitle, { color: theme.text }]}>{title}</Text>
-        <Text style={[styles.mowgliQuickActionCaption, { color: theme.textMuted }]}>{caption}</Text>
+        <Text style={[styles.mowgliActionSquareTitle, { color: theme.text }]} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={[styles.mowgliQuickActionCaption, { color: theme.textMuted }]} numberOfLines={2}>
+          {caption}
+        </Text>
       </View>
     </Pressable>
   );
@@ -465,15 +468,15 @@ export default function HomeScreen({
           theme={theme}
           icon="calendar-outline"
           title="Treatments"
-          caption="Alle Leistungen ansehen"
+          caption="Alle Leistungen"
           onPress={onViewOffers}
         />
         <QuickAction
           styles={styles}
           theme={theme}
           icon="star-outline"
-          title="Membership"
-          caption="Vorteile freischalten"
+          title="Vorteile"
+          caption="Mitgliedschaft"
           onPress={openMembershipTab}
         />
         <QuickAction
@@ -481,7 +484,7 @@ export default function HomeScreen({
           theme={theme}
           icon="call-outline"
           title="Kontakt"
-          caption="Klinik direkt erreichen"
+          caption="Klinik erreichen"
           onPress={() => {
             void callClinicNow();
           }}
