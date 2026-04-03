@@ -25,6 +25,7 @@ const state = {
   },
   patientMemberships: [],
   membershipSummary: {},
+  settingsSnapshot: null,
   catalog: {
     categories: [],
     treatments: [],
@@ -49,6 +50,8 @@ const authMessage = document.getElementById("authMessage");
 
 const settingsForm = document.getElementById("settingsForm");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+const brandColorPicker = document.getElementById("brandColorPicker");
+const accentColorPicker = document.getElementById("accentColorPicker");
 const membersBody = document.getElementById("membersBody");
 const memberForm = document.getElementById("memberForm");
 const billingStatus = document.getElementById("billingStatus");
@@ -121,6 +124,12 @@ const refreshAuditBtn = document.getElementById("refreshAuditBtn");
 const sideNavItems = Array.from(document.querySelectorAll(".side-nav-item[data-nav-target]"));
 let metricsResizeTimer = null;
 let metricsResizeFrame = null;
+const CATEGORY_ID_UI_ALIASES = {
+  koerper: "korper",
+};
+const CATEGORY_ID_STORAGE_ALIASES = {
+  korper: "koerper",
+};
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -161,6 +170,41 @@ function showToast(message) {
     toast.classList.remove("show");
     state.toastTimer = null;
   }, 2600);
+}
+
+function normalizeHexColorForUi(value, fallback = "#8A5A2F") {
+  const candidate = String(value || "").trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(candidate) ? candidate : fallback;
+}
+
+function displayCategoryId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return CATEGORY_ID_UI_ALIASES[normalized] || normalized;
+}
+
+function storeCategoryId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return CATEGORY_ID_STORAGE_ALIASES[normalized] || normalized;
+}
+
+function syncColorFieldPair(textInput, colorInput, fallback) {
+  if (!(textInput instanceof HTMLInputElement) || !(colorInput instanceof HTMLInputElement)) return;
+  const syncFromText = () => {
+    colorInput.value = normalizeHexColorForUi(textInput.value, fallback);
+  };
+  const syncFromColor = () => {
+    textInput.value = colorInput.value;
+  };
+  syncFromText();
+  textInput.addEventListener("input", syncFromText);
+  colorInput.addEventListener("input", syncFromColor);
+}
+
+function buildSettingsPayload(extra = {}) {
+  const payload = parseAuthForm(settingsForm);
+  delete payload.brandColorPicker;
+  delete payload.accentColorPicker;
+  return { ...payload, ...extra };
 }
 
 function setAuthMessage(text, success = false) {
@@ -262,14 +306,23 @@ async function apiRequest(path, options = {}) {
 }
 
 function fillSettingsForm(settings) {
+  state.settingsSnapshot = { ...(settings || {}) };
   settingsForm.elements.clinicName.value = settings.clinicName || "";
   settingsForm.elements.website.value = settings.website || "";
   settingsForm.elements.logoUrl.value = settings.logoUrl || "";
   settingsForm.elements.brandColor.value = settings.brandColor || "";
   settingsForm.elements.accentColor.value = settings.accentColor || "";
   settingsForm.elements.fontFamily.value = settings.fontFamily || "";
-  settingsForm.elements.designPreset.value = settings.designPreset || "clean";
+  if (settingsForm.elements.designPreset) {
+    settingsForm.elements.designPreset.value = settings.designPreset || "clean";
+  }
   settingsForm.elements.calendlyUrl.value = settings.calendlyUrl || "";
+  if (brandColorPicker instanceof HTMLInputElement) {
+    brandColorPicker.value = normalizeHexColorForUi(settings.brandColor, "#16A34A");
+  }
+  if (accentColorPicker instanceof HTMLInputElement) {
+    accentColorPicker.value = normalizeHexColorForUi(settings.accentColor, "#EB6C13");
+  }
 
   const disabled = !state.isOwner;
   Array.from(settingsForm.elements).forEach((element) => {
@@ -929,7 +982,7 @@ function renderCatalog() {
     .map(
       (item, index) =>
         `<tr>
-          <td><input data-list="categories" data-field="id" value="${escapeAttr(item.id)}" placeholder="gesicht"></td>
+          <td><input data-list="categories" data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht"></td>
           <td><input data-list="categories" data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht"></td>
           <td><button class="row-remove" type="button" data-remove-list="categories" data-index="${index}">Entfernen</button></td>
         </tr>`
@@ -945,7 +998,7 @@ function renderCatalog() {
         `<tr>
           <td><input data-list="treatments" data-field="id" value="${escapeAttr(item.id)}" placeholder="t-basic-glow"></td>
           <td><input data-list="treatments" data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></td>
-          <td><input data-list="treatments" data-field="category" value="${escapeAttr(item.category)}" placeholder="gesicht"></td>
+          <td><input data-list="treatments" data-field="category" value="${escapeAttr(displayCategoryId(item.category))}" placeholder="gesicht"></td>
           <td><input data-list="treatments" data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="11000"></td>
           <td><input data-list="treatments" data-field="memberPriceCents" value="${escapeAttr(item.memberPriceCents)}" placeholder="9900"></td>
           <td><input data-list="treatments" data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></td>
@@ -1028,7 +1081,7 @@ function renderCatalog() {
 function syncCatalogStateFromDom() {
   const categories = Array.from(categoriesBody.querySelectorAll("tr"))
     .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
+      const id = storeCategoryId(row.querySelector('input[data-field="id"]')?.value.trim() || "");
       const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
       return { id, label };
     })
@@ -1038,7 +1091,7 @@ function syncCatalogStateFromDom() {
     .map((row) => {
       const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
       const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
-      const category = row.querySelector('input[data-field="category"]')?.value.trim() || "";
+      const category = storeCategoryId(row.querySelector('input[data-field="category"]')?.value.trim() || "");
       const description = row.querySelector('input[data-field="description"]')?.value.trim() || "";
       return {
         id,
@@ -1346,6 +1399,51 @@ async function saveCatalog() {
   }
 }
 
+async function maybeAdoptWebsiteBranding(websiteSync) {
+  const suggestedBranding = websiteSync?.suggestedBranding;
+  if (!suggestedBranding || typeof suggestedBranding !== "object") return;
+
+  const suggestedBrandColor = String(suggestedBranding.brandColor || "").trim();
+  const suggestedAccentColor = String(suggestedBranding.accentColor || "").trim();
+  const suggestedFontFamily = String(suggestedBranding.fontFamily || "").trim();
+  const currentBrandColor = String(settingsForm.elements.brandColor?.value || "").trim();
+  const currentFontFamily = String(settingsForm.elements.fontFamily?.value || "").trim();
+
+  const wantsWebsiteColor = Boolean(suggestedBrandColor)
+    && suggestedBrandColor.toLowerCase() !== currentBrandColor.toLowerCase()
+    && window.confirm("Möchtest du die Markenfarbe von der Website übernehmen?");
+  const wantsWebsiteFont = Boolean(suggestedFontFamily)
+    && suggestedFontFamily !== currentFontFamily
+    && window.confirm("Möchtest du die Schriftart von der Website übernehmen?");
+
+  if (!wantsWebsiteColor && !wantsWebsiteFont) {
+    return;
+  }
+
+  const followUpPayload = buildSettingsPayload({
+    syncWebsiteCatalog: false,
+    skipWebsiteImport: true,
+    useWebsiteBrandColor: false,
+    useWebsiteAccentColor: false,
+    useWebsiteFontFamily: false,
+  });
+
+  if (wantsWebsiteColor) {
+    followUpPayload.brandColor = suggestedBrandColor;
+    if (suggestedAccentColor) {
+      followUpPayload.accentColor = suggestedAccentColor;
+    }
+  }
+  if (wantsWebsiteFont) {
+    followUpPayload.fontFamily = suggestedFontFamily;
+  }
+
+  const response = await apiRequest("/clinic/settings", { method: "PUT", body: followUpPayload });
+  await Promise.all([loadSettings(), loadAuditLogs()]);
+  showToast("Website-Branding übernommen");
+  return response;
+}
+
 function downloadJsonFile(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const objectUrl = URL.createObjectURL(blob);
@@ -1378,7 +1476,33 @@ function handleImportCatalogButton() {
     showToast("Nur Owner können importieren.");
     return;
   }
-  importCatalogInput.click();
+
+  void importCatalogFromWebsite();
+}
+
+async function importCatalogFromWebsite() {
+  const website = String(settingsForm.elements.website?.value || "").trim();
+  if (!website) {
+    showToast("Bitte zuerst eine Website in den Klinik-Einstellungen speichern.");
+    return;
+  }
+
+  try {
+    importCatalogBtn.disabled = true;
+    const response = await apiRequest("/clinic/catalog/import-from-website", {
+      method: "POST",
+      body: {},
+    });
+    state.catalog = normalizeCatalogPayload(response.catalog || {});
+    renderCatalog();
+    await Promise.all([loadAuditLogs(), loadSettings()]);
+    showToast(`${Number(response.websiteSync?.importedTreatments || 0)} Treatments von der Website übernommen`);
+    await maybeAdoptWebsiteBranding(response.websiteSync);
+  } catch (error) {
+    showToast(error.message || "Website-Import fehlgeschlagen");
+  } finally {
+    importCatalogBtn.disabled = false;
+  }
 }
 
 async function handleImportCatalogChange(event) {
@@ -1625,12 +1749,40 @@ async function handleSettingsSave(event) {
     return;
   }
 
-  const payload = parseAuthForm(settingsForm);
+  const websiteValue = String(settingsForm.elements.website?.value || "").trim();
+  const previousWebsite = String(state.settingsSnapshot?.website || "").trim();
+  const shouldOfferWebsiteBranding = Boolean(websiteValue) && websiteValue !== previousWebsite;
+  const payload = buildSettingsPayload({
+    syncWebsiteCatalog: shouldOfferWebsiteBranding,
+    skipWebsiteImport: false,
+    useWebsiteBrandColor: false,
+    useWebsiteAccentColor: false,
+    useWebsiteFontFamily: false,
+  });
 
   try {
     saveSettingsBtn.disabled = true;
-    await apiRequest("/clinic/settings", { method: "PUT", body: payload });
-    await Promise.all([loadSettings(), loadAuditLogs()]);
+    const response = await apiRequest("/clinic/settings", { method: "PUT", body: payload });
+    await Promise.all([
+      loadSettings(),
+      loadAuditLogs(),
+      response.websiteSync?.success ? loadCatalog() : Promise.resolve(),
+    ]);
+
+    const importedTreatments = Number(response.websiteSync?.importedTreatments || 0);
+    if (response.websiteSync?.success && websiteValue) {
+      showToast(`Einstellungen gespeichert · ${importedTreatments} Treatments übernommen`);
+      if (shouldOfferWebsiteBranding) {
+        await maybeAdoptWebsiteBranding(response.websiteSync);
+      }
+      return;
+    }
+
+    if (response.websiteSync?.error) {
+      showToast(`Einstellungen gespeichert · Import fehlgeschlagen: ${response.websiteSync.error}`);
+      return;
+    }
+
     showToast("Einstellungen gespeichert");
   } catch (error) {
     showToast(error.message);
@@ -1740,6 +1892,8 @@ function bindEvents() {
   registerForm.addEventListener("submit", handleRegister);
   logoutBtn.addEventListener("click", handleLogout);
   settingsForm.addEventListener("submit", handleSettingsSave);
+  syncColorFieldPair(settingsForm.elements.brandColor, brandColorPicker, "#16A34A");
+  syncColorFieldPair(settingsForm.elements.accentColor, accentColorPicker, "#EB6C13");
   memberForm.addEventListener("submit", handleCreateMember);
   startCheckoutBtn.addEventListener("click", handleCheckoutStart);
   refreshMetricsBtn.addEventListener("click", () => {
@@ -1782,7 +1936,9 @@ function bindEvents() {
   saveCatalogBtn.addEventListener("click", saveCatalog);
   exportCatalogBtn.addEventListener("click", handleExportCatalog);
   importCatalogBtn.addEventListener("click", handleImportCatalogButton);
-  importCatalogInput.addEventListener("change", handleImportCatalogChange);
+  if (importCatalogInput) {
+    importCatalogInput.addEventListener("change", handleImportCatalogChange);
+  }
   addCategoryBtn.addEventListener("click", () => addCatalogRow("categories"));
   addTreatmentBtn.addEventListener("click", () => addCatalogRow("treatments"));
   addMembershipBtn.addEventListener("click", () => addCatalogRow("memberships"));

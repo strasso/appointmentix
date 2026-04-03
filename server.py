@@ -245,6 +245,8 @@ ALLOWED_UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
 IMPORT_MAX_PAGES = 10
 IMPORT_MAX_PAGE_BYTES = 1_000_000
+IMPORT_MAX_STYLESHEETS = 4
+IMPORT_MAX_STYLESHEET_BYTES = 300_000
 IMPORT_FETCH_TIMEOUT = (4, 10)
 IMPORT_USER_AGENT = "Curabo-ClinicImportV1/1.0 (+https://www.curabo.app)"
 IMPORT_ALLOWED_PATH_KEYWORDS = (
@@ -343,6 +345,10 @@ PRICE_PATTERN = re.compile(
   r"((?:ab\s*)?(?:\d{1,4}(?:[.,]\d{2})?)\s?(?:€|eur|euro)|(?:€\s?\d{1,4}(?:[.,]\d{2})?))",
   re.IGNORECASE,
 )
+HEX_COLOR_CANDIDATE_PATTERN = re.compile(r"#[0-9A-Fa-f]{6}\b")
+RGB_COLOR_CANDIDATE_PATTERN = re.compile(r"rgba?\(([^)]+)\)", re.IGNORECASE)
+FONT_FAMILY_DECLARATION_PATTERN = re.compile(r"font-family\s*:\s*([^;}{]+)", re.IGNORECASE)
+INLINE_STYLE_COLOR_PATTERN = re.compile(r"(?:color|background(?:-color)?)\s*:\s*([^;]+)", re.IGNORECASE)
 
 DEFAULT_TREATMENT_GALLERY_URLS = [
   "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1000&q=80",
@@ -5130,6 +5136,291 @@ def build_import_website_url(raw_url: str) -> str:
   return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
 
 
+def parse_bool_flag(value: object, default: bool = False) -> bool:
+  if value is None:
+    return default
+  if isinstance(value, bool):
+    return value
+  normalized = str(value).strip().lower()
+  if normalized in {"1", "true", "yes", "on"}:
+    return True
+  if normalized in {"0", "false", "no", "off"}:
+    return False
+  return default
+
+
+def normalize_basic_slug_text(value: object) -> str:
+  normalized = str(value or "").lower().strip()
+  replacements = {
+    "ä": "a",
+    "ö": "o",
+    "ü": "u",
+    "ß": "ss",
+  }
+  for source, target in replacements.items():
+    normalized = normalized.replace(source, target)
+  normalized = re.sub(r"[^a-z0-9]+", "-", normalized)
+  return normalized.strip("-")
+
+
+def normalize_catalog_category_id(value: object) -> str:
+  normalized = normalize_keyword_text(value)
+  if normalized in {"koerper", "korper", "body", "körper"}:
+    return "koerper"
+  if normalized in {"gesicht", "face", "haut", "skin"}:
+    return "gesicht"
+  if normalized in {"haare", "haar", "hair", "scalp", "kopfhaut"}:
+    return "haare"
+  if normalized in {"injectable", "injectables", "botox", "hyaluron", "filler"}:
+    return "injectables"
+  if normalized in {"premium", "signature", "luxury"}:
+    return "premium"
+  return normalize_basic_slug_text(value) or "gesicht"
+
+
+def parse_price_text_to_cents(value: object) -> int | None:
+  raw_text = clean_import_text(value, 40).lower()
+  if not raw_text:
+    return None
+  numeric_match = re.search(r"(\d{1,4}(?:[.,]\d{1,2})?)", raw_text)
+  if not numeric_match:
+    return None
+  number_text = numeric_match.group(1).replace(",", ".")
+  try:
+    amount = float(number_text)
+  except ValueError:
+    return None
+  cents = int(round(amount * 100))
+  if cents < 0:
+    return None
+  return cents
+
+
+def infer_import_treatment_category_id(title: object) -> str:
+  normalized = normalize_keyword_text(title)
+  if not normalized:
+    return "gesicht"
+  token_set = set(normalized.split())
+  if token_set & {"haar", "haare", "hair", "epilation", "haarentfernung", "laser", "prp", "mesohair", "scalp", "kopfhaut"}:
+    return "haare"
+  if token_set & {"botox", "hyaluron", "filler", "injectable", "injectables", "lippen", "lip"}:
+    return "injectables"
+  if token_set & {"cellulite", "body", "korper", "koerper", "contour", "cryolipolysis"}:
+    return "koerper"
+  return "gesicht"
+
+
+def category_label_for_id(category_id: str) -> str:
+  for item in DEFAULT_MOBILE_CATEGORIES:
+    if str(item.get("id")) == str(category_id):
+      return str(item.get("label") or category_id)
+  return str(category_id or "Kategorie").capitalize()
+
+
+def build_import_treatment_id(title: object) -> str:
+  slug = normalize_basic_slug_text(title)
+  if not slug:
+    return "t-import"
+  return f"t-{slug[:48]}"
+
+
+def normalize_font_family_candidate(value: object) -> str:
+  raw = str(value or "").strip()
+  if not raw:
+    return ""
+  first = raw.split(",")[0].strip().strip("'\"")
+  normalized = re.sub(r"\s+", " ", first)
+  if not normalized:
+    return ""
+  lowered = normalized.lower()
+  ignored = {
+    "inherit",
+    "initial",
+    "unset",
+    "system-ui",
+    "-apple-system",
+    "blinkmacsystemfont",
+    "sans-serif",
+    "serif",
+    "monospace",
+    "ui-sans-serif",
+    "ui-serif",
+  }
+  if lowered in ignored or lowered.startswith("var("):
+    return ""
+  serif_names = {
+    "fraunces",
+    "playfair display",
+    "cormorant garamond",
+    "merriweather",
+    "lora",
+    "libre baskerville",
+    "georgia",
+  }
+  fallback = "serif" if lowered in serif_names else "sans-serif"
+  if " " in normalized:
+    return f'"{normalized}", {fallback}'
+  return f"{normalized}, {fallback}"
+
+
+def normalize_rgb_css_color(value: str) -> str:
+  channels = [part.strip() for part in value.split(",")]
+  if len(channels) < 3:
+    return ""
+  try:
+    red = max(0, min(255, int(float(channels[0]))))
+    green = max(0, min(255, int(float(channels[1]))))
+    blue = max(0, min(255, int(float(channels[2]))))
+  except ValueError:
+    return ""
+  return f"#{red:02X}{green:02X}{blue:02X}"
+
+
+def is_neutral_hex_color(value: str) -> bool:
+  candidate = to_hex_color(str(value), "")
+  if not candidate:
+    return True
+  red = int(candidate[1:3], 16)
+  green = int(candidate[3:5], 16)
+  blue = int(candidate[5:7], 16)
+  spread = max(red, green, blue) - min(red, green, blue)
+  luminance = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue)
+  return spread < 18 or luminance < 28 or luminance > 240
+
+
+def extract_brand_color_candidates_from_text(text: str) -> list[str]:
+  candidates: list[str] = []
+  if not text:
+    return candidates
+
+  for match in HEX_COLOR_CANDIDATE_PATTERN.findall(text):
+    color = to_hex_color(match.upper(), "")
+    if color and not is_neutral_hex_color(color):
+      candidates.append(color)
+
+  for match in RGB_COLOR_CANDIDATE_PATTERN.findall(text):
+    color = normalize_rgb_css_color(match)
+    if color and not is_neutral_hex_color(color):
+      candidates.append(color)
+
+  return candidates
+
+
+def fetch_import_stylesheet_texts(root_url: str, soup: BeautifulSoup) -> list[str]:
+  stylesheet_texts: list[str] = []
+  seen_urls: set[str] = set()
+  stylesheet_links = soup.find_all("link", href=True)
+  for node in stylesheet_links:
+    rel_values = node.get("rel") or []
+    rel_tokens = {str(value).strip().lower() for value in rel_values}
+    href = str(node.get("href") or "").strip()
+    if not href:
+      continue
+    if "stylesheet" not in rel_tokens and not href.lower().endswith(".css"):
+      continue
+    target_url = normalize_import_visit_url(urljoin(root_url, href))
+    if not target_url or target_url in seen_urls:
+      continue
+    seen_urls.add(target_url)
+    if len(stylesheet_texts) >= IMPORT_MAX_STYLESHEETS:
+      break
+
+    try:
+      response = requests.get(
+        target_url,
+        headers={"User-Agent": IMPORT_USER_AGENT, "Accept": "text/css,*/*;q=0.1"},
+        timeout=IMPORT_FETCH_TIMEOUT,
+        allow_redirects=True,
+      )
+    except Exception:
+      continue
+
+    if response.status_code >= 400:
+      continue
+
+    content_type = str(response.headers.get("content-type") or "").lower()
+    if "css" not in content_type and not target_url.lower().endswith(".css"):
+      continue
+
+    stylesheet_texts.append(response.text[:IMPORT_MAX_STYLESHEET_BYTES])
+  return stylesheet_texts
+
+
+def extract_branding_from_import_pages(pages: list[dict]) -> dict:
+  if not pages:
+    return {"brandColor": "", "accentColor": "", "fontFamily": ""}
+
+  root_page = pages[0]
+  root_soup = root_page["soup"]
+  root_url = str(root_page["url"])
+  brand_color = ""
+  accent_color = ""
+  font_family = ""
+  color_votes: dict[str, int] = {}
+  font_votes: dict[str, int] = {}
+
+  meta_candidates = [
+    root_soup.find("meta", attrs={"name": "theme-color"}),
+    root_soup.find("meta", attrs={"name": "msapplication-TileColor"}),
+  ]
+  for node in meta_candidates:
+    if not node:
+      continue
+    candidate = to_hex_color(str(node.get("content") or "").strip(), "")
+    if candidate and not is_neutral_hex_color(candidate):
+      brand_color = candidate
+      break
+
+  stylesheet_texts = fetch_import_stylesheet_texts(root_url, root_soup)
+  combined_sources = [str(root_page.get("html") or "")]
+  combined_sources.extend(
+    clean_import_text(style_node.get_text(" ", strip=False), IMPORT_MAX_STYLESHEET_BYTES)
+    for style_node in root_soup.find_all("style")
+  )
+  combined_sources.extend(stylesheet_texts)
+
+  for source in combined_sources:
+    for color in extract_brand_color_candidates_from_text(source):
+      color_votes[color] = color_votes.get(color, 0) + 1
+
+    for match in FONT_FAMILY_DECLARATION_PATTERN.findall(source):
+      candidate = normalize_font_family_candidate(match)
+      if candidate:
+        font_votes[candidate] = font_votes.get(candidate, 0) + 1
+
+  for link in root_soup.find_all("link", href=True):
+    href = str(link.get("href") or "").strip()
+    if "fonts.googleapis.com" not in href:
+      continue
+    parsed = urlparse(href)
+    families = parse_qs(parsed.query).get("family", [])
+    for entry in families:
+      family_name = entry.split(":")[0].replace("+", " ").strip()
+      candidate = normalize_font_family_candidate(family_name)
+      if candidate:
+        font_votes[candidate] = font_votes.get(candidate, 0) + 5
+
+  if not brand_color and color_votes:
+    brand_color = sorted(color_votes.items(), key=lambda item: item[1], reverse=True)[0][0]
+
+  if color_votes:
+    for color, _count in sorted(color_votes.items(), key=lambda item: item[1], reverse=True):
+      if color != brand_color:
+        accent_color = color
+        break
+  if not accent_color:
+    accent_color = brand_color
+
+  if font_votes:
+    font_family = sorted(font_votes.items(), key=lambda item: item[1], reverse=True)[0][0]
+
+  return {
+    "brandColor": brand_color,
+    "accentColor": accent_color,
+    "fontFamily": font_family,
+  }
+
+
 def is_same_import_domain(candidate_url: str, canonical_domain: str) -> bool:
   parsed = urlparse(candidate_url)
   return canonical_domain_from_hostname(parsed.hostname or "") == canonical_domain
@@ -5567,6 +5858,35 @@ def extract_import_data_from_pages(pages: list[dict]) -> dict:
   }
 
 
+def collect_import_bundle_from_website(raw_url: object) -> dict:
+  normalized_url = normalize_import_input_url(raw_url)
+  if not normalized_url:
+    raise ValueError("Bitte eine gültige Website-URL mit http:// oder https:// angeben.")
+
+  canonical_domain = canonical_domain_from_url(normalized_url)
+  if not canonical_domain:
+    raise ValueError("Domain konnte aus der URL nicht ermittelt werden.")
+
+  website_url = build_import_website_url(normalized_url)
+  if not website_url:
+    raise ValueError("Website-URL ist ungültig.")
+
+  crawl_result = crawl_import_pages(website_url, normalized_url, canonical_domain)
+  if not crawl_result["root_ok"]:
+    raise RuntimeError(f"Root-Seite konnte nicht geladen werden: {crawl_result['root_error']}")
+
+  extracted = extract_import_data_from_pages(crawl_result["pages"])
+  branding = extract_branding_from_import_pages(crawl_result["pages"])
+  return {
+    "sourceUrl": normalized_url,
+    "websiteUrl": website_url,
+    "canonicalDomain": canonical_domain,
+    "crawlResult": crawl_result,
+    "extracted": extracted,
+    "branding": branding,
+  }
+
+
 def find_existing_clinic_by_import_domain(conn: DBConnectionAdapter, canonical_domain: str):
   rows = conn.execute(
     """
@@ -5619,6 +5939,179 @@ def replace_clinic_import_services(conn: DBConnectionAdapter, clinic_id: int, se
       """,
       (clinic_id, title, price_text, source_url),
     )
+
+
+def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int, clinic_name: str) -> dict:
+  ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+  catalog_row = conn.execute(
+    """
+    SELECT
+      categories_json,
+      treatments_json,
+      memberships_json,
+      reward_actions_json,
+      reward_redeems_json,
+      home_articles_json
+    FROM clinic_catalogs
+    WHERE clinic_id = ?
+    LIMIT 1
+    """,
+    (clinic_id,),
+  ).fetchone()
+
+  default_catalog = build_default_mobile_catalog(clinic_name)
+  if not catalog_row:
+    return {
+      "categories": default_catalog["categories"],
+      "treatments": default_catalog["treatments"],
+      "memberships": default_catalog["memberships"],
+      "rewardActions": default_catalog["rewardActions"],
+      "rewardRedeems": default_catalog["rewardRedeems"],
+      "homeArticles": default_catalog["homeArticles"],
+    }
+
+  return {
+    "categories": parse_json_list(catalog_row["categories_json"]) or default_catalog["categories"],
+    "treatments": parse_json_list(catalog_row["treatments_json"]) or default_catalog["treatments"],
+    "memberships": parse_json_list(catalog_row["memberships_json"]) or default_catalog["memberships"],
+    "rewardActions": parse_json_list(catalog_row["reward_actions_json"]) or default_catalog["rewardActions"],
+    "rewardRedeems": parse_json_list(catalog_row["reward_redeems_json"]) or default_catalog["rewardRedeems"],
+    "homeArticles": parse_json_list(catalog_row["home_articles_json"]) or default_catalog["homeArticles"],
+  }
+
+
+def write_clinic_catalog_bundle(conn: DBConnectionAdapter, clinic_id: int, clinic_name: str, catalog: dict) -> None:
+  ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+  conn.execute(
+    """
+    UPDATE clinic_catalogs
+    SET
+      categories_json = ?,
+      treatments_json = ?,
+      memberships_json = ?,
+      reward_actions_json = ?,
+      reward_redeems_json = ?,
+      home_articles_json = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE clinic_id = ?
+    """,
+    (
+      serialize_json_list(catalog.get("categories", [])),
+      serialize_json_list(catalog.get("treatments", [])),
+      serialize_json_list(catalog.get("memberships", [])),
+      serialize_json_list(catalog.get("rewardActions", [])),
+      serialize_json_list(catalog.get("rewardRedeems", [])),
+      serialize_json_list(catalog.get("homeArticles", [])),
+      clinic_id,
+    ),
+  )
+
+
+def build_treatments_from_import_data(extracted: dict, existing_treatments: list[dict]) -> list[dict]:
+  services = extracted.get("services") if isinstance(extracted.get("services"), list) else []
+  prices = extracted.get("prices") if isinstance(extracted.get("prices"), list) else []
+  existing_by_name = {
+    normalize_keyword_text(item.get("name")): item
+    for item in existing_treatments
+    if isinstance(item, dict) and str(item.get("name", "")).strip()
+  }
+  price_by_title: dict[str, str] = {}
+  for item in prices:
+    title = normalize_service_title_for_import(item.get("title"))
+    price_text = clean_import_text(item.get("price"), 40)
+    if not title or not price_text:
+      continue
+    key = normalize_keyword_text(title)
+    if key and key not in price_by_title:
+      price_by_title[key] = price_text
+
+  treatments: list[dict] = []
+  seen_ids: set[str] = set()
+  source_items = services or prices
+  for item in source_items[:300]:
+    title = normalize_service_title_for_import(item.get("title"))
+    if not title:
+      continue
+    key = normalize_keyword_text(title)
+    existing = existing_by_name.get(key, {})
+    treatment_id = str(existing.get("id") or "").strip() or build_import_treatment_id(title)
+    if treatment_id in seen_ids:
+      suffix = 2
+      candidate_id = treatment_id
+      while candidate_id in seen_ids:
+        candidate_id = f"{treatment_id}-{suffix}"
+        suffix += 1
+      treatment_id = candidate_id
+    seen_ids.add(treatment_id)
+
+    price_text = price_by_title.get(key) or clean_import_text(item.get("price"), 40)
+    price_cents = parse_price_text_to_cents(price_text)
+    member_price_cents = parse_amount_cents(existing.get("memberPriceCents"))
+    standard_cents = price_cents if price_cents is not None else parse_amount_cents(existing.get("priceCents")) or 0
+    treatments.append(
+      {
+        "id": treatment_id,
+        "name": title,
+        "category": str(existing.get("category") or infer_import_treatment_category_id(title)),
+        "priceCents": int(standard_cents),
+        "memberPriceCents": int(member_price_cents or 0),
+        "durationMinutes": int(parse_amount_cents(existing.get("durationMinutes")) or 30),
+        "description": str(existing.get("description") or "").strip(),
+        **({"imageUrl": existing.get("imageUrl")} if existing.get("imageUrl") else {}),
+        **({"galleryUrls": existing.get("galleryUrls")} if existing.get("galleryUrls") else {}),
+      }
+    )
+
+  return treatments
+
+
+def build_category_list_for_treatments(treatments: list[dict], existing_categories: list[dict]) -> list[dict]:
+  if not treatments:
+    return existing_categories
+  existing_labels = {
+    str(item.get("id")): str(item.get("label") or category_label_for_id(str(item.get("id"))))
+    for item in existing_categories
+    if isinstance(item, dict) and str(item.get("id", "")).strip()
+  }
+  ordered_ids: list[str] = []
+  for treatment in treatments:
+    category_id = normalize_catalog_category_id(treatment.get("category"))
+    if category_id not in ordered_ids:
+      ordered_ids.append(category_id)
+  return [
+    {
+      "id": category_id,
+      "label": existing_labels.get(category_id) or category_label_for_id(category_id),
+    }
+    for category_id in ordered_ids
+  ]
+
+
+def apply_imported_services_to_clinic_catalog(conn: DBConnectionAdapter, clinic_id: int, clinic_name: str, extracted: dict) -> dict:
+  current_catalog = load_raw_clinic_catalog_for_update(conn, clinic_id, clinic_name)
+  imported_treatments = build_treatments_from_import_data(extracted, current_catalog.get("treatments", []))
+  if not imported_treatments:
+    return current_catalog
+
+  normalized_treatments = []
+  for treatment in imported_treatments:
+    normalized_treatments.append(
+      {
+        **treatment,
+        "category": normalize_catalog_category_id(treatment.get("category")),
+      }
+    )
+
+  updated_catalog = {
+    "categories": build_category_list_for_treatments(normalized_treatments, current_catalog.get("categories", [])),
+    "treatments": normalized_treatments,
+    "memberships": current_catalog.get("memberships", []),
+    "rewardActions": current_catalog.get("rewardActions", []),
+    "rewardRedeems": current_catalog.get("rewardRedeems", []),
+    "homeArticles": current_catalog.get("homeArticles", []),
+  }
+  write_clinic_catalog_bundle(conn, clinic_id, clinic_name, updated_catalog)
+  return updated_catalog
 
 
 def upsert_imported_clinic_record(
@@ -5678,6 +6171,7 @@ def upsert_imported_clinic_record(
         (db_name, website_url, clinic_id),
       )
       replace_clinic_import_services(conn, clinic_id, services, prices)
+      apply_imported_services_to_clinic_catalog(conn, clinic_id, db_name, extracted)
       return clinic_id, False
 
     fallback_name = extracted_name or canonical_domain
@@ -5717,6 +6211,7 @@ def upsert_imported_clinic_record(
     )
     ensure_clinic_catalog_row(conn, int(clinic_id), fallback_name)
     replace_clinic_import_services(conn, int(clinic_id), services, prices)
+    apply_imported_services_to_clinic_catalog(conn, int(clinic_id), fallback_name, extracted)
     return int(clinic_id), True
 
 
@@ -6202,23 +6697,19 @@ def import_clinic():
 
   payload = request.get_json(silent=True) or {}
   raw_url = str(payload.get("url", "")).strip()
-  normalized_url = normalize_import_input_url(raw_url)
-  if not normalized_url:
-    return jsonify({"error": "Bitte eine gültige Website-URL mit http:// oder https:// angeben."}), 400
+  try:
+    import_bundle = collect_import_bundle_from_website(raw_url)
+  except ValueError as exc:
+    return jsonify({"error": str(exc)}), 400
+  except RuntimeError as exc:
+    return jsonify({"error": str(exc)}), 502
 
-  canonical_domain = canonical_domain_from_url(normalized_url)
-  if not canonical_domain:
-    return jsonify({"error": "Domain konnte aus der URL nicht ermittelt werden."}), 400
-
-  website_url = build_import_website_url(normalized_url)
-  if not website_url:
-    return jsonify({"error": "Website-URL ist ungültig."}), 400
-
-  crawl_result = crawl_import_pages(website_url, normalized_url, canonical_domain)
-  if not crawl_result["root_ok"]:
-    return jsonify({"error": f"Root-Seite konnte nicht geladen werden: {crawl_result['root_error']}"}), 502
-
-  extracted = extract_import_data_from_pages(crawl_result["pages"])
+  normalized_url = import_bundle["sourceUrl"]
+  website_url = import_bundle["websiteUrl"]
+  canonical_domain = import_bundle["canonicalDomain"]
+  crawl_result = import_bundle["crawlResult"]
+  extracted = import_bundle["extracted"]
+  branding = import_bundle["branding"]
   clinic_id, created = upsert_imported_clinic_record(
     source_url=normalized_url,
     website_url=website_url,
@@ -6273,6 +6764,7 @@ def import_clinic():
         "prices": prices_payload,
         "imported_at": clinic_row["imported_at"] if clinic_row else utc_now_iso(),
       },
+      "branding": branding,
       "import_summary": {
         "created": created,
         "pages_fetched": int(crawl_result["pages_fetched"]),
@@ -7985,6 +8477,69 @@ def import_clinic_catalog():
   )
 
 
+@app.post("/api/clinic/catalog/import-from-website")
+def import_clinic_catalog_from_website():
+  user_row, auth_error = require_owner_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  clinic_row = get_clinic_row_by_id(clinic_id)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  website = normalize_url(safe_public_text(clinic_row["website"]))
+  if not website:
+    return jsonify({"error": "Bitte zuerst eine Klinik-Website in den Einstellungen speichern."}), 400
+
+  try:
+    import_bundle = collect_import_bundle_from_website(website)
+  except ValueError as exc:
+    return jsonify({"error": str(exc)}), 400
+  except RuntimeError as exc:
+    return jsonify({"error": str(exc)}), 502
+
+  with get_db() as conn:
+    extracted = import_bundle["extracted"]
+    replace_clinic_import_services(conn, clinic_id, extracted.get("services", []), extracted.get("prices", []))
+    updated_catalog = apply_imported_services_to_clinic_catalog(conn, clinic_id, str(clinic_row["name"]), extracted)
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(user_row["id"]),
+    action="catalog.imported_from_website",
+    entity_type="catalog",
+    entity_id=str(clinic_id),
+    metadata={
+      "website": website,
+      "pagesFetched": int(import_bundle["crawlResult"]["pages_fetched"]),
+      "pagesAttempted": int(import_bundle["crawlResult"]["pages_attempted"]),
+      "treatments": len(updated_catalog.get("treatments", [])),
+    },
+  )
+
+  return jsonify(
+    {
+      "success": True,
+      "catalog": updated_catalog,
+      "websiteSync": {
+        "success": True,
+        "pagesFetched": int(import_bundle["crawlResult"]["pages_fetched"]),
+        "pagesAttempted": int(import_bundle["crawlResult"]["pages_attempted"]),
+        "importedTreatments": len(updated_catalog.get("treatments", [])),
+        "suggestedBranding": {
+          "brandColor": safe_public_text(import_bundle["branding"].get("brandColor")),
+          "accentColor": safe_public_text(import_bundle["branding"].get("accentColor")),
+          "fontFamily": safe_public_text(import_bundle["branding"].get("fontFamily")),
+        },
+      },
+    }
+  )
+
+
 @app.post("/api/clinic/catalog/auto-gallery")
 def clinic_catalog_auto_gallery():
   user_row, auth_error = require_owner_row()
@@ -8791,9 +9346,10 @@ def update_clinic_settings():
   logo_url = safe_public_text(payload.get("logoUrl"), safe_public_text(clinic_row["logo_url"]))
   current_brand_color = safe_public_text(clinic_row["brand_color"], "#8A5A2F")
   current_accent_color = safe_public_text(clinic_row["accent_color"], "#EB6C13")
+  current_font_family = safe_public_text(clinic_row["font_family"], "Manrope, sans-serif")
   brand_color = to_hex_color(safe_public_text(payload.get("brandColor"), current_brand_color), current_brand_color)
   accent_color = to_hex_color(safe_public_text(payload.get("accentColor"), current_accent_color), current_accent_color)
-  font_family = safe_public_text(payload.get("fontFamily"), safe_public_text(clinic_row["font_family"], "Inter, system-ui, sans-serif"))
+  font_family = safe_public_text(payload.get("fontFamily"), current_font_family)
   design_preset = safe_public_text(payload.get("designPreset"), safe_public_text(clinic_row["design_preset"], "clean")).lower()
   calendly_url = normalize_url(
     safe_public_text(
@@ -8801,13 +9357,38 @@ def update_clinic_settings():
       safe_public_text(clinic_row["calendly_url"], CALENDLY_URL),
     )
   )
+  sync_website_catalog = bool(website) and parse_bool_flag(payload.get("syncWebsiteCatalog"), True)
+  skip_website_import = parse_bool_flag(payload.get("skipWebsiteImport"), False)
+  use_website_brand_color = parse_bool_flag(payload.get("useWebsiteBrandColor"), False)
+  use_website_accent_color = parse_bool_flag(payload.get("useWebsiteAccentColor"), use_website_brand_color)
+  use_website_font_family = parse_bool_flag(payload.get("useWebsiteFontFamily"), False)
 
   if not clinic_name:
     return jsonify({"error": "Klinikname ist erforderlich."}), 400
   if design_preset not in DESIGN_PRESETS:
-    return jsonify({"error": "Ungültiges Design-Preset."}), 400
+    design_preset = "clean"
   if len(font_family) > 120:
     return jsonify({"error": "Schriftart ist zu lang."}), 400
+
+  website_sync: dict | None = None
+  import_bundle: dict | None = None
+  if website and sync_website_catalog and not skip_website_import:
+    try:
+      import_bundle = collect_import_bundle_from_website(website)
+      extracted_branding = import_bundle["branding"]
+      suggested_brand_color = to_hex_color(extracted_branding.get("brandColor", ""), "")
+      suggested_accent_color = to_hex_color(extracted_branding.get("accentColor", ""), "")
+      suggested_font_family = safe_public_text(extracted_branding.get("fontFamily"))
+      if use_website_brand_color and suggested_brand_color:
+        brand_color = suggested_brand_color
+      if use_website_accent_color and suggested_accent_color:
+        accent_color = suggested_accent_color
+      if use_website_font_family and suggested_font_family:
+        font_family = suggested_font_family
+    except ValueError as exc:
+      website_sync = {"success": False, "error": str(exc)}
+    except RuntimeError as exc:
+      website_sync = {"success": False, "error": str(exc)}
 
   with get_db() as conn:
     conn.execute(
@@ -8865,6 +9446,22 @@ def update_clinic_settings():
       ),
     )
 
+    if import_bundle:
+      extracted = import_bundle["extracted"]
+      replace_clinic_import_services(conn, clinic_id, extracted.get("services", []), extracted.get("prices", []))
+      updated_catalog = apply_imported_services_to_clinic_catalog(conn, clinic_id, clinic_name, extracted)
+      website_sync = {
+        "success": True,
+        "pagesFetched": int(import_bundle["crawlResult"]["pages_fetched"]),
+        "pagesAttempted": int(import_bundle["crawlResult"]["pages_attempted"]),
+        "importedTreatments": len(updated_catalog.get("treatments", [])),
+        "suggestedBranding": {
+          "brandColor": safe_public_text(import_bundle["branding"].get("brandColor")),
+          "accentColor": safe_public_text(import_bundle["branding"].get("accentColor")),
+          "fontFamily": safe_public_text(import_bundle["branding"].get("fontFamily")),
+        },
+      }
+
   create_audit_log(
     clinic_id=clinic_id,
     actor_user_id=int(user_row["id"]),
@@ -8876,6 +9473,7 @@ def update_clinic_settings():
       "brandColor": brand_color,
       "accentColor": accent_color,
       "designPreset": design_preset,
+      "websiteSync": website_sync,
     },
   )
 
@@ -8890,7 +9488,8 @@ def update_clinic_settings():
         "fontFamily": font_family,
         "designPreset": design_preset,
         "calendlyUrl": calendly_url,
-      }
+      },
+      "websiteSync": website_sync,
     }
   )
 

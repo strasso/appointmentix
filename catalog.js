@@ -32,6 +32,12 @@ const mediaGrid = document.getElementById("mediaGrid");
 const mediaUploadInput = document.getElementById("mediaUploadInput");
 const mediaUploadBtn = document.getElementById("mediaUploadBtn");
 const refreshMediaBtn = document.getElementById("refreshMediaBtn");
+const CATEGORY_ID_UI_ALIASES = {
+  koerper: "korper",
+};
+const CATEGORY_ID_STORAGE_ALIASES = {
+  korper: "koerper",
+};
 
 function showToast(message) {
   toast.textContent = message;
@@ -127,12 +133,22 @@ function toInt(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function displayCategoryId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return CATEGORY_ID_UI_ALIASES[normalized] || normalized;
+}
+
+function storeCategoryId(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return CATEGORY_ID_STORAGE_ALIASES[normalized] || normalized;
+}
+
 function categoryCard(item = {}) {
   return `
     <div class="item-card" data-kind="category">
       <div class="field-grid-2">
         <label>ID
-          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="gesicht">
+          <input data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht">
         </label>
         <label>Label
           <input data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht">
@@ -154,7 +170,7 @@ function treatmentCard(item = {}) {
           <input data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow">
         </label>
         <label>Kategorie-ID
-          <input data-field="category" value="${escapeAttr(item.category)}" placeholder="gesicht">
+          <input data-field="category" value="${escapeAttr(displayCategoryId(item.category))}" placeholder="gesicht">
         </label>
         <label>Dauer (Min)
           <input data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60">
@@ -341,7 +357,7 @@ async function loadMediaLibrary() {
 function collectCatalogFromDom() {
   const categories = Array.from(categoriesList.querySelectorAll('.item-card[data-kind="category"]'))
     .map((card) => ({
-      id: card.querySelector('[data-field="id"]')?.value.trim() || "",
+      id: storeCategoryId(card.querySelector('[data-field="id"]')?.value.trim() || ""),
       label: card.querySelector('[data-field="label"]')?.value.trim() || "",
     }))
     .filter((item) => item.id && item.label);
@@ -350,7 +366,7 @@ function collectCatalogFromDom() {
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
-      category: card.querySelector('[data-field="category"]')?.value.trim() || "",
+      category: storeCategoryId(card.querySelector('[data-field="category"]')?.value.trim() || ""),
       durationMinutes: toInt(card.querySelector('[data-field="durationMinutes"]')?.value, 30),
       priceCents: toInt(card.querySelector('[data-field="priceCents"]')?.value, 0),
       memberPriceCents: toInt(card.querySelector('[data-field="memberPriceCents"]')?.value, 0),

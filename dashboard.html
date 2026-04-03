@@ -297,28 +297,33 @@
             </label>
             <label>Website
               <input name="website" type="text" placeholder="https://deine-klinik.de">
+              <span class="field-hint">Wird für Import, Vorschläge und Klinik-Basisdaten genutzt.</span>
             </label>
             <label>Logo URL
               <input name="logoUrl" type="text" placeholder="https://...">
             </label>
             <div class="row-2">
-              <label>Markenfarbe
-                <input name="brandColor" type="text" placeholder="#16A34A">
+              <label class="color-field" for="brandColor">
+                <span>Markenfarbe</span>
+                <div class="color-input-row">
+                  <input id="brandColor" name="brandColor" type="text" placeholder="#16A34A" spellcheck="false" autocapitalize="off" autocomplete="off">
+                  <input id="brandColorPicker" type="color" value="#16A34A" aria-label="Markenfarbe auswählen">
+                </div>
+                <span class="field-hint">Hex-Code oder Farbwähler. Wird in App und Dashboard übernommen.</span>
               </label>
-              <label>Akzentfarbe
-                <input name="accentColor" type="text" placeholder="#EB6C13">
+              <label class="color-field" for="accentColor">
+                <span>Akzentfarbe</span>
+                <div class="color-input-row">
+                  <input id="accentColor" name="accentColor" type="text" placeholder="#EB6C13" spellcheck="false" autocapitalize="off" autocomplete="off">
+                  <input id="accentColorPicker" type="color" value="#EB6C13" aria-label="Akzentfarbe auswählen">
+                </div>
+                <span class="field-hint">Optional für Highlights, Chips und aktive States.</span>
               </label>
             </div>
             <label>Schriftart
               <input name="fontFamily" type="text" placeholder="Manrope, sans-serif">
             </label>
-            <label>Design-Preset
-              <select name="designPreset">
-                <option value="clean">clean</option>
-                <option value="bold">bold</option>
-                <option value="minimal">minimal</option>
-              </select>
-            </label>
+            <input name="designPreset" type="hidden" value="clean">
             <label>Calendly URL
               <input name="calendlyUrl" type="text" placeholder="https://calendly.com/...">
             </label>
@@ -388,13 +393,12 @@
           <div class="section-head">
             <div>
               <h2>Katalog-Editor</h2>
-              <p class="subline">Pflege Treatments, Mitgliedschaften, Belohnungen und Home-Content ohne Code.</p>
             </div>
             <div class="inline-actions">
               <a class="btn ghost" href="/catalog">Visueller Editor</a>
               <button id="exportCatalogBtn" class="btn ghost" type="button">Katalog exportieren</button>
               <input id="importCatalogInput" class="hidden" type="file" accept="application/json">
-              <button id="importCatalogBtn" class="btn ghost" type="button">Katalog importieren</button>
+              <button id="importCatalogBtn" class="btn ghost" type="button">Von Website übernehmen</button>
               <button id="saveCatalogBtn" class="btn primary" type="button">Katalog speichern</button>
             </div>
           </div>
@@ -402,7 +406,10 @@
           <form id="catalogForm" class="catalog-grid">
             <section class="catalog-block">
               <div class="catalog-head">
-                <h3>Kategorien</h3>
+                <div>
+                  <h3>Kategorien</h3>
+                  <p class="field-hint">IDs als Slugs ohne Umlaute anlegen, z. B. <span>korper</span>.</p>
+                </div>
                 <button id="addCategoryBtn" class="btn ghost btn-sm" type="button">+ Kategorie</button>
               </div>
               <div class="table-wrap">
@@ -633,5 +640,55 @@
   </main>
 
   <script src="dashboard.js"></script>
+  <script>
+    (() => {
+      const pairs = [
+        ["brandColor", "brandColorPicker"],
+        ["accentColor", "accentColorPicker"],
+      ];
+
+      const isHex = (value) => /^#[0-9a-fA-F]{6}$/.test(String(value || "").trim());
+
+      const syncPair = (textId, pickerId) => {
+        const textInput = document.getElementById(textId);
+        const pickerInput = document.getElementById(pickerId);
+        if (!(textInput instanceof HTMLInputElement) || !(pickerInput instanceof HTMLInputElement)) return false;
+        const textValue = String(textInput.value || "").trim();
+        if (isHex(textValue) && pickerInput.value !== textValue) {
+          pickerInput.value = textValue;
+        }
+        return isHex(textValue);
+      };
+
+      const wirePair = (textId, pickerId) => {
+        const textInput = document.getElementById(textId);
+        const pickerInput = document.getElementById(pickerId);
+        if (!(textInput instanceof HTMLInputElement) || !(pickerInput instanceof HTMLInputElement)) return;
+
+        textInput.addEventListener("input", () => {
+          const value = String(textInput.value || "").trim();
+          if (isHex(value)) {
+            pickerInput.value = value;
+          }
+        });
+
+        pickerInput.addEventListener("input", () => {
+          textInput.value = pickerInput.value;
+        });
+      };
+
+      const pollInitialSync = (attempt = 0) => {
+        const ready = pairs.map(([textId, pickerId]) => syncPair(textId, pickerId)).every(Boolean);
+        if (!ready && attempt < 40) {
+          window.setTimeout(() => pollInitialSync(attempt + 1), 125);
+        }
+      };
+
+      window.addEventListener("DOMContentLoaded", () => {
+        pairs.forEach(([textId, pickerId]) => wirePair(textId, pickerId));
+        pollInitialSync();
+      });
+    })();
+  </script>
 </body>
 </html>
