@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
+import html
 import os
 import re
 import secrets
@@ -249,6 +250,7 @@ IMPORT_MAX_STYLESHEETS = 4
 IMPORT_MAX_STYLESHEET_BYTES = 300_000
 IMPORT_FETCH_TIMEOUT = (4, 10)
 IMPORT_USER_AGENT = "Curabo-ClinicImportV1/1.0 (+https://www.curabo.app)"
+IMPORT_READER_PREFIX = "https://r.jina.ai/http://"
 IMPORT_ALLOWED_PATH_KEYWORDS = (
   "/services",
   "/treatments",
@@ -280,6 +282,24 @@ IMPORT_GENERIC_SERVICE_LABELS = {
   "home",
   "mehr",
   "more",
+}
+IMPORT_GENERIC_PRICED_SERVICE_BLOCKLIST = {
+  "instagram",
+  "impressum",
+  "datenschutz",
+  "cookie",
+  "cookies",
+  "cookie-richtlinie",
+  "alle akzeptieren",
+  "alle ablehnen",
+  "nur auswahl akzeptieren",
+  "mehr anzeigen",
+  "unbedingt erforderlich",
+  "funktionell",
+  "performance",
+  "galerie",
+  "kontakt",
+  "home",
 }
 IMPORT_TREATMENT_KEYWORDS = {
   "behandlung",
@@ -5201,7 +5221,36 @@ def infer_import_treatment_category_id(title: object) -> str:
   if not normalized:
     return "gesicht"
   token_set = set(normalized.split())
-  if token_set & {"haar", "haare", "hair", "epilation", "haarentfernung", "laser", "prp", "mesohair", "scalp", "kopfhaut"}:
+  if token_set & {
+    "haar",
+    "haare",
+    "hair",
+    "epilation",
+    "haarentfernung",
+    "laser",
+    "prp",
+    "mesohair",
+    "scalp",
+    "kopfhaut",
+    "schnitt",
+    "waschen",
+    "fohnen",
+    "föhnen",
+    "legen",
+    "farbe",
+    "farben",
+    "faerben",
+    "pflanzenfarbe",
+    "strahnen",
+    "strähnen",
+    "straehnen",
+    "schaumtonung",
+    "schaumtönung",
+    "schaumtoenung",
+    "augenbrauen",
+    "wimpern",
+    "friseur",
+  }:
     return "haare"
   if token_set & {"botox", "hyaluron", "filler", "injectable", "injectables", "lippen", "lip"}:
     return "injectables"
@@ -5453,6 +5502,10 @@ def fetch_import_html(url: str) -> dict:
   status_code = int(response.status_code)
   if status_code >= 400:
     response.close()
+    if status_code == 403:
+      fallback_result = fetch_import_reader_html(url)
+      if fallback_result["ok"]:
+        return fallback_result
     return {"ok": False, "url": url, "error": f"HTTP {status_code}", "status_code": status_code, "html": ""}
 
   content_type = str(response.headers.get("Content-Type", "")).lower()
@@ -5498,6 +5551,135 @@ def fetch_import_html(url: str) -> dict:
     "error": "",
     "status_code": status_code,
     "html": html_text,
+    "fetch_mode": "direct",
+  }
+
+
+def build_import_reader_url(url: str) -> str:
+  normalized = normalize_import_visit_url(url) or normalize_import_input_url(url)
+  if not normalized:
+    return ""
+  without_scheme = re.sub(r"^https?://", "", normalized, flags=re.IGNORECASE)
+  return f"{IMPORT_READER_PREFIX}{without_scheme}"
+
+
+def extract_import_reader_source_url(markdown_text: str, fallback_url: str) -> str:
+  match = re.search(r"^URL Source:\s*(\S+)", markdown_text, flags=re.MULTILINE)
+  candidate = normalize_import_visit_url(match.group(1)) if match else ""
+  return candidate or fallback_url
+
+
+def convert_import_reader_markdown_to_html(markdown_text: str) -> str:
+  lines = markdown_text.splitlines()
+  title_text = ""
+  html_parts: list[str] = []
+  in_list = False
+
+  image_link_pattern = re.compile(r"\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)")
+  link_pattern = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+  image_pattern = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+  def close_list() -> None:
+    nonlocal in_list
+    if in_list:
+      html_parts.append("</ul>")
+      in_list = False
+
+  def convert_inline(value: str) -> str:
+    escaped = html.escape(value, quote=True)
+    escaped = image_link_pattern.sub(
+      lambda match: (
+        f'<a href="{html.escape(match.group(3), quote=True)}">'
+        f'<img alt="{html.escape(match.group(1), quote=True)}" src="{html.escape(match.group(2), quote=True)}" />'
+        "</a>"
+      ),
+      escaped,
+    )
+    escaped = image_pattern.sub(
+      lambda match: (
+        f'<img alt="{html.escape(match.group(1), quote=True)}" src="{html.escape(match.group(2), quote=True)}" />'
+      ),
+      escaped,
+    )
+    escaped = link_pattern.sub(
+      lambda match: (
+        f'<a href="{html.escape(match.group(2), quote=True)}">{html.escape(match.group(1))}</a>'
+      ),
+      escaped,
+    )
+    return escaped
+
+  for raw_line in lines:
+    line = raw_line.strip()
+    if not line:
+      close_list()
+      continue
+
+    if line.startswith("Title: "):
+      title_text = clean_import_text(line[7:], 220)
+      continue
+    if line == "Markdown Content:" or line.startswith("URL Source:"):
+      close_list()
+      continue
+
+    if line.startswith("*   ") or line.startswith("- "):
+      if not in_list:
+        html_parts.append("<ul>")
+        in_list = True
+      item = line[4:] if line.startswith("*   ") else line[2:]
+      html_parts.append(f"<li>{convert_inline(item)}</li>")
+      continue
+
+    close_list()
+    if line.startswith("### "):
+      html_parts.append(f"<h3>{convert_inline(line[4:])}</h3>")
+      continue
+    if line.startswith("## "):
+      html_parts.append(f"<h2>{convert_inline(line[3:])}</h2>")
+      continue
+    if line.startswith("# "):
+      html_parts.append(f"<h1>{convert_inline(line[2:])}</h1>")
+      continue
+
+    html_parts.append(f"<p>{convert_inline(line)}</p>")
+
+  close_list()
+  title_tag = f"<title>{html.escape(title_text)}</title>" if title_text else ""
+  return f"<html><head>{title_tag}</head><body>{''.join(html_parts)}</body></html>"
+
+
+def fetch_import_reader_html(url: str) -> dict:
+  reader_url = build_import_reader_url(url)
+  if not reader_url:
+    return {"ok": False, "url": url, "error": "Reader-Fallback URL ungültig", "status_code": None, "html": ""}
+
+  try:
+    response = requests.get(
+      reader_url,
+      headers={"User-Agent": IMPORT_USER_AGENT, "Accept": "text/plain,text/markdown,*/*"},
+      timeout=IMPORT_FETCH_TIMEOUT,
+      allow_redirects=True,
+    )
+  except Exception as exc:
+    return {"ok": False, "url": url, "error": f"Reader-Fallback fehlgeschlagen: {exc}", "status_code": None, "html": ""}
+
+  status_code = int(response.status_code)
+  if status_code >= 400:
+    return {"ok": False, "url": url, "error": f"Reader-Fallback HTTP {status_code}", "status_code": status_code, "html": ""}
+
+  markdown_text = str(response.text or "").strip()
+  if not markdown_text:
+    return {"ok": False, "url": url, "error": "Reader-Fallback leer", "status_code": status_code, "html": ""}
+
+  source_url = extract_import_reader_source_url(markdown_text, normalize_import_visit_url(url) or url)
+  html_text = convert_import_reader_markdown_to_html(markdown_text)
+  return {
+    "ok": True,
+    "url": source_url,
+    "error": "",
+    "status_code": status_code,
+    "html": html_text,
+    "fetch_mode": "reader_fallback",
   }
 
 
@@ -5581,6 +5763,7 @@ def crawl_import_pages(root_url: str, entry_url: str, canonical_domain: str) -> 
     "pages": pages,
     "pages_attempted": pages_attempted,
     "pages_fetched": len(pages),
+    "fetch_mode": str(root_result.get("fetch_mode") or "direct"),
   }
 
 
@@ -5745,6 +5928,41 @@ def normalize_service_title_for_import(raw_value: object) -> str:
   return stripped
 
 
+def normalize_priced_service_title_for_import(raw_value: object) -> str:
+  title = clean_import_text(raw_value, 140)
+  if not title:
+    return ""
+  if "@" in title or "http://" in title.lower() or "https://" in title.lower():
+    return ""
+
+  stripped = PRICE_PATTERN.sub("", title)
+  stripped = re.sub(r"[*_`#]+", " ", stripped)
+  stripped = re.sub(r"\s+", " ", stripped).strip(" -–—|:;,.")
+  stripped = clean_import_text(stripped, 140)
+  if not stripped:
+    return ""
+
+  normalized = normalize_keyword_text(stripped)
+  if not normalized or normalized in IMPORT_GENERIC_SERVICE_LABELS:
+    return ""
+  if any(fragment in normalized for fragment in IMPORT_GENERIC_PRICED_SERVICE_BLOCKLIST):
+    return ""
+  if any(fragment in normalized for fragment in ("javascript", "void", "accept", "ablehnen", "richtlinie")):
+    return ""
+
+  word_count = len(normalized.split())
+  if word_count == 0 or word_count > 14:
+    return ""
+
+  alpha_count = len(re.findall(r"[A-Za-zÄÖÜäöüß]", stripped))
+  if alpha_count < 2:
+    return ""
+
+  if len(stripped) < 2 or len(stripped) > 90:
+    return ""
+  return stripped
+
+
 def extract_services_from_import_soup(soup: BeautifulSoup, source_url: str) -> list[dict]:
   candidates: list[dict] = []
   seen_titles: set[str] = set()
@@ -5774,7 +5992,10 @@ def extract_prices_from_import_soup(soup: BeautifulSoup, source_url: str) -> lis
       continue
 
     price_text = clean_import_text(match.group(1), 40)
-    title = normalize_service_title_for_import(PRICE_PATTERN.sub("", text, count=1))
+    title_source = PRICE_PATTERN.sub("", text)
+    title = normalize_service_title_for_import(title_source)
+    if not title:
+      title = normalize_priced_service_title_for_import(title_source)
     if not title:
       continue
 
@@ -5911,7 +6132,7 @@ def find_existing_clinic_by_import_domain(conn: DBConnectionAdapter, canonical_d
 def replace_clinic_import_services(conn: DBConnectionAdapter, clinic_id: int, services: list[dict], prices: list[dict]) -> None:
   price_by_title: dict[str, str] = {}
   for item in prices:
-    title = normalize_service_title_for_import(item.get("title"))
+    title = normalize_service_title_for_import(item.get("title")) or normalize_priced_service_title_for_import(item.get("title"))
     price_text = clean_import_text(item.get("price"), 40)
     if not title or not price_text:
       continue
@@ -5920,8 +6141,9 @@ def replace_clinic_import_services(conn: DBConnectionAdapter, clinic_id: int, se
       price_by_title[title_key] = price_text
 
   conn.execute("DELETE FROM clinic_import_services WHERE clinic_id = ?", (clinic_id,))
-  for service in services[:400]:
-    title = normalize_service_title_for_import(service.get("title"))
+  source_items = services or prices
+  for service in source_items[:400]:
+    title = normalize_service_title_for_import(service.get("title")) or normalize_priced_service_title_for_import(service.get("title"))
     if not title:
       continue
     source_url = normalize_import_visit_url(service.get("source_url", "")) or ""
@@ -6017,7 +6239,7 @@ def build_treatments_from_import_data(extracted: dict, existing_treatments: list
   }
   price_by_title: dict[str, str] = {}
   for item in prices:
-    title = normalize_service_title_for_import(item.get("title"))
+    title = normalize_service_title_for_import(item.get("title")) or normalize_priced_service_title_for_import(item.get("title"))
     price_text = clean_import_text(item.get("price"), 40)
     if not title or not price_text:
       continue
@@ -6029,7 +6251,7 @@ def build_treatments_from_import_data(extracted: dict, existing_treatments: list
   seen_ids: set[str] = set()
   source_items = services or prices
   for item in source_items[:300]:
-    title = normalize_service_title_for_import(item.get("title"))
+    title = normalize_service_title_for_import(item.get("title")) or normalize_priced_service_title_for_import(item.get("title"))
     if not title:
       continue
     key = normalize_keyword_text(title)
@@ -8527,6 +8749,7 @@ def import_clinic_catalog_from_website():
       "catalog": updated_catalog,
       "websiteSync": {
         "success": True,
+        "importMode": str(import_bundle["crawlResult"].get("fetch_mode") or "direct"),
         "pagesFetched": int(import_bundle["crawlResult"]["pages_fetched"]),
         "pagesAttempted": int(import_bundle["crawlResult"]["pages_attempted"]),
         "importedTreatments": len(updated_catalog.get("treatments", [])),
@@ -9452,6 +9675,7 @@ def update_clinic_settings():
       updated_catalog = apply_imported_services_to_clinic_catalog(conn, clinic_id, clinic_name, extracted)
       website_sync = {
         "success": True,
+        "importMode": str(import_bundle["crawlResult"].get("fetch_mode") or "direct"),
         "pagesFetched": int(import_bundle["crawlResult"]["pages_fetched"]),
         "pagesAttempted": int(import_bundle["crawlResult"]["pages_attempted"]),
         "importedTreatments": len(updated_catalog.get("treatments", [])),

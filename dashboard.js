@@ -176,9 +176,17 @@ function humanizeImportError(message) {
   const normalized = String(message || "").trim();
   if (!normalized) return "Serveranfrage fehlgeschlagen";
   if (normalized.includes("HTTP 403")) {
-    return "Die Website blockiert automatische Imports gerade per Cloudflare/403. Dafür brauchen wir einen Browser-Fallback.";
+    return "Die Website blockiert den Direktzugriff per Cloudflare/403.";
   }
   return normalized;
+}
+
+function formatWebsiteImportSuccess(websiteSync) {
+  const importedTreatments = Number(websiteSync?.importedTreatments || 0);
+  const suffix = websiteSync?.importMode === "reader_fallback"
+    ? " · per Fallback übernommen"
+    : "";
+  return `${importedTreatments} Treatments übernommen${suffix}`;
 }
 
 function normalizeHexColorForUi(value, fallback = "#8A5A2F") {
@@ -1505,7 +1513,7 @@ async function importCatalogFromWebsite() {
     state.catalog = normalizeCatalogPayload(response.catalog || {});
     renderCatalog();
     await Promise.all([loadAuditLogs(), loadSettings()]);
-    showToast(`${Number(response.websiteSync?.importedTreatments || 0)} Treatments von der Website übernommen`);
+    showToast(formatWebsiteImportSuccess(response.websiteSync));
     await maybeAdoptWebsiteBranding(response.websiteSync);
   } catch (error) {
     showToast(humanizeImportError(error.message || "Website-Import fehlgeschlagen"));
@@ -1780,7 +1788,7 @@ async function handleSettingsSave(event) {
 
     const importedTreatments = Number(response.websiteSync?.importedTreatments || 0);
     if (response.websiteSync?.success && websiteValue) {
-      showToast(`Einstellungen gespeichert · ${importedTreatments} Treatments übernommen`);
+      showToast(`Einstellungen gespeichert · ${formatWebsiteImportSuccess(response.websiteSync)}`);
       if (shouldOfferWebsiteBranding) {
         await maybeAdoptWebsiteBranding(response.websiteSync);
       }
