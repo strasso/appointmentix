@@ -758,6 +758,53 @@ function normalizeAppointmentList(items) {
     });
 }
 
+function buildDemoAppointmentSlotDays() {
+  const weekdayShort = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const monthShort = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  const slotTimes = [
+    [9, 0],
+    [10, 30],
+    [11, 0],
+    [13, 0],
+    [14, 30],
+    [15, 0],
+    [16, 0],
+  ];
+  const now = new Date();
+  const days = [];
+
+  for (let offset = 1; offset <= 14 && days.length < 7; offset += 1) {
+    const date = new Date(now);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + offset);
+    if (date.getDay() === 0) continue;
+
+    const slots = slotTimes.map(([hour, minute]) => {
+      const slotDate = new Date(date);
+      slotDate.setHours(hour, minute, 0, 0);
+      return {
+        startsAt: slotDate.toISOString(),
+        label: slotDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      };
+    });
+
+    days.push({
+      isoDate: date.toISOString().slice(0, 10),
+      weekdayShort: weekdayShort[date.getDay()],
+      dayLabel: String(date.getDate()).padStart(2, '0'),
+      monthShort: monthShort[date.getMonth()],
+      selected: false,
+      slots,
+    });
+  }
+
+  const monthLabel = days.length > 0
+    ? `${monthShort[new Date(days[0].isoDate).getMonth()]} ${new Date(days[0].isoDate).getFullYear()}`
+    : '';
+
+  return { monthLabel, days };
+}
+
 async function fetchClinicBundle(baseUrl, clinicName, clinicId = '') {
   const safeBaseUrl = normalizeUrl(baseUrl);
   const params = new URLSearchParams();
@@ -1150,6 +1197,25 @@ async function fetchPatientAppointments(baseUrl, clinicName, memberEmail) {
   return parseJsonPayload(text) || {};
 }
 
+async function fetchAppointmentTimeSlots(baseUrl, appointmentId, clinicName, memberEmail) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const safeClinicName = String(clinicName || '').trim();
+  const safeEmail = String(memberEmail || '').trim().toLowerCase();
+  const query = `?clinicName=${encodeURIComponent(safeClinicName)}&memberEmail=${encodeURIComponent(safeEmail)}`;
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/appointments/${appointmentId}/time-slots${query}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+  }, { timeoutMs: 9000, retries: 1, retryDelayMs: 450 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Verfügbare Zeiten konnten nicht geladen werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
 async function updatePatientAppointment(baseUrl, appointmentId, action, payload) {
   const safeBaseUrl = normalizeUrl(baseUrl);
   const safeAction = String(action || '').trim().toLowerCase();
@@ -1168,6 +1234,24 @@ async function updatePatientAppointment(baseUrl, appointmentId, action, payload)
   const text = await response.text();
   if (!response.ok) {
     throw buildApiError('Termin konnte nicht aktualisiert werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
+async function confirmPatientAppointmentReschedule(baseUrl, appointmentId, payload) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/appointments/${appointmentId}/reschedule`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload || {}),
+  }, { timeoutMs: 12000, retries: 1, retryDelayMs: 500 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Termin konnte nicht verschoben werden.', response.status, text);
   }
   return parseJsonPayload(text) || {};
 }
@@ -1241,6 +1325,10 @@ export default function App() {
   const [appointments, setAppointments] = useState(() => normalizeAppointmentList(DEMO_APPOINTMENTS));
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentActionLoading, setAppointmentActionLoading] = useState(false);
+  const [rescheduleOverlayOpen, setRescheduleOverlayOpen] = useState(false);
+  const [appointmentSlotDays, setAppointmentSlotDays] = useState([]);
+  const [appointmentSlotMonthLabel, setAppointmentSlotMonthLabel] = useState('');
+  const [appointmentSlotsLoading, setAppointmentSlotsLoading] = useState(false);
 
   const [activeMembership, setActiveMembership] = useState('silber');
   const [membershipStatus, setMembershipStatus] = useState(null);
@@ -1570,6 +1658,13 @@ export default function App() {
     }
   }
 
+  function resetAppointmentRescheduleState() {
+    setRescheduleOverlayOpen(false);
+    setAppointmentSlotDays([]);
+    setAppointmentSlotMonthLabel('');
+    setAppointmentSlotsLoading(false);
+  }
+
   function switchMainTab(nextTab) {
     Animated.sequence([
       Animated.timing(tabFadeAnim, {
@@ -1586,6 +1681,7 @@ export default function App() {
       }),
     ]).start();
     if (nextTab !== 'profile') {
+      resetAppointmentRescheduleState();
       setSelectedAppointment(null);
       setProfileTab('overview');
     }
@@ -3281,6 +3377,7 @@ function continueToAccessStep() {
   };
 
   const handleOpenAppointments = () => {
+    resetAppointmentRescheduleState();
     setProfileTab('appointments');
     setAppointmentSegment('upcoming');
     setSelectedAppointment(null);
@@ -3289,12 +3386,14 @@ function continueToAccessStep() {
   };
 
   const handleCloseAppointments = () => {
+    resetAppointmentRescheduleState();
     setSelectedAppointment(null);
     setProfileTab('overview');
   };
 
   const handleOpenAppointment = (appointment) => {
     if (!appointment) return;
+    resetAppointmentRescheduleState();
     mainScrollRef.current?.scrollTo?.({ y: 0, animated: false });
     setProfileTab('appointments');
     setSelectedAppointment(appointment);
@@ -3303,6 +3402,120 @@ function continueToAccessStep() {
       treatmentId: appointment.treatmentId || '',
       metadata: { screen: 'appointments' },
     });
+  };
+
+  const handleCloseAppointmentDetail = () => {
+    resetAppointmentRescheduleState();
+    setSelectedAppointment(null);
+  };
+
+  const handleOpenRescheduleOverlay = async (appointment) => {
+    if (!appointment) return;
+
+    if (!analyticsConnected) {
+      const slotPayload = buildDemoAppointmentSlotDays();
+      setAppointmentSlotMonthLabel(slotPayload.monthLabel || '');
+      setAppointmentSlotDays(Array.isArray(slotPayload.days) ? slotPayload.days : []);
+      setRescheduleOverlayOpen(true);
+      return;
+    }
+
+    const normalized = normalizeUrl(analyticsBaseUrl);
+    const resolvedClinicName = String(clinicProfile.name || clinicLookupName || clinicSearchQuery || '').trim();
+    const memberEmail = patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase();
+    if (!normalized || !resolvedClinicName || !memberEmail) {
+      Alert.alert('Daten fehlen', 'Für Terminaktionen muss dein Profil mit einer E-Mail und einer MedSpa verbunden sein.');
+      return;
+    }
+
+    setAppointmentSlotsLoading(true);
+    setRescheduleOverlayOpen(true);
+    setAppointmentSlotDays([]);
+    setAppointmentSlotMonthLabel('');
+    try {
+      const payload = await fetchAppointmentTimeSlots(normalized, appointment.id, resolvedClinicName, memberEmail);
+      setAppointmentSlotMonthLabel(String(payload?.monthLabel || ''));
+      setAppointmentSlotDays(Array.isArray(payload?.days) ? payload.days : []);
+    } catch (error) {
+      setRescheduleOverlayOpen(false);
+      Alert.alert('Zeiten nicht verfügbar', String(error?.message || error));
+    } finally {
+      setAppointmentSlotsLoading(false);
+    }
+  };
+
+  const handleCloseRescheduleOverlay = () => {
+    setRescheduleOverlayOpen(false);
+  };
+
+  const handleConfirmAppointmentReschedule = async (appointment, startsAt) => {
+    if (!appointment || !startsAt) return;
+
+    const durationMinutes = Math.max(0, Number(appointment?.treatmentDurationMinutes || 0));
+    const buildLocalRow = (source) => {
+      const startDate = new Date(startsAt);
+      const endDate = durationMinutes > 0 && !Number.isNaN(startDate.getTime())
+        ? new Date(startDate.getTime() + durationMinutes * 60000).toISOString()
+        : source?.endsAt || '';
+      const localDateLabel = !Number.isNaN(startDate.getTime())
+        ? startDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : '';
+      const previousNotes = String(source?.notes || '').trim();
+      const updateNote = localDateLabel ? `Neuer Terminvorschlag bestätigt: ${localDateLabel}.` : '';
+      return {
+        ...source,
+        startsAt,
+        endsAt: endDate,
+        status: 'rescheduled',
+        updatedAt: new Date().toISOString(),
+        notes: updateNote ? [previousNotes, updateNote].filter(Boolean).join('\n') : previousNotes,
+      };
+    };
+
+    if (!analyticsConnected) {
+      const nextRows = normalizeAppointmentList(
+        appointments.map((item) => (
+          String(item.id) === String(appointment.id) ? buildLocalRow(item) : item
+        ))
+      );
+      const nextSelected = nextRows.find((item) => String(item.id) === String(appointment.id)) || null;
+      setAppointments(nextRows);
+      setSelectedAppointment(nextSelected);
+      setRescheduleOverlayOpen(false);
+      Alert.alert('Termin verschoben', 'Dein neuer Termin wurde gespeichert.');
+      return;
+    }
+
+    const normalized = normalizeUrl(analyticsBaseUrl);
+    const resolvedClinicName = String(clinicProfile.name || clinicLookupName || clinicSearchQuery || '').trim();
+    const memberEmail = patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase();
+    if (!normalized || !resolvedClinicName || !memberEmail) {
+      Alert.alert('Daten fehlen', 'Für Terminaktionen muss dein Profil mit einer E-Mail und einer MedSpa verbunden sein.');
+      return;
+    }
+
+    setAppointmentActionLoading(true);
+    try {
+      const payload = await confirmPatientAppointmentReschedule(normalized, appointment.id, {
+        clinicName: resolvedClinicName,
+        memberEmail,
+        startsAt,
+      });
+      const updatedRow = payload?.appointment || null;
+      if (updatedRow) {
+        const nextRows = normalizeAppointmentList(
+          appointments.map((item) => (String(item.id) === String(updatedRow.id) ? updatedRow : item))
+        );
+        setAppointments(nextRows);
+        setSelectedAppointment(nextRows.find((item) => String(item.id) === String(updatedRow.id)) || updatedRow);
+      }
+      setRescheduleOverlayOpen(false);
+      Alert.alert('Termin verschoben', 'Dein neuer Termin wurde gespeichert.');
+    } catch (error) {
+      Alert.alert('Verschiebung fehlgeschlagen', String(error?.message || error));
+    } finally {
+      setAppointmentActionLoading(false);
+    }
   };
 
   const handleRequestAppointmentUpdate = async (appointment, action) => {
@@ -3479,11 +3692,17 @@ function continueToAccessStep() {
             <AppointmentDetailScreen
               mowgliTheme={mowgliTheme}
               appointment={selectedAppointment}
-              onBack={() => setSelectedAppointment(null)}
+              onBack={handleCloseAppointmentDetail}
               onOpenMaps={openClinicInMaps}
               onCallClinic={callClinicNow}
-              onRequestReschedule={() => handleRequestAppointmentUpdate(selectedAppointment, 'reschedule-request')}
+              onRequestReschedule={() => handleOpenRescheduleOverlay(selectedAppointment)}
+              onCloseRescheduleOverlay={handleCloseRescheduleOverlay}
+              onConfirmReschedule={(startsAt) => handleConfirmAppointmentReschedule(selectedAppointment, startsAt)}
               onCancelAppointment={() => handleRequestAppointmentUpdate(selectedAppointment, 'cancel')}
+              rescheduleOverlayOpen={rescheduleOverlayOpen}
+              appointmentSlotDays={appointmentSlotDays}
+              appointmentSlotMonthLabel={appointmentSlotMonthLabel}
+              appointmentSlotsLoading={appointmentSlotsLoading}
               actionLoading={appointmentActionLoading}
               treatmentImageUrl={selectedAppointmentImageUrl}
             />
@@ -3551,9 +3770,9 @@ function continueToAccessStep() {
       <SafeAreaView style={[styles.safeArea, { backgroundColor: mowgliTheme.page }]}>
         <StatusBar style={uiAppearance === 'dark' ? 'light' : 'dark'} />
         <View style={styles.bootWrap}>
-          <ActivityIndicator size="large" color={THEME.brand} />
-          <Text style={styles.bootTitle}>Curabo wird geladen ...</Text>
-          <Text style={styles.bootBody}>Die App wird gestartet.</Text>
+          <ActivityIndicator size="large" color={mowgliTheme.accent} />
+          <Text style={[styles.bootTitle, { color: mowgliTheme.text }]}>Curabo wird geladen ...</Text>
+          <Text style={[styles.bootBody, { color: mowgliTheme.textMuted }]}>Die App wird gestartet.</Text>
         </View>
       </SafeAreaView>
     );
@@ -3767,17 +3986,18 @@ const styles = StyleSheet.create({
   },
   bootTitle: {
     marginTop: 16,
-    fontSize: 24,
-    fontWeight: '800',
-    color: THEME.ink,
-    letterSpacing: -0.6,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: -0.4,
     fontFamily: UI_FONT_FAMILY,
   },
   bootBody: {
     marginTop: 8,
-    color: THEME.inkSoft,
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
     fontFamily: UI_FONT_FAMILY,
   },
   onboardingCard: {
@@ -4881,16 +5101,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(200,169,126,0.14)',
-    padding: 20,
-  },
-  mowgliMembershipGlow: {
-    position: 'absolute',
-    top: -52,
-    right: -32,
-    width: 160,
-    height: 160,
-    borderRadius: 999,
-    backgroundColor: 'rgba(200,169,126,0.09)',
+    padding: 18,
   },
   mowgliMembershipTopRow: {
     flexDirection: 'row',
@@ -4921,9 +5132,9 @@ const styles = StyleSheet.create({
   },
   mowgliMembershipBody: {
     color: '#A59A8E',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 14,
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 12,
     fontFamily: UI_FONT_FAMILY,
   },
   mowgliTextLink: {
@@ -5948,27 +6159,26 @@ const styles = StyleSheet.create({
   },
   mowgliActionSquare: {
     flex: 1,
-    aspectRatio: 1,
-    minHeight: 0,
+    minHeight: 108,
     borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 14,
-    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+    gap: 6,
   },
   mowgliActionSquareIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 999,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   mowgliActionSquareTitle: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 14,
     textAlign: 'center',
     fontWeight: '700',
     fontFamily: UI_FONT_FAMILY,

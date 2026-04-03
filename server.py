@@ -11,6 +11,10 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, quote_plus, unquote_plus, urljoin, urlparse
+try:
+  from zoneinfo import ZoneInfo
+except ImportError:
+  ZoneInfo = None
 
 import stripe
 import requests
@@ -141,6 +145,33 @@ PATIENT_APPOINTMENT_STATUSES = {
   "completed",
   "canceled",
 }
+PATIENT_APPOINTMENT_SLOT_TIMES = (
+  (9, 0),
+  (10, 30),
+  (11, 0),
+  (13, 0),
+  (14, 30),
+  (15, 0),
+  (16, 0),
+)
+PATIENT_APPOINTMENT_LOOKAHEAD_DAYS = 21
+PATIENT_APPOINTMENT_SLOT_DAY_LIMIT = 7
+GERMAN_WEEKDAY_SHORT = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+GERMAN_MONTH_NAMES = (
+  "Jänner",
+  "Februar",
+  "März",
+  "April",
+  "Mai",
+  "Juni",
+  "Juli",
+  "August",
+  "September",
+  "Oktober",
+  "November",
+  "Dezember",
+)
+GERMAN_MONTH_SHORT = ("Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez")
 STRIPE_TO_ADMIN_SUBSCRIPTION_STATUS = {
   "active": "active",
   "trialing": "trialing",
@@ -2667,6 +2698,15 @@ def normalize_optional_datetime_value(value: object) -> str | None:
   return parsed.isoformat()
 
 
+def clinic_local_timezone():
+  if ZoneInfo is not None:
+    try:
+      return ZoneInfo("Europe/Vienna")
+    except Exception:
+      return timezone.utc
+  return timezone.utc
+
+
 def resolve_catalog_membership_plan(clinic_row, membership_id: str) -> dict | None:
   target_membership_id = str(membership_id or "").strip()
   if not target_membership_id:
@@ -3278,6 +3318,63 @@ def list_patient_appointments(clinic_id: int, patient_email: str, limit: int = 8
   return sorted_rows
 
 
+def generate_patient_appointment_slot_days(appointment_row, day_limit: int = PATIENT_APPOINTMENT_SLOT_DAY_LIMIT) -> dict:
+  local_tz = clinic_local_timezone()
+  now_local = utc_now().astimezone(local_tz)
+  selected_start = parse_datetime_utc(appointment_row["starts_at"])
+  selected_local_date = selected_start.astimezone(local_tz).date() if selected_start else None
+
+  days: list[dict] = []
+  for offset in range(PATIENT_APPOINTMENT_LOOKAHEAD_DAYS):
+    date_local = (now_local + timedelta(days=offset)).date()
+    if date_local.weekday() == 6:
+      continue
+
+    slots = []
+    for hour_value, minute_value in PATIENT_APPOINTMENT_SLOT_TIMES:
+      slot_local = datetime(
+        date_local.year,
+        date_local.month,
+        date_local.day,
+        hour_value,
+        minute_value,
+        tzinfo=local_tz,
+      )
+      if slot_local <= now_local + timedelta(hours=2):
+        continue
+      slot_utc = slot_local.astimezone(timezone.utc)
+      slots.append(
+        {
+          "startsAt": slot_utc.isoformat(),
+          "label": slot_local.strftime("%H:%M"),
+          "isCurrent": selected_start is not None and slot_utc.isoformat() == selected_start.isoformat(),
+        }
+      )
+
+    if not slots:
+      continue
+
+    days.append(
+      {
+        "isoDate": date_local.isoformat(),
+        "weekdayShort": GERMAN_WEEKDAY_SHORT[date_local.weekday()],
+        "dayLabel": f"{date_local.day:02d}",
+        "monthShort": GERMAN_MONTH_SHORT[date_local.month - 1],
+        "selected": selected_local_date == date_local,
+        "slots": slots,
+      }
+    )
+    if len(days) >= day_limit:
+      break
+
+  month_label = ""
+  if days:
+    first_dt = datetime.fromisoformat(days[0]["isoDate"])
+    month_label = f"{GERMAN_MONTH_NAMES[first_dt.month - 1]} {first_dt.year}"
+
+  return {"monthLabel": month_label, "days": days}
+
+
 def create_patient_appointments_from_checkout(
   clinic_row,
   patient_email: str,
@@ -3377,6 +3474,73 @@ def create_patient_appointments_from_checkout(
           inserted_rows.append(serialize_patient_appointment_row(row))
 
   return inserted_rows
+
+
+def reschedule_patient_appointment(
+  clinic_id: int,
+  patient_email: str,
+  appointment_id: int,
+  starts_at: str,
+):
+  safe_email = sanitize_patient_email(patient_email)
+  normalized_starts_at = normalize_optional_datetime_value(starts_at)
+  if not safe_email or appointment_id <= 0 or not normalized_starts_at:
+    return None
+
+  now_iso = utc_now_iso()
+
+  with get_db() as conn:
+    existing = conn.execute(
+      """
+      SELECT
+        id,
+        starts_at,
+        ends_at,
+        notes,
+        treatment_duration_minutes
+      FROM patient_appointments
+      WHERE clinic_id = ? AND patient_email = ? AND id = ?
+      LIMIT 1
+      """,
+      (clinic_id, safe_email, appointment_id),
+    ).fetchone()
+    if not existing:
+      return None
+
+    parsed_start = parse_datetime_utc(normalized_starts_at)
+    if not parsed_start:
+      return None
+    duration_minutes = max(0, min(int(existing["treatment_duration_minutes"] or 0), 600))
+    next_end = None
+    if duration_minutes > 0:
+      next_end = (parsed_start + timedelta(minutes=duration_minutes)).isoformat()
+
+    previous_notes = str(existing["notes"] or "").strip()
+    change_note = f"Neuer Terminvorschlag bestätigt: {parsed_start.astimezone(clinic_local_timezone()).strftime('%d.%m.%Y %H:%M')}."
+    next_notes = f"{previous_notes}\n{change_note}".strip() if previous_notes else change_note
+
+    conn.execute(
+      """
+      UPDATE patient_appointments
+      SET
+        starts_at = ?,
+        ends_at = ?,
+        status = 'rescheduled',
+        notes = ?,
+        canceled_at = NULL,
+        updated_at = ?
+      WHERE id = ?
+      """,
+      (
+        normalized_starts_at,
+        next_end,
+        next_notes,
+        now_iso,
+        existing["id"],
+      ),
+    )
+
+  return get_patient_appointment_row(clinic_id, safe_email, appointment_id)
 
 
 def update_patient_appointment_status(
@@ -7219,6 +7383,72 @@ def mobile_appointments():
     "past": sum(1 for row in serialized if row.get("segment") == "past"),
   }
   return jsonify({"appointments": serialized, "summary": summary})
+
+
+@app.get("/api/mobile/appointments/<int:appointment_id>/time-slots")
+def mobile_appointment_time_slots(appointment_id: int):
+  clinic_name = str(request.args.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(request.args.get("memberEmail") or request.args.get("email"))
+  if len(clinic_name) < 2:
+    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if not patient_email:
+    return jsonify({"error": "memberEmail ist erforderlich."}), 400
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  appointment_row = get_patient_appointment_row(int(clinic_row["id"]), patient_email, appointment_id)
+  if not appointment_row:
+    return jsonify({"error": "Termin nicht gefunden."}), 404
+
+  payload = generate_patient_appointment_slot_days(appointment_row)
+  return jsonify(
+    {
+      "appointmentId": appointment_id,
+      "treatmentName": appointment_row["treatment_name"] or "",
+      "monthLabel": payload["monthLabel"],
+      "days": payload["days"],
+    }
+  )
+
+
+@app.post("/api/mobile/appointments/<int:appointment_id>/reschedule")
+def mobile_reschedule_appointment(appointment_id: int):
+  payload = request.get_json(silent=True) or {}
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
+  starts_at = str(payload.get("startsAt") or "").strip()
+  if len(clinic_name) < 2:
+    return jsonify({"error": "clinicName ist erforderlich."}), 400
+  if not patient_email:
+    return jsonify({"error": "memberEmail ist erforderlich."}), 400
+  if not starts_at:
+    return jsonify({"error": "startsAt ist erforderlich."}), 400
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return jsonify({"error": "Klinik nicht gefunden."}), 404
+
+  appointment_row = reschedule_patient_appointment(
+    clinic_id=int(clinic_row["id"]),
+    patient_email=patient_email,
+    appointment_id=appointment_id,
+    starts_at=starts_at,
+  )
+  if not appointment_row:
+    return jsonify({"error": "Termin nicht gefunden oder Zeit ungültig."}), 404
+
+  create_audit_log(
+    clinic_id=int(clinic_row["id"]),
+    actor_user_id=None,
+    action="mobile.appointment_rescheduled",
+    entity_type="patient_appointment",
+    entity_id=str(appointment_id),
+    metadata={"patientEmail": patient_email, "startsAt": starts_at},
+  )
+
+  return jsonify({"success": True, "appointment": serialize_patient_appointment_row(appointment_row)})
 
 
 @app.post("/api/mobile/appointments/<int:appointment_id>/cancel")

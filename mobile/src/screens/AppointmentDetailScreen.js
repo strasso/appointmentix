@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createMowgliTheme } from '../theme/tokens';
 
@@ -47,13 +47,49 @@ export default function AppointmentDetailScreen({
   onOpenMaps,
   onCallClinic,
   onRequestReschedule,
+  onCloseRescheduleOverlay,
+  onConfirmReschedule,
   onCancelAppointment,
+  rescheduleOverlayOpen,
+  appointmentSlotDays,
+  appointmentSlotMonthLabel,
+  appointmentSlotsLoading,
   actionLoading,
   treatmentImageUrl,
 }) {
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const safeAppointment = appointment || {};
   const actionable = !['completed', 'canceled'].includes(String(safeAppointment.status || '').toLowerCase());
+  const [selectedDate, setSelectedDate] = React.useState('');
+  const [selectedSlot, setSelectedSlot] = React.useState('');
+  const slotDays = Array.isArray(appointmentSlotDays) ? appointmentSlotDays : [];
+
+  const activeDay = React.useMemo(() => {
+    if (!slotDays.length) return null;
+    return slotDays.find((day) => day.isoDate === selectedDate) || slotDays[0] || null;
+  }, [slotDays, selectedDate]);
+
+  const activeSlot = React.useMemo(() => {
+    if (!activeDay?.slots?.length) return null;
+    return activeDay.slots.find((slot) => slot.startsAt === selectedSlot) || null;
+  }, [activeDay, selectedSlot]);
+
+  React.useEffect(() => {
+    if (!rescheduleOverlayOpen) {
+      setSelectedDate('');
+      setSelectedSlot('');
+      return;
+    }
+    const defaultDay = slotDays.find((day) => day.selected) || slotDays[0] || null;
+    setSelectedDate(defaultDay?.isoDate || '');
+    setSelectedSlot(defaultDay?.slots?.find((slot) => slot.isCurrent)?.startsAt || defaultDay?.slots?.[0]?.startsAt || '');
+  }, [rescheduleOverlayOpen, slotDays]);
+
+  React.useEffect(() => {
+    if (!rescheduleOverlayOpen || !activeDay?.slots?.length) return;
+    if (activeDay.slots.some((slot) => slot.startsAt === selectedSlot)) return;
+    setSelectedSlot(activeDay.slots.find((slot) => slot.isCurrent)?.startsAt || activeDay.slots[0]?.startsAt || '');
+  }, [activeDay, rescheduleOverlayOpen, selectedSlot]);
 
   return (
     <View style={[detailStyles.screen, { backgroundColor: theme.page }]}>
@@ -178,6 +214,152 @@ export default function AppointmentDetailScreen({
           <Text style={[detailStyles.secondaryActionText, { color: '#B86A5D' }]}>Stornieren</Text>
         </Pressable>
       </View>
+
+      {rescheduleOverlayOpen && (
+        <View style={detailStyles.overlayRoot}>
+          <View style={detailStyles.overlayScrim} />
+          <View style={[detailStyles.overlayPanel, { backgroundColor: theme.page }]}>
+            <View style={[detailStyles.overlayHeader, { borderBottomColor: theme.border }]}>
+              <Pressable onPress={onCloseRescheduleOverlay} style={({ pressed }) => [detailStyles.overlayHeaderButton, pressed && detailStyles.iconButtonPressed]}>
+                <Ionicons name="arrow-back" size={22} color={theme.text} />
+              </Pressable>
+              <View style={detailStyles.overlayHeaderCopy}>
+                <Text style={[detailStyles.overlayTitle, { color: theme.text }]}>Termin wählen</Text>
+                <Text style={[detailStyles.overlaySubtitle, { color: theme.textMuted }]} numberOfLines={1}>
+                  {safeAppointment.treatmentName || 'Treatment'}
+                </Text>
+              </View>
+              <View style={detailStyles.overlayHeaderButton} />
+            </View>
+
+            <ScrollView
+              style={detailStyles.overlayScroll}
+              contentContainerStyle={detailStyles.overlayContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View>
+                <Text style={[detailStyles.sectionLabel, { color: theme.accent }]}>
+                  {appointmentSlotMonthLabel || 'Verfügbare Tage'}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={detailStyles.dayRail}
+                >
+                  {slotDays.map((day) => {
+                    const selected = day.isoDate === activeDay?.isoDate;
+                    return (
+                      <Pressable
+                        key={day.isoDate}
+                        onPress={() => setSelectedDate(day.isoDate)}
+                        style={({ pressed }) => [
+                          detailStyles.dayCard,
+                          {
+                            backgroundColor: selected ? theme.accent : theme.surface,
+                            borderColor: selected ? theme.accent : theme.border,
+                          },
+                          pressed && detailStyles.iconButtonPressed,
+                        ]}
+                      >
+                        <Text style={[detailStyles.dayWeekday, { color: selected ? theme.textInverse : theme.text }]}>
+                          {day.weekdayShort}
+                        </Text>
+                        <Text style={[detailStyles.dayNumber, { color: selected ? theme.textInverse : theme.text }]}>
+                          {day.dayLabel}
+                        </Text>
+                        <Text style={[detailStyles.dayMonth, { color: selected ? theme.textInverse : theme.textMuted }]}>
+                          {day.monthShort}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View>
+                <Text style={[detailStyles.sectionLabel, { color: theme.accent }]}>Verfügbare Zeiten</Text>
+                {appointmentSlotsLoading ? (
+                  <View style={[detailStyles.loadingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <ActivityIndicator color={theme.accent} />
+                    <Text style={[detailStyles.loadingText, { color: theme.textMuted }]}>Zeiten werden geladen ...</Text>
+                  </View>
+                ) : (
+                  <View style={detailStyles.slotGrid}>
+                    {(activeDay?.slots || []).map((slot) => {
+                      const selected = slot.startsAt === selectedSlot;
+                      return (
+                        <Pressable
+                          key={slot.startsAt}
+                          onPress={() => setSelectedSlot(slot.startsAt)}
+                          style={({ pressed }) => [
+                            detailStyles.slotButton,
+                            {
+                              backgroundColor: selected ? theme.accent : theme.surface,
+                              borderColor: selected ? theme.accent : theme.border,
+                            },
+                            pressed && detailStyles.iconButtonPressed,
+                          ]}
+                        >
+                          <Text style={[detailStyles.slotLabel, { color: selected ? theme.textInverse : theme.text }]}>
+                            {slot.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              <View style={[detailStyles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Ionicons name="information-circle-outline" size={16} color={theme.accent} />
+                <Text style={[detailStyles.infoText, { color: theme.textMuted }]}>
+                  Der Behandler wird von der Klinik basierend auf Verfügbarkeit zugewiesen. Du kannst diesen Termin nach Bestätigung jederzeit wieder anpassen.
+                </Text>
+              </View>
+
+              {!appointmentSlotsLoading && !activeSlot && (
+                <View style={detailStyles.emptySelection}>
+                  <Text style={[detailStyles.emptySelectionText, { color: theme.textMuted }]}>
+                    Bitte wähle ein Zeitfenster.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={[detailStyles.overlayFooter, { borderTopColor: theme.border, backgroundColor: theme.shell }]}>
+              <View style={detailStyles.overlaySummary}>
+                <View>
+                  <Text style={[detailStyles.summaryLabel, { color: theme.textMuted }]}>Auswahl</Text>
+                  <Text style={[detailStyles.summaryValue, { color: theme.text }]}>
+                    {activeSlot ? `${formatAppointmentDate(activeSlot.startsAt)} • ${formatAppointmentTime(activeSlot.startsAt)}` : 'Noch kein Slot gewählt'}
+                  </Text>
+                </View>
+                <View style={detailStyles.summaryPrice}>
+                  <Text style={[detailStyles.summaryLabel, { color: theme.textMuted }]}>Status</Text>
+                  <Text style={[detailStyles.summaryAccent, { color: theme.accent }]}>Termin verschieben</Text>
+                </View>
+              </View>
+              <Pressable
+                disabled={!activeSlot || appointmentSlotsLoading || actionLoading}
+                onPress={() => onConfirmReschedule?.(activeSlot?.startsAt)}
+                style={({ pressed }) => [
+                  detailStyles.primaryAction,
+                  {
+                    backgroundColor: theme.primaryButtonBg,
+                    opacity: !activeSlot || appointmentSlotsLoading || actionLoading ? 0.45 : 1,
+                  },
+                  pressed && activeSlot && !appointmentSlotsLoading && !actionLoading && detailStyles.iconButtonPressed,
+                ]}
+              >
+                <Text style={[detailStyles.primaryActionText, { color: theme.primaryButtonText }]}>
+                  {actionLoading ? 'Bitte warten ...' : 'Bestätigen'}
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color={theme.primaryButtonText} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -381,5 +563,175 @@ const detailStyles = StyleSheet.create({
   secondaryActionText: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  overlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+  overlayScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10, 10, 12, 0.9)',
+  },
+  overlayPanel: {
+    flex: 1,
+  },
+  overlayHeader: {
+    paddingTop: 18,
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  overlayHeaderButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overlayHeaderCopy: {
+    flex: 1,
+  },
+  overlayTitle: {
+    fontFamily: 'Georgia',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  overlaySubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+  },
+  overlayScroll: {
+    flex: 1,
+  },
+  overlayContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 28,
+    gap: 28,
+  },
+  dayRail: {
+    gap: 10,
+    paddingRight: 24,
+  },
+  dayCard: {
+    width: 58,
+    minHeight: 78,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    gap: 3,
+  },
+  dayWeekday: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
+  dayNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  dayMonth: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  slotGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  slotButton: {
+    width: '31%',
+    minWidth: 92,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  slotLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  loadingCard: {
+    minHeight: 136,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+  },
+  emptySelection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  emptySelectionText: {
+    fontSize: 14,
+  },
+  overlayFooter: {
+    borderTopWidth: 1,
+    paddingHorizontal: 24,
+    paddingTop: 18,
+    paddingBottom: 30,
+    gap: 16,
+  },
+  overlaySummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    maxWidth: 220,
+  },
+  summaryPrice: {
+    alignItems: 'flex-end',
+  },
+  summaryAccent: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  primaryAction: {
+    minHeight: 56,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  primaryActionText: {
+    fontSize: 15,
+    fontWeight: '800',
   },
 });
