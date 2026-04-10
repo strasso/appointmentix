@@ -919,6 +919,32 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
 
+        CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          clinic_name TEXT NOT NULL DEFAULT '',
+          order_id TEXT NOT NULL UNIQUE,
+          stripe_session_id TEXT UNIQUE,
+          stripe_payment_intent_id TEXT,
+          patient_email TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          analytics_session_id TEXT NOT NULL DEFAULT '',
+          payment_method TEXT NOT NULL DEFAULT 'card',
+          payment_status TEXT NOT NULL DEFAULT 'pending',
+          checkout_status TEXT NOT NULL DEFAULT 'open',
+          currency TEXT NOT NULL DEFAULT 'eur',
+          total_cents INTEGER NOT NULL DEFAULT 0,
+          line_items_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          finalized_at TEXT,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_clinic_created ON patient_checkout_sessions(clinic_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_email ON patient_checkout_sessions(patient_email);
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_status ON patient_checkout_sessions(checkout_status, created_at DESC);
+
         CREATE TABLE IF NOT EXISTS clinic_campaigns (
           id BIGSERIAL PRIMARY KEY,
           clinic_id BIGINT NOT NULL,
@@ -1200,6 +1226,32 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_email ON patient_appointments(clinic_id, patient_email);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
+
+        CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          clinic_name TEXT NOT NULL DEFAULT '',
+          order_id TEXT NOT NULL UNIQUE,
+          stripe_session_id TEXT UNIQUE,
+          stripe_payment_intent_id TEXT,
+          patient_email TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          analytics_session_id TEXT NOT NULL DEFAULT '',
+          payment_method TEXT NOT NULL DEFAULT 'card',
+          payment_status TEXT NOT NULL DEFAULT 'pending',
+          checkout_status TEXT NOT NULL DEFAULT 'open',
+          currency TEXT NOT NULL DEFAULT 'eur',
+          total_cents INTEGER NOT NULL DEFAULT 0,
+          line_items_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          finalized_at TEXT,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_clinic_created ON patient_checkout_sessions(clinic_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_email ON patient_checkout_sessions(patient_email);
+        CREATE INDEX IF NOT EXISTS idx_patient_checkout_sessions_status ON patient_checkout_sessions(checkout_status, created_at DESC);
 
         CREATE TABLE IF NOT EXISTS clinic_campaigns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3342,6 +3394,42 @@ def list_patient_appointments(clinic_id: int, patient_email: str, limit: int = 8
 
   sorted_rows = sorted(list(rows), key=sort_key)
   return sorted_rows
+
+
+def list_patient_appointments_by_order_id(clinic_id: int, order_id: str) -> list:
+  safe_order_id = str(order_id or "").strip()
+  if clinic_id <= 0 or not safe_order_id:
+    return []
+
+  with get_db() as conn:
+    rows = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        treatment_id,
+        treatment_name,
+        treatment_duration_minutes,
+        practitioner_name,
+        starts_at,
+        ends_at,
+        location_label,
+        location_address,
+        status,
+        notes,
+        order_id,
+        canceled_at,
+        created_at,
+        updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND order_id = ?
+      ORDER BY created_at DESC, id DESC
+      """,
+      (clinic_id, safe_order_id),
+    ).fetchall()
+  return list(rows)
 
 
 def generate_patient_appointment_slot_days(appointment_row, day_limit: int = PATIENT_APPOINTMENT_SLOT_DAY_LIMIT) -> dict:
@@ -8237,6 +8325,508 @@ def mobile_request_appointment_reschedule(appointment_id: int):
   return jsonify({"success": True, "appointment": serialize_patient_appointment_row(appointment_row)})
 
 
+def resolve_mobile_checkout_request(payload: dict):
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
+  patient_name = sanitize_patient_name(payload.get("memberName") or payload.get("name"))
+  session_id = sanitize_campaign_text(payload.get("sessionId"), 120)
+  payment_method = normalize_patient_checkout_method(
+    payload.get("paymentMethod") or payload.get("payment_method"),
+    "card",
+  )
+  payment_status_raw = payload.get("paymentStatus")
+  if payment_status_raw is None:
+    payment_status = "pending" if payment_method == "klarna" else "paid"
+  else:
+    payment_status = normalize_patient_payment_status(payment_status_raw, "paid")
+  raw_items = payload.get("cartItems")
+
+  if len(clinic_name) < 2:
+    return None, (jsonify({"error": "clinicName ist erforderlich."}), 400)
+  if not isinstance(raw_items, list) or not raw_items:
+    return None, (jsonify({"error": "cartItems ist erforderlich."}), 400)
+  if len(raw_items) > 50:
+    return None, (jsonify({"error": "Zu viele cartItems."}), 400)
+
+  clinic_row = get_clinic_row_by_name(clinic_name)
+  if not clinic_row:
+    return None, (jsonify({"error": "Klinik nicht gefunden."}), 404)
+
+  catalog = load_clinic_catalog_bundle(clinic_row)
+  membership_row = None
+  if patient_email:
+    membership_row = get_patient_membership_row(int(clinic_row["id"]), patient_email)
+    membership_row = synchronize_patient_membership_row(clinic_row, membership_row)
+
+  line_items: list[dict] = []
+  total_cents = 0
+  for entry in raw_items:
+    if not isinstance(entry, dict):
+      continue
+    treatment_id = str(entry.get("treatmentId") or entry.get("id") or "").strip()
+    if not treatment_id:
+      continue
+    treatment = resolve_catalog_treatment(catalog, treatment_id)
+    if not treatment:
+      continue
+    units = parse_amount_cents(entry.get("units"))
+    if units is None:
+      units = 1
+    units = max(1, min(units, 20))
+    pricing = membership_pricing_for_treatment(clinic_row, treatment, membership_row)
+    unit_price_cents = int(pricing["unitPriceCents"] or 0)
+    line_total_cents = max(0, unit_price_cents * units)
+    total_cents += line_total_cents
+    starts_at = normalize_optional_datetime_value(
+      entry.get("startsAt") or entry.get("scheduledAt") or entry.get("appointmentAt")
+    )
+    ends_at = normalize_optional_datetime_value(entry.get("endsAt"))
+    duration_minutes = max(0, min(int(treatment.get("durationMinutes") or 0), 600))
+    if starts_at and not ends_at and duration_minutes > 0:
+      parsed_start = parse_datetime_utc(starts_at)
+      if parsed_start:
+        ends_at = (parsed_start + timedelta(minutes=duration_minutes)).isoformat()
+    line_items.append(
+      {
+        "treatmentId": treatment_id,
+        "name": str(treatment.get("name") or treatment_id),
+        "units": units,
+        "unitCents": unit_price_cents,
+        "totalCents": line_total_cents,
+        "priceSource": pricing["priceSource"],
+        "durationMinutes": duration_minutes,
+        "startsAt": starts_at,
+        "endsAt": ends_at,
+        "notes": str(entry.get("notes") or "").strip(),
+        "appointmentStatus": str(entry.get("appointmentStatus") or "").strip(),
+      }
+    )
+
+  if not line_items:
+    return None, (jsonify({"error": "Keine gültigen cartItems gefunden."}), 400)
+
+  return {
+    "clinicRow": clinic_row,
+    "clinicName": clinic_name,
+    "patientEmail": patient_email,
+    "patientName": patient_name,
+    "analyticsSessionId": session_id,
+    "paymentMethod": payment_method,
+    "paymentStatus": payment_status,
+    "membershipRow": membership_row,
+    "lineItems": line_items,
+    "totalCents": total_cents,
+  }, None
+
+
+def build_mobile_checkout_result_payload(
+  clinic_row,
+  patient_email: str,
+  order_id: str,
+  payment_method: str,
+  payment_status: str,
+  total_cents: int,
+  line_items: list[dict],
+):
+  earned_points = max(0, int(round(max(0, total_cents) / 100)))
+  appointments = [
+    serialize_patient_appointment_row(row)
+    for row in list_patient_appointments_by_order_id(int(clinic_row["id"]), order_id)
+  ]
+
+  membership_row = None
+  if patient_email:
+    membership_row = get_patient_membership_row(int(clinic_row["id"]), patient_email)
+    membership_row = synchronize_patient_membership_row(clinic_row, membership_row)
+
+  return {
+    "success": True,
+    "orderId": order_id,
+    "totalCents": int(max(0, total_cents)),
+    "currency": "eur",
+    "earnedPoints": earned_points,
+    "paymentMethod": normalize_patient_checkout_method(payment_method, "card"),
+    "paymentStatus": normalize_patient_payment_status(payment_status, "pending"),
+    "lineItems": line_items,
+    "appointments": appointments,
+    "membership": serialize_patient_membership_row(membership_row) if membership_row else None,
+  }
+
+
+def fulfill_mobile_checkout(
+  checkout_data: dict,
+  *,
+  order_id: str | None = None,
+  payment_status: str | None = None,
+  payment_method: str | None = None,
+  stripe_session_id: str = "",
+):
+  clinic_row = checkout_data["clinicRow"]
+  patient_email = checkout_data["patientEmail"]
+  patient_name = checkout_data["patientName"]
+  analytics_session_id = checkout_data["analyticsSessionId"]
+  line_items = checkout_data["lineItems"]
+  total_cents = int(checkout_data["totalCents"] or 0)
+  resolved_payment_method = normalize_patient_checkout_method(payment_method or checkout_data["paymentMethod"], "card")
+  resolved_payment_status = normalize_patient_payment_status(payment_status or checkout_data["paymentStatus"], "pending")
+  resolved_order_id = str(order_id or f"ord_{secrets.token_hex(6)}").strip() or f"ord_{secrets.token_hex(6)}"
+
+  created_appointments = create_patient_appointments_from_checkout(
+    clinic_row,
+    patient_email=patient_email,
+    patient_name=patient_name,
+    line_items=line_items,
+    payment_status=resolved_payment_status,
+    order_id=resolved_order_id,
+  )
+
+  earned_points = max(0, int(round(total_cents / 100)))
+  create_analytics_event(
+    clinic_id=int(clinic_row["id"]),
+    user_id=None,
+    event_name="purchase_success",
+    treatment_id=sanitize_treatment_id(line_items[0].get("treatmentId")),
+    amount_cents=total_cents,
+    metadata={
+      "sessionId": analytics_session_id,
+      "patientEmail": patient_email,
+      "itemCount": len(line_items),
+      "earnedPoints": earned_points,
+      "paymentStatus": resolved_payment_status,
+      "paymentMethod": resolved_payment_method,
+      "orderId": resolved_order_id,
+      "stripeSessionId": stripe_session_id,
+      "appointmentsCreated": len(created_appointments),
+      "lineItems": line_items[:20],
+    },
+    event_source="patient_app_checkout",
+  )
+
+  create_audit_log(
+    clinic_id=int(clinic_row["id"]),
+    actor_user_id=None,
+    action="mobile.checkout_completed",
+    entity_type="checkout",
+    entity_id=resolved_order_id,
+    metadata={
+      "patientEmail": patient_email,
+      "totalCents": total_cents,
+      "items": len(line_items),
+      "paymentMethod": resolved_payment_method,
+      "paymentStatus": resolved_payment_status,
+      "stripeSessionId": stripe_session_id,
+      "appointmentsCreated": len(created_appointments),
+    },
+  )
+
+  if patient_email:
+    membership_row = get_patient_membership_row(int(clinic_row["id"]), patient_email)
+    membership_row = synchronize_patient_membership_row(clinic_row, membership_row)
+    if membership_row:
+      target_status = resolve_membership_status_for_payment(resolved_payment_status, membership_row["status"])
+      update_patient_membership_status(
+        clinic_id=int(clinic_row["id"]),
+        patient_email=patient_email,
+        status=target_status,
+        payment_status=resolved_payment_status,
+      )
+
+  return build_mobile_checkout_result_payload(
+    clinic_row=clinic_row,
+    patient_email=patient_email,
+    order_id=resolved_order_id,
+    payment_method=resolved_payment_method,
+    payment_status=resolved_payment_status,
+    total_cents=total_cents,
+    line_items=line_items,
+  )
+
+
+def create_patient_checkout_session_record(checkout_data: dict, order_id: str, stripe_session) -> None:
+  with get_db() as conn:
+    conn.execute(
+      """
+      INSERT INTO patient_checkout_sessions (
+        clinic_id,
+        clinic_name,
+        order_id,
+        stripe_session_id,
+        stripe_payment_intent_id,
+        patient_email,
+        patient_name,
+        analytics_session_id,
+        payment_method,
+        payment_status,
+        checkout_status,
+        currency,
+        total_cents,
+        line_items_json,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(order_id) DO UPDATE SET
+        stripe_session_id = excluded.stripe_session_id,
+        stripe_payment_intent_id = excluded.stripe_payment_intent_id,
+        patient_email = excluded.patient_email,
+        patient_name = excluded.patient_name,
+        analytics_session_id = excluded.analytics_session_id,
+        payment_method = excluded.payment_method,
+        payment_status = excluded.payment_status,
+        checkout_status = excluded.checkout_status,
+        currency = excluded.currency,
+        total_cents = excluded.total_cents,
+        line_items_json = excluded.line_items_json,
+        updated_at = excluded.updated_at
+      """,
+      (
+        int(checkout_data["clinicRow"]["id"]),
+        str(checkout_data["clinicRow"]["name"] or checkout_data["clinicName"]),
+        order_id,
+        str(stripe_session.get("id") or ""),
+        str(stripe_session.get("payment_intent") or ""),
+        checkout_data["patientEmail"],
+        checkout_data["patientName"],
+        checkout_data["analyticsSessionId"],
+        checkout_data["paymentMethod"],
+        "pending",
+        "open",
+        "eur",
+        int(checkout_data["totalCents"] or 0),
+        serialize_json_list(checkout_data["lineItems"]),
+        utc_now_iso(),
+      ),
+    )
+
+
+def get_patient_checkout_session_row(stripe_session_id: str):
+  safe_session_id = str(stripe_session_id or "").strip()
+  if not safe_session_id:
+    return None
+  with get_db() as conn:
+    row = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        clinic_name,
+        order_id,
+        stripe_session_id,
+        stripe_payment_intent_id,
+        patient_email,
+        patient_name,
+        analytics_session_id,
+        payment_method,
+        payment_status,
+        checkout_status,
+        currency,
+        total_cents,
+        line_items_json,
+        created_at,
+        updated_at,
+        finalized_at
+      FROM patient_checkout_sessions
+      WHERE stripe_session_id = ?
+      LIMIT 1
+      """,
+      (safe_session_id,),
+    ).fetchone()
+  return row
+
+
+def update_patient_checkout_session_state(
+  stripe_session_id: str,
+  *,
+  payment_status: str | None = None,
+  checkout_status: str | None = None,
+  stripe_payment_intent_id: str | None = None,
+  finalized: bool = False,
+) -> None:
+  safe_session_id = str(stripe_session_id or "").strip()
+  if not safe_session_id:
+    return
+  now_iso = utc_now_iso()
+  with get_db() as conn:
+    conn.execute(
+      """
+      UPDATE patient_checkout_sessions
+      SET
+        payment_status = COALESCE(?, payment_status),
+        checkout_status = COALESCE(?, checkout_status),
+        stripe_payment_intent_id = COALESCE(?, stripe_payment_intent_id),
+        updated_at = ?,
+        finalized_at = CASE WHEN ? THEN COALESCE(finalized_at, ?) ELSE finalized_at END
+      WHERE stripe_session_id = ?
+      """,
+      (
+        normalize_patient_payment_status(payment_status, "pending") if payment_status is not None else None,
+        str(checkout_status or "").strip() or None,
+        str(stripe_payment_intent_id or "").strip() or None,
+        now_iso,
+        1 if finalized else 0,
+        now_iso,
+        safe_session_id,
+      ),
+    )
+
+
+def resolve_payment_status_from_checkout_session(session_object: dict, fallback: str = "pending") -> str:
+  payment_status = str(session_object.get("payment_status") or "").strip().lower()
+  if payment_status == "paid":
+    return "paid"
+  if payment_status in {"unpaid", "no_payment_required"}:
+    return "pending"
+  return normalize_patient_payment_status(payment_status, fallback)
+
+
+def finalize_patient_checkout_session(
+  stripe_session_id: str,
+  *,
+  stripe_session: dict | None = None,
+  payment_status_override: str | None = None,
+) -> dict:
+  safe_session_id = str(stripe_session_id or "").strip()
+  if not safe_session_id:
+    raise ValueError("Stripe Session fehlt.")
+  if not stripe_runtime_ready():
+    raise RuntimeError("Stripe ist nicht vollständig konfiguriert.")
+
+  session_object = stripe_session
+  if not session_object:
+    session_object = stripe.checkout.Session.retrieve(safe_session_id)
+
+  checkout_row = get_patient_checkout_session_row(safe_session_id)
+  if not checkout_row:
+    raise ValueError("Checkout-Session wurde serverseitig nicht gefunden.")
+
+  clinic_row = get_clinic_row_by_id(int(checkout_row["clinic_id"]))
+  if not clinic_row:
+    raise ValueError("Klinik für Checkout nicht gefunden.")
+
+  payment_status = normalize_patient_payment_status(
+    payment_status_override or resolve_payment_status_from_checkout_session(session_object, checkout_row["payment_status"] or "pending"),
+    "pending",
+  )
+  payment_method = normalize_patient_checkout_method(checkout_row["payment_method"], "card")
+  line_items = parse_json_list(checkout_row["line_items_json"])
+
+  if checkout_row["finalized_at"]:
+    update_patient_checkout_session_state(
+      safe_session_id,
+      payment_status=payment_status,
+      checkout_status="complete",
+      stripe_payment_intent_id=str(session_object.get("payment_intent") or ""),
+      finalized=False,
+    )
+    return build_mobile_checkout_result_payload(
+      clinic_row=clinic_row,
+      patient_email=str(checkout_row["patient_email"] or ""),
+      order_id=str(checkout_row["order_id"] or ""),
+      payment_method=payment_method,
+      payment_status=payment_status,
+      total_cents=int(checkout_row["total_cents"] or 0),
+      line_items=line_items,
+    )
+
+  checkout_data = {
+    "clinicRow": clinic_row,
+    "clinicName": str(checkout_row["clinic_name"] or clinic_row["name"] or ""),
+    "patientEmail": str(checkout_row["patient_email"] or ""),
+    "patientName": str(checkout_row["patient_name"] or ""),
+    "analyticsSessionId": str(checkout_row["analytics_session_id"] or ""),
+    "paymentMethod": payment_method,
+    "paymentStatus": payment_status,
+    "lineItems": line_items,
+    "totalCents": int(checkout_row["total_cents"] or 0),
+  }
+  result = fulfill_mobile_checkout(
+    checkout_data,
+    order_id=str(checkout_row["order_id"] or ""),
+    payment_status=payment_status,
+    payment_method=payment_method,
+    stripe_session_id=safe_session_id,
+  )
+  update_patient_checkout_session_state(
+    safe_session_id,
+    payment_status=payment_status,
+    checkout_status="complete",
+    stripe_payment_intent_id=str(session_object.get("payment_intent") or ""),
+    finalized=True,
+  )
+  return result
+
+
+def mark_patient_checkout_session_failed(stripe_session_id: str, reason: str = "") -> None:
+  checkout_row = get_patient_checkout_session_row(stripe_session_id)
+  if not checkout_row:
+    return
+  update_patient_checkout_session_state(
+    stripe_session_id,
+    payment_status="failed",
+    checkout_status="failed",
+    finalized=False,
+  )
+  create_audit_log(
+    clinic_id=int(checkout_row["clinic_id"]),
+    actor_user_id=None,
+    action="mobile.checkout_failed",
+    entity_type="checkout",
+    entity_id=str(checkout_row["order_id"] or stripe_session_id),
+    metadata={
+      "stripeSessionId": str(stripe_session_id or ""),
+      "reason": str(reason or "").strip(),
+      "patientEmail": str(checkout_row["patient_email"] or ""),
+    },
+  )
+
+
+def patient_checkout_return_html(session_id: str, status: str) -> str:
+  safe_session_id = html.escape(str(session_id or "").strip(), quote=True)
+  normalized_status = "cancel" if str(status or "").strip().lower() == "cancel" else "success"
+  app_target = (
+    f"curabo://checkout/cancel?session_id={safe_session_id}"
+    if normalized_status == "cancel"
+    else f"curabo://checkout/success?session_id={safe_session_id}"
+  )
+  title = "Checkout abgebrochen" if normalized_status == "cancel" else "Checkout abgeschlossen"
+  body = (
+    "Du kannst jetzt zu Curabo zurückkehren."
+    if normalized_status == "cancel"
+    else "Curabo wird jetzt wieder geöffnet, um deinen Kauf fertigzustellen."
+  )
+  button = "Zurück zur App"
+  safe_target = html.escape(app_target, quote=True)
+  return f"""<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{html.escape(title)}</title>
+    <style>
+      body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:#0f1115; color:#f8f5ef; margin:0; }}
+      main {{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }}
+      .card {{ width:min(440px, 100%); background:#171a20; border:1px solid rgba(255,255,255,.08); border-radius:24px; padding:28px; box-shadow:0 18px 48px rgba(0,0,0,.3); }}
+      h1 {{ margin:0 0 12px; font-size:28px; line-height:1.1; }}
+      p {{ margin:0 0 24px; color:rgba(248,245,239,.72); line-height:1.6; }}
+      a {{ display:inline-flex; align-items:center; justify-content:center; padding:14px 18px; border-radius:14px; background:#f97316; color:#fff; text-decoration:none; font-weight:600; }}
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <h1>{html.escape(title)}</h1>
+        <p>{html.escape(body)}</p>
+        <a href="{safe_target}">{button}</a>
+      </section>
+    </main>
+    <script>
+      window.setTimeout(function () {{
+        window.location.href = "{safe_target}";
+      }}, 250);
+    </script>
+  </body>
+</html>"""
+
+
 @app.post("/api/mobile/cart/add")
 def mobile_cart_add():
   payload = request.get_json(silent=True) or {}
@@ -8311,157 +8901,122 @@ def mobile_cart_add():
 @app.post("/api/mobile/checkout/complete")
 def mobile_checkout_complete():
   payload = request.get_json(silent=True) or {}
-  clinic_name = str(payload.get("clinicName", "")).strip()
-  patient_email = sanitize_patient_email(payload.get("memberEmail") or payload.get("email"))
-  session_id = sanitize_campaign_text(payload.get("sessionId"), 120)
-  payment_method = normalize_patient_checkout_method(
-    payload.get("paymentMethod") or payload.get("payment_method"),
-    "card",
-  )
-  payment_status_raw = payload.get("paymentStatus")
-  if payment_status_raw is None:
-    payment_status = "pending" if payment_method == "klarna" else "paid"
-  else:
-    payment_status = normalize_patient_payment_status(payment_status_raw, "paid")
-  raw_items = payload.get("cartItems")
+  checkout_data, error_response = resolve_mobile_checkout_request(payload)
+  if error_response:
+    return error_response
+  return jsonify(fulfill_mobile_checkout(checkout_data))
 
-  if len(clinic_name) < 2:
-    return jsonify({"error": "clinicName ist erforderlich."}), 400
-  if not isinstance(raw_items, list) or not raw_items:
-    return jsonify({"error": "cartItems ist erforderlich."}), 400
-  if len(raw_items) > 50:
-    return jsonify({"error": "Zu viele cartItems."}), 400
 
-  clinic_row = get_clinic_row_by_name(clinic_name)
-  if not clinic_row:
-    return jsonify({"error": "Klinik nicht gefunden."}), 404
+@app.post("/api/mobile/checkout/create-session")
+def mobile_checkout_create_session():
+  payload = request.get_json(silent=True) or {}
+  checkout_data, error_response = resolve_mobile_checkout_request(payload)
+  if error_response:
+    return error_response
+  if not stripe_runtime_ready():
+    return jsonify({"error": "Stripe ist für Patienten-Checkout aktuell nicht vollständig konfiguriert."}), 503
 
-  catalog = load_clinic_catalog_bundle(clinic_row)
-  membership_row = None
-  if patient_email:
-    membership_row = get_patient_membership_row(int(clinic_row["id"]), patient_email)
-    membership_row = synchronize_patient_membership_row(clinic_row, membership_row)
+  payment_method = normalize_patient_checkout_method(checkout_data["paymentMethod"], "card")
+  requested_payment_methods = parse_checkout_payment_method_types([payment_method])
+  if not requested_payment_methods:
+    requested_payment_methods = ["card"]
 
-  line_items: list[dict] = []
-  total_cents = 0
-  for entry in raw_items:
-    if not isinstance(entry, dict):
-      continue
-    treatment_id = str(entry.get("treatmentId") or entry.get("id") or "").strip()
-    if not treatment_id:
-      continue
-    treatment = resolve_catalog_treatment(catalog, treatment_id)
-    if not treatment:
-      continue
-    units = parse_amount_cents(entry.get("units"))
-    if units is None:
-      units = 1
-    units = max(1, min(units, 20))
-    pricing = membership_pricing_for_treatment(clinic_row, treatment, membership_row)
-    unit_price_cents = int(pricing["unitPriceCents"] or 0)
-    line_total_cents = max(0, unit_price_cents * units)
-    total_cents += line_total_cents
-    starts_at = normalize_optional_datetime_value(
-      entry.get("startsAt") or entry.get("scheduledAt") or entry.get("appointmentAt")
-    )
-    ends_at = normalize_optional_datetime_value(entry.get("endsAt"))
-    duration_minutes = max(0, min(int(treatment.get("durationMinutes") or 0), 600))
-    if starts_at and not ends_at and duration_minutes > 0:
-      parsed_start = parse_datetime_utc(starts_at)
-      if parsed_start:
-        ends_at = (parsed_start + timedelta(minutes=duration_minutes)).isoformat()
-    line_items.append(
-      {
-        "treatmentId": treatment_id,
-        "name": str(treatment.get("name") or treatment_id),
-        "units": units,
-        "unitCents": unit_price_cents,
-        "totalCents": line_total_cents,
-        "priceSource": pricing["priceSource"],
-        "durationMinutes": duration_minutes,
-        "startsAt": starts_at,
-        "endsAt": ends_at,
-        "notes": str(entry.get("notes") or "").strip(),
-        "appointmentStatus": str(entry.get("appointmentStatus") or "").strip(),
-      }
-    )
-
-  if not line_items:
-    return jsonify({"error": "Keine gültigen cartItems gefunden."}), 400
-
-  earned_points = max(0, int(round(total_cents / 100)))
   order_id = f"ord_{secrets.token_hex(6)}"
-  patient_name = sanitize_patient_name(payload.get("memberName") or payload.get("name"))
-  created_appointments = create_patient_appointments_from_checkout(
-    clinic_row,
-    patient_email=patient_email,
-    patient_name=patient_name,
-    line_items=line_items,
-    payment_status=payment_status,
-    order_id=order_id,
-  )
+  base_url = request.host_url.rstrip("/")
+  success_url = f"{base_url}/mobile/checkout/return?status=success&session_id={{CHECKOUT_SESSION_ID}}"
+  cancel_url = f"{base_url}/mobile/checkout/return?status=cancel&session_id={{CHECKOUT_SESSION_ID}}"
 
-  create_analytics_event(
-    clinic_id=int(clinic_row["id"]),
-    user_id=None,
-    event_name="purchase_success",
-    treatment_id=sanitize_treatment_id(line_items[0].get("treatmentId")),
-    amount_cents=total_cents,
-    metadata={
-      "sessionId": session_id,
-      "patientEmail": patient_email,
-      "itemCount": len(line_items),
-      "earnedPoints": earned_points,
-      "paymentStatus": payment_status,
-      "paymentMethod": payment_method,
-      "orderId": order_id,
-      "appointmentsCreated": len(created_appointments),
-      "lineItems": line_items[:20],
+  checkout_payload: dict = {
+    "mode": "payment",
+    "line_items": [
+      {
+        "price_data": {
+          "currency": "eur",
+          "unit_amount": int(item["unitCents"] or 0),
+          "product_data": {
+            "name": str(item["name"] or item["treatmentId"] or "Treatment"),
+            "description": f"Behandlung bei {str(checkout_data['clinicRow']['name'] or checkout_data['clinicName'])}",
+          },
+        },
+        "quantity": int(item["units"] or 1),
+      }
+      for item in checkout_data["lineItems"]
+    ],
+    "payment_method_types": requested_payment_methods,
+    "success_url": success_url,
+    "cancel_url": cancel_url,
+    "allow_promotion_codes": True,
+    "billing_address_collection": "auto",
+    "locale": "de",
+    "client_reference_id": order_id,
+    "metadata": {
+      "checkout_flow": "patient_app_checkout",
+      "order_id": order_id,
+      "clinic_id": str(checkout_data["clinicRow"]["id"]),
+      "payment_method": payment_method,
     },
-    event_source="patient_app_checkout",
-  )
+  }
+  if checkout_data["patientEmail"]:
+    checkout_payload["customer_email"] = checkout_data["patientEmail"]
+
+  try:
+    checkout_session = stripe.checkout.Session.create(**checkout_payload)
+  except Exception as exc:
+    return jsonify({"error": f"Stripe Checkout konnte nicht erstellt werden: {exc}"}), 502
+
+  create_patient_checkout_session_record(checkout_data, order_id, checkout_session)
 
   create_audit_log(
-    clinic_id=int(clinic_row["id"]),
+    clinic_id=int(checkout_data["clinicRow"]["id"]),
     actor_user_id=None,
-    action="mobile.checkout_completed",
+    action="mobile.checkout_session_created",
     entity_type="checkout",
     entity_id=order_id,
     metadata={
-      "patientEmail": patient_email,
-      "totalCents": total_cents,
-      "items": len(line_items),
+      "patientEmail": checkout_data["patientEmail"],
       "paymentMethod": payment_method,
-      "paymentStatus": payment_status,
-      "appointmentsCreated": len(created_appointments),
+      "stripeSessionId": str(checkout_session.get("id") or ""),
+      "totalCents": int(checkout_data["totalCents"] or 0),
+      "items": len(checkout_data["lineItems"]),
     },
   )
-
-  updated_membership = membership_row
-  if membership_row and patient_email:
-    target_status = resolve_membership_status_for_payment(payment_status, membership_row["status"])
-    updated_membership = update_patient_membership_status(
-      clinic_id=int(clinic_row["id"]),
-      patient_email=patient_email,
-      status=target_status,
-      payment_status=payment_status,
-    )
-    updated_membership = synchronize_patient_membership_row(clinic_row, updated_membership)
 
   return jsonify(
     {
       "success": True,
       "orderId": order_id,
-      "totalCents": total_cents,
-      "currency": "eur",
-      "earnedPoints": earned_points,
+      "sessionId": checkout_session.get("id"),
+      "checkoutUrl": checkout_session.get("url"),
       "paymentMethod": payment_method,
-      "paymentStatus": payment_status,
-      "lineItems": line_items,
-      "appointments": created_appointments,
-      "membership": serialize_patient_membership_row(updated_membership) if updated_membership else None,
+      "paymentMethodsConfigured": requested_payment_methods,
     }
   )
+
+
+@app.post("/api/mobile/checkout/finalize-session")
+def mobile_checkout_finalize_session():
+  payload = request.get_json(silent=True) or {}
+  stripe_session_id = str(payload.get("sessionId") or payload.get("stripeSessionId") or "").strip()
+  if not stripe_session_id:
+    return jsonify({"error": "sessionId ist erforderlich."}), 400
+
+  try:
+    result = finalize_patient_checkout_session(stripe_session_id)
+  except ValueError as exc:
+    return jsonify({"error": str(exc)}), 404
+  except RuntimeError as exc:
+    return jsonify({"error": str(exc)}), 503
+  except Exception as exc:
+    return jsonify({"error": f"Checkout konnte nicht finalisiert werden: {exc}"}), 502
+
+  return jsonify(result)
+
+
+@app.get("/mobile/checkout/return")
+def mobile_checkout_return():
+  session_id = str(request.args.get("session_id", "")).strip()
+  status = str(request.args.get("status", "success")).strip().lower()
+  return patient_checkout_return_html(session_id, status)
 
 
 @app.get("/api/clinic/catalog")
@@ -10327,13 +10882,34 @@ def stripe_webhook():
 
   event_type = event.get("type")
   event_object = ((event.get("data") or {}).get("object") or {})
+  event_metadata = event_object.get("metadata") or {}
+  is_patient_checkout = str(event_metadata.get("checkout_flow") or "").strip() == "patient_app_checkout"
 
   if event_type == "checkout.session.completed":
     handle_checkout_session_completed(event_object)
+    if is_patient_checkout:
+      try:
+        finalize_patient_checkout_session(str(event_object.get("id") or ""), stripe_session=event_object)
+      except Exception:
+        pass
   elif event_type == "checkout.session.async_payment_succeeded":
     handle_checkout_session_completed(event_object)
+    if is_patient_checkout:
+      try:
+        finalize_patient_checkout_session(
+          str(event_object.get("id") or ""),
+          stripe_session=event_object,
+          payment_status_override="paid",
+        )
+      except Exception:
+        pass
   elif event_type == "checkout.session.async_payment_failed":
     handle_invoice_event(event_object, default_status="past_due")
+    if is_patient_checkout:
+      mark_patient_checkout_session_failed(
+        str(event_object.get("id") or ""),
+        reason=str(event_object.get("payment_status") or "async_payment_failed"),
+      )
 
   if event_type in {
     "customer.subscription.created",

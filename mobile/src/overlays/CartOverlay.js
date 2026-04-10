@@ -190,6 +190,23 @@ export default function CartOverlay({
               );
             })}
           </View>
+          {selectedCheckoutMethod === 'klarna' && (
+            <View
+              style={[
+                styles.inlineInfoBox,
+                {
+                  backgroundColor: theme.surfaceAlt,
+                  borderColor: theme.border,
+                  shadowColor: theme.shadowColor,
+                },
+              ]}
+            >
+              <Text style={[styles.inlineInfoTitle, { color: theme.text }]}>Klarna Ratenzahlung</Text>
+              <Text style={[styles.inlineInfoText, { color: theme.textMuted }]}>
+                Der finale Klarna-Ratenkauf wird im sicheren Stripe Checkout bestätigt und danach automatisch in Curabo übernommen.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={[styles.mowgliCartOverlayFooter, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>

@@ -121,6 +121,20 @@ function checkoutDefaultPaymentStatus(methodId) {
   return String(methodId || '').trim().toLowerCase() === 'klarna' ? 'pending' : 'paid';
 }
 
+function parseCheckoutReturnUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+  const parsed = Linking.parse(rawUrl);
+  const host = String(parsed?.hostname || parsed?.host || '').replace(/^\/+/, '').toLowerCase();
+  const path = String(parsed?.path || '').replace(/^\/+/, '').toLowerCase();
+  const route = path.startsWith('checkout/') ? path : [host, path].filter(Boolean).join('/');
+  if (route !== 'checkout/success' && route !== 'checkout/cancel') return null;
+  const queryParams = parsed?.queryParams || {};
+  const sessionId = String(queryParams.session_id || queryParams.sessionId || '').trim();
+  const status = route.endsWith('/cancel') ? 'cancel' : 'success';
+  return { status, sessionId };
+}
+
 const HOME_ARTICLES = [
   {
     id: 'art-1',
@@ -1178,6 +1192,42 @@ async function completeMobileCheckout(baseUrl, payload) {
   return parseJsonPayload(text) || {};
 }
 
+async function createMobileCheckoutSession(baseUrl, payload) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/checkout/create-session`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload || {}),
+  }, { timeoutMs: 18000, retries: 1, retryDelayMs: 600 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Stripe Checkout konnte nicht gestartet werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
+async function finalizeMobileCheckoutSession(baseUrl, payload) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/checkout/finalize-session`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload || {}),
+  }, { timeoutMs: 18000, retries: 1, retryDelayMs: 600 });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw buildApiError('Stripe Checkout konnte nicht abgeschlossen werden.', response.status, text);
+  }
+  return parseJsonPayload(text) || {};
+}
+
 async function fetchPatientAppointments(baseUrl, clinicName, memberEmail) {
   const safeBaseUrl = normalizeUrl(baseUrl);
   const safeClinicName = String(clinicName || '').trim();
@@ -1378,11 +1428,17 @@ export default function App() {
   const [cartItems, setCartItems] = useState([]);
   const [cartSyncing, setCartSyncing] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [pendingStripeCheckoutSessionId, setPendingStripeCheckoutSessionId] = useState('');
   const tabFadeAnim = useRef(new Animated.Value(1)).current;
   const liquidShineAnim = useRef(new Animated.Value(-220)).current;
   const floatingAuraAnim = useRef(new Animated.Value(0)).current;
   const clinicSearchRequestRef = useRef(0);
   const mainScrollRef = useRef(null);
+  const checkoutReturnHandledRef = useRef('');
+  const analyticsBaseUrlRef = useRef('');
+  const selectedCheckoutMethodRef = useRef('card');
+  const pendingStripeCheckoutSessionIdRef = useRef('');
+  const checkoutLoadingRef = useRef(false);
   const appSessionId = useMemo(
     () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     []
@@ -2810,6 +2866,76 @@ function continueToAccessStep() {
     setCartItems((prev) => prev.filter((item) => item.id !== itemId));
   }
 
+  function applyCompletedCheckout(payload, paymentMethodText) {
+    const spentCents = Math.max(0, Number(payload?.totalCents || 0));
+    const earnedPoints = Math.max(0, Number(payload?.earnedPoints || 0));
+    const purchasedItems = Array.isArray(payload?.lineItems) ? payload.lineItems : [];
+
+    setPoints((prev) => prev + earnedPoints);
+    setHistory((prev) => [
+      {
+        id: String(payload?.orderId || `purchase-${Date.now()}`),
+        type: 'purchase',
+        title: `${purchasedItems.length || cartItems.length} Behandlung(en) gekauft`,
+        amount: spentCents,
+        createdAt: Date.now(),
+      },
+      ...prev,
+    ]);
+
+    const nextMembership = payload?.membership || null;
+    const createdAppointments = normalizeAppointmentList(payload?.appointments || []);
+    if (nextMembership) {
+      setMembershipStatus(nextMembership);
+      if (nextMembership.membershipId) {
+        setActiveMembership(nextMembership.membershipId);
+      }
+    }
+    if (createdAppointments.length > 0) {
+      setAppointments((prev) => normalizeAppointmentList([...createdAppointments, ...prev]));
+    }
+
+    setCartItems([]);
+    setSelectedTreatment(null);
+    setUnits(1);
+    setPendingStripeCheckoutSessionId('');
+    tapFeedback(8);
+    track(`Kauf abgeschlossen (${paymentMethodText}): ${formatPrice(spentCents)} | +${earnedPoints} Punkte`);
+    Alert.alert(
+      'Kauf erfolgreich',
+      `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}${createdAppointments.length > 0 ? `\nTerminwunsch: ${createdAppointments.length}x in Meine Termine gespeichert.` : ''}`
+    );
+  }
+
+  async function finalizeStripeCheckoutFromReturn(sessionId) {
+    const baseUrlHint = normalizeUrl(analyticsBaseUrlRef.current || analyticsBaseUrl);
+    const safeSessionId = String(sessionId || '').trim();
+    if (!safeSessionId) return;
+    if (checkoutLoadingRef.current) return;
+
+    setCheckoutLoading(true);
+    try {
+      const { value: payload } = await runWithBaseUrlFallback(
+        baseUrlHint,
+        (candidate) => finalizeMobileCheckoutSession(candidate, {
+          sessionId: safeSessionId,
+        }),
+        { preferPublic: shouldPreferPublicBackends }
+      );
+      const resolvedPaymentMethod = String(
+        payload?.paymentMethod || selectedCheckoutMethodRef.current || 'card'
+      )
+        .trim()
+        .toLowerCase();
+      applyCompletedCheckout(payload, checkoutMethodLabel(resolvedPaymentMethod));
+    } catch (error) {
+      checkoutReturnHandledRef.current = '';
+      Alert.alert('Checkout fehlgeschlagen', String(error?.message || error));
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }
+
   async function runCheckout() {
     if (cartItems.length === 0) {
       Alert.alert('Warenkorb leer', 'Bitte wähle zuerst mindestens eine Behandlung.');
@@ -2830,7 +2956,7 @@ function continueToAccessStep() {
 
       setCheckoutLoading(true);
       try {
-        const payload = await completeMobileCheckout(normalized, {
+        const checkoutPayload = {
           clinicName: resolvedClinicName,
           memberEmail: patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase(),
           memberName: patientGuestMode ? '' : String(settingsName || '').trim(),
@@ -2841,48 +2967,44 @@ function continueToAccessStep() {
             treatmentId: String(item.treatmentId || item.id || ''),
             units: Math.max(1, Number(item.units || 1)),
           })),
-        });
+        };
 
-        const spentCents = Math.max(0, Number(payload?.totalCents || 0));
-        const earnedPoints = Math.max(0, Number(payload?.earnedPoints || 0));
-        const purchasedItems = Array.isArray(payload?.lineItems) ? payload.lineItems : [];
-
-        setPoints((prev) => prev + earnedPoints);
-        setHistory((prev) => [
-          {
-            id: String(payload?.orderId || `purchase-${Date.now()}`),
-            type: 'purchase',
-            title: `${purchasedItems.length || cartItems.length} Behandlung(en) gekauft`,
-            amount: spentCents,
-            createdAt: Date.now(),
-          },
-          ...prev,
-        ]);
-
-        const nextMembership = payload?.membership || null;
-        const createdAppointments = normalizeAppointmentList(payload?.appointments || []);
-        if (nextMembership) {
-          setMembershipStatus(nextMembership);
-          if (nextMembership.membershipId) {
-            setActiveMembership(nextMembership.membershipId);
-          }
+        const sessionPayload = await createMobileCheckoutSession(normalized, checkoutPayload);
+        const checkoutUrl = String(sessionPayload?.checkoutUrl || '').trim();
+        const checkoutSessionId = String(sessionPayload?.sessionId || '').trim();
+        if (!checkoutUrl || !checkoutSessionId) {
+          throw new Error('Checkout-URL fehlt.');
         }
-        if (createdAppointments.length > 0) {
-          setAppointments((prev) => normalizeAppointmentList([...createdAppointments, ...prev]));
+        setPendingStripeCheckoutSessionId(checkoutSessionId);
+        const supported = await Linking.canOpenURL(checkoutUrl);
+        if (!supported) {
+          throw new Error('Stripe Checkout kann auf diesem Gerät nicht geöffnet werden.');
         }
-
-        setCartItems([]);
-        setSelectedTreatment(null);
-        setUnits(1);
-
-        tapFeedback(8);
-        track(`Kauf abgeschlossen (${paymentMethodText}): ${formatPrice(spentCents)} | +${earnedPoints} Punkte`);
-        Alert.alert(
-          'Kauf erfolgreich',
-          `Gesamt: ${formatPrice(spentCents)}\nZahlart: ${paymentMethodText}\nVerdiente Punkte: ${earnedPoints}\nBestellnummer: ${String(payload?.orderId || '—')}${createdAppointments.length > 0 ? `\nTerminwunsch: ${createdAppointments.length}x in Meine Termine gespeichert.` : ''}`
-        );
+        await Linking.openURL(checkoutUrl);
       } catch (error) {
-        Alert.alert('Checkout fehlgeschlagen', String(error?.message || error));
+        const fallbackAllowed = paymentMethod !== 'klarna';
+        if (fallbackAllowed) {
+          try {
+            const payload = await completeMobileCheckout(normalized, {
+              clinicName: resolvedClinicName,
+              memberEmail: patientGuestMode ? '' : String(settingsEmail || '').trim().toLowerCase(),
+              memberName: patientGuestMode ? '' : String(settingsName || '').trim(),
+              sessionId: appSessionId,
+              paymentStatus,
+              paymentMethod,
+              cartItems: cartItems.map((item) => ({
+                treatmentId: String(item.treatmentId || item.id || ''),
+                units: Math.max(1, Number(item.units || 1)),
+              })),
+            });
+            applyCompletedCheckout(payload, paymentMethodText);
+            return;
+          } catch (fallbackError) {
+            Alert.alert('Checkout fehlgeschlagen', String(fallbackError?.message || fallbackError));
+          }
+        } else {
+          Alert.alert('Checkout fehlgeschlagen', String(error?.message || error));
+        }
       } finally {
         setCheckoutLoading(false);
       }
@@ -3181,6 +3303,78 @@ function continueToAccessStep() {
 
   useEffect(() => {
     track('App geöffnet', 'app_open');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    analyticsBaseUrlRef.current = analyticsBaseUrl;
+  }, [analyticsBaseUrl]);
+
+  useEffect(() => {
+    selectedCheckoutMethodRef.current = String(selectedCheckoutMethod || 'card').trim().toLowerCase();
+  }, [selectedCheckoutMethod]);
+
+  useEffect(() => {
+    pendingStripeCheckoutSessionIdRef.current = String(pendingStripeCheckoutSessionId || '').trim();
+  }, [pendingStripeCheckoutSessionId]);
+
+  useEffect(() => {
+    checkoutLoadingRef.current = checkoutLoading;
+  }, [checkoutLoading]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function handleCheckoutReturn(rawUrl) {
+      const parsed = parseCheckoutReturnUrl(rawUrl);
+      if (!parsed) return;
+
+      const resolvedSessionId = String(parsed.sessionId || pendingStripeCheckoutSessionIdRef.current || '').trim();
+      const dedupeKey = `${parsed.status}:${resolvedSessionId || 'missing'}`;
+      if (checkoutReturnHandledRef.current === dedupeKey) return;
+      checkoutReturnHandledRef.current = dedupeKey;
+
+      setHeaderSearchOpen(false);
+      setCartSheetOpen(false);
+
+      if (parsed.status === 'cancel') {
+        setPendingStripeCheckoutSessionId('');
+        Alert.alert(
+          'Checkout abgebrochen',
+          'Der Checkout wurde abgebrochen. Du kannst die Behandlung jederzeit erneut starten.'
+        );
+        return;
+      }
+
+      if (!resolvedSessionId) {
+        setPendingStripeCheckoutSessionId('');
+        Alert.alert('Checkout unvollständig', 'Die Stripe-Session fehlt. Bitte versuche den Kauf erneut.');
+        return;
+      }
+
+      await finalizeStripeCheckoutFromReturn(resolvedSessionId);
+    }
+
+    const subscription = Linking.addEventListener('url', (event) => {
+      if (!active) return;
+      const nextUrl = String(event?.url || '').trim();
+      if (!nextUrl) return;
+      void handleCheckoutReturn(nextUrl);
+    });
+
+    Linking.getInitialURL()
+      .then((initialUrl) => {
+        if (!active) return;
+        const nextUrl = String(initialUrl || '').trim();
+        if (!nextUrl) return;
+        void handleCheckoutReturn(nextUrl);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+      subscription?.remove?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
