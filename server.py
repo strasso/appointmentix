@@ -242,6 +242,24 @@ DEFAULT_MOBILE_CATEGORIES = [
   {"id": "injectables", "label": "Injectables"},
   {"id": "premium", "label": "Premium"},
 ]
+BODY_ZONE_DEFINITIONS_V1 = [
+  {"id": "face", "label": "Gesicht"},
+  {"id": "neck", "label": "Hals"},
+  {"id": "chest", "label": "Brust"},
+  {"id": "underarms", "label": "Achseln"},
+  {"id": "upper_arms", "label": "Oberarme"},
+  {"id": "forearms", "label": "Unterarme"},
+  {"id": "hands", "label": "Hände"},
+  {"id": "belly", "label": "Bauch"},
+  {"id": "bikini", "label": "Bikini"},
+  {"id": "intimate", "label": "Intimbereich"},
+  {"id": "upper_legs", "label": "Oberschenkel"},
+  {"id": "knees", "label": "Knie"},
+  {"id": "lower_legs", "label": "Unterschenkel"},
+  {"id": "feet", "label": "Füße"},
+]
+BODY_ZONE_LABELS_BY_ID = {item["id"]: item["label"] for item in BODY_ZONE_DEFINITIONS_V1}
+ALLOWED_BODY_ZONE_IDS = set(BODY_ZONE_LABELS_BY_ID)
 ALLOWED_UPLOAD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_IMAGE_UPLOAD_BYTES = 8 * 1024 * 1024
 IMPORT_MAX_PAGES = 10
@@ -2211,6 +2229,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-basic-glow",
         "name": "Basic Glow",
         "category": "gesicht",
+        "bodyZones": ["face"],
         "priceCents": 11000,
         "memberPriceCents": 0,
         "durationMinutes": 60,
@@ -2220,6 +2239,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-microdermabrasion",
         "name": "Mikrodermabrasion",
         "category": "gesicht",
+        "bodyZones": ["face"],
         "priceCents": 13000,
         "memberPriceCents": 9900,
         "durationMinutes": 60,
@@ -2229,6 +2249,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-med-peeling",
         "name": "Medizinisches Peeling",
         "category": "gesicht",
+        "bodyZones": ["face"],
         "priceCents": 19000,
         "memberPriceCents": 16150,
         "durationMinutes": 50,
@@ -2238,6 +2259,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-microneedling",
         "name": "Microneedling",
         "category": "gesicht",
+        "bodyZones": ["face", "neck"],
         "priceCents": 32500,
         "memberPriceCents": 27625,
         "durationMinutes": 60,
@@ -2247,6 +2269,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-clear-brilliant",
         "name": "Clear + Brilliant Laser",
         "category": "premium",
+        "bodyZones": ["face", "neck"],
         "priceCents": 59000,
         "memberPriceCents": 53100,
         "durationMinutes": 45,
@@ -2256,6 +2279,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-fraxel",
         "name": "Fraxel Dual Laser",
         "category": "premium",
+        "bodyZones": ["face", "neck", "chest"],
         "priceCents": 75000,
         "memberPriceCents": 67500,
         "durationMinutes": 60,
@@ -2265,6 +2289,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-laser-hair",
         "name": "Laser-Haarentfernung",
         "category": "haare",
+        "bodyZones": ["underarms", "bikini", "upper_legs", "lower_legs"],
         "priceCents": 9000,
         "memberPriceCents": 7650,
         "durationMinutes": 30,
@@ -2274,6 +2299,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-prp",
         "name": "PRP Mesohair",
         "category": "haare",
+        "bodyZones": [],
         "priceCents": 68000,
         "memberPriceCents": 61200,
         "durationMinutes": 60,
@@ -2283,6 +2309,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-botox",
         "name": "Botox Gesicht",
         "category": "injectables",
+        "bodyZones": ["face"],
         "priceCents": 36000,
         "memberPriceCents": 32400,
         "durationMinutes": 30,
@@ -2292,6 +2319,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-lippen",
         "name": "Hyaluron Lippen",
         "category": "injectables",
+        "bodyZones": ["face"],
         "priceCents": 58000,
         "memberPriceCents": 52200,
         "durationMinutes": 45,
@@ -2301,6 +2329,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-thermage-face",
         "name": "Thermage Gesicht + Hals",
         "category": "premium",
+        "bodyZones": ["face", "neck"],
         "priceCents": 390000,
         "memberPriceCents": 370500,
         "durationMinutes": 75,
@@ -2310,6 +2339,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-cellulite-awt",
         "name": "Cellulite AWT",
         "category": "koerper",
+        "bodyZones": ["belly", "upper_legs"],
         "priceCents": 9000,
         "memberPriceCents": 8100,
         "durationMinutes": 30,
@@ -2343,6 +2373,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-skin-refresh",
         "name": "Skin Refresh",
         "category": "gesicht",
+        "bodyZones": ["face"],
         "priceCents": 14900,
         "memberPriceCents": 0,
         "durationMinutes": 45,
@@ -2352,6 +2383,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-laser-basic",
         "name": "Laser Basic",
         "category": "haare",
+        "bodyZones": ["underarms", "upper_legs", "lower_legs"],
         "priceCents": 9900,
         "memberPriceCents": 8500,
         "durationMinutes": 30,
@@ -2361,6 +2393,7 @@ def build_default_mobile_catalog(clinic_name: str) -> dict:
         "id": "t-injectables-classic",
         "name": "Injectables Classic",
         "category": "injectables",
+        "bodyZones": ["face"],
         "priceCents": 29000,
         "memberPriceCents": 26100,
         "durationMinutes": 30,
@@ -2443,10 +2476,11 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
 
   def default_bundle() -> dict:
     default_catalog = build_default_mobile_catalog(clinic_name)
+    default_treatments = normalize_treatment_list(default_catalog["treatments"])
     return apply_auto_gallery_to_catalog(
       {
         "categories": default_catalog["categories"],
-        "treatments": default_catalog["treatments"],
+        "treatments": default_treatments,
         "memberships": default_catalog["memberships"],
         "rewardActions": default_catalog["rewardActions"],
         "rewardRedeems": default_catalog["rewardRedeems"],
@@ -2479,7 +2513,7 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
 
     default_catalog = build_default_mobile_catalog(clinic_name)
     categories = parse_json_list(catalog_row["categories_json"])
-    treatments = parse_json_list(catalog_row["treatments_json"])
+    treatments = normalize_treatment_list(parse_json_list(catalog_row["treatments_json"]))
     memberships = parse_json_list(catalog_row["memberships_json"])
     reward_actions = parse_json_list(catalog_row["reward_actions_json"])
     reward_redeems = parse_json_list(catalog_row["reward_redeems_json"])
@@ -2488,7 +2522,7 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
     return apply_auto_gallery_to_catalog(
       {
         "categories": categories or default_catalog["categories"],
-        "treatments": treatments or default_catalog["treatments"],
+        "treatments": treatments or normalize_treatment_list(default_catalog["treatments"]),
         "memberships": memberships or default_catalog["memberships"],
         "rewardActions": reward_actions or default_catalog["rewardActions"],
         "rewardRedeems": reward_redeems or default_catalog["rewardRedeems"],
@@ -5286,6 +5320,88 @@ def normalize_catalog_category_id(value: object) -> str:
   return normalize_basic_slug_text(value) or "gesicht"
 
 
+BODY_ZONE_NORMALIZATION_MAP = {
+  "face": "face",
+  "gesicht": "face",
+  "neck": "neck",
+  "hals": "neck",
+  "chest": "chest",
+  "brust": "chest",
+  "underarms": "underarms",
+  "achseln": "underarms",
+  "upper arms": "upper_arms",
+  "upper_arms": "upper_arms",
+  "oberarme": "upper_arms",
+  "forearms": "forearms",
+  "unterarme": "forearms",
+  "hands": "hands",
+  "haende": "hands",
+  "hande": "hands",
+  "belly": "belly",
+  "bauch": "belly",
+  "bikini": "bikini",
+  "intimate": "intimate",
+  "intimbereich": "intimate",
+  "upper legs": "upper_legs",
+  "upper_legs": "upper_legs",
+  "oberschenkel": "upper_legs",
+  "knees": "knees",
+  "knie": "knees",
+  "lower legs": "lower_legs",
+  "lower_legs": "lower_legs",
+  "unterschenkel": "lower_legs",
+  "feet": "feet",
+  "fuesse": "feet",
+  "fusse": "feet",
+  "fusse": "feet",
+}
+
+
+def normalize_body_zone_id(value: object) -> str:
+  normalized = normalize_keyword_text(value)
+  if normalized in BODY_ZONE_NORMALIZATION_MAP:
+    return BODY_ZONE_NORMALIZATION_MAP[normalized]
+  compact = normalized.replace(" ", "_")
+  if compact in ALLOWED_BODY_ZONE_IDS:
+    return compact
+  return ""
+
+
+def normalize_body_zones(value: object) -> list[str]:
+  if not isinstance(value, list):
+    return []
+  seen: set[str] = set()
+  normalized: list[str] = []
+  for item in value:
+    zone_id = normalize_body_zone_id(item)
+    if not zone_id or zone_id in seen:
+      continue
+    seen.add(zone_id)
+    normalized.append(zone_id)
+  ordered = [zone_id for zone_id in BODY_ZONE_LABELS_BY_ID if zone_id in seen]
+  if len(ordered) == len(normalized):
+    return ordered
+  return normalized
+
+
+def normalize_treatment_body_zones(treatment: dict) -> dict:
+  if not isinstance(treatment, dict):
+    return {}
+  normalized = dict(treatment)
+  normalized["bodyZones"] = normalize_body_zones(normalized.get("bodyZones"))
+  return normalized
+
+
+def normalize_treatment_list(treatments: object) -> list[dict]:
+  if not isinstance(treatments, list):
+    return []
+  return [
+    normalize_treatment_body_zones(item)
+    for item in treatments
+    if isinstance(item, dict)
+  ]
+
+
 def parse_price_text_to_cents(value: object) -> int | None:
   raw_text = clean_import_text(value, 40).lower()
   if not raw_text:
@@ -6273,7 +6389,7 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
   if not catalog_row:
     return {
       "categories": default_catalog["categories"],
-      "treatments": default_catalog["treatments"],
+      "treatments": normalize_treatment_list(default_catalog["treatments"]),
       "memberships": default_catalog["memberships"],
       "rewardActions": default_catalog["rewardActions"],
       "rewardRedeems": default_catalog["rewardRedeems"],
@@ -6282,7 +6398,7 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
 
   return {
     "categories": parse_json_list(catalog_row["categories_json"]) or default_catalog["categories"],
-    "treatments": parse_json_list(catalog_row["treatments_json"]) or default_catalog["treatments"],
+    "treatments": normalize_treatment_list(parse_json_list(catalog_row["treatments_json"])) or normalize_treatment_list(default_catalog["treatments"]),
     "memberships": parse_json_list(catalog_row["memberships_json"]) or default_catalog["memberships"],
     "rewardActions": parse_json_list(catalog_row["reward_actions_json"]) or default_catalog["rewardActions"],
     "rewardRedeems": parse_json_list(catalog_row["reward_redeems_json"]) or default_catalog["rewardRedeems"],
@@ -6292,6 +6408,7 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
 
 def write_clinic_catalog_bundle(conn: DBConnectionAdapter, clinic_id: int, clinic_name: str, catalog: dict) -> None:
   ensure_clinic_catalog_row(conn, clinic_id, clinic_name)
+  treatments = normalize_treatment_list(catalog.get("treatments", []))
   conn.execute(
     """
     UPDATE clinic_catalogs
@@ -6307,7 +6424,7 @@ def write_clinic_catalog_bundle(conn: DBConnectionAdapter, clinic_id: int, clini
     """,
     (
       serialize_json_list(catalog.get("categories", [])),
-      serialize_json_list(catalog.get("treatments", [])),
+      serialize_json_list(treatments),
       serialize_json_list(catalog.get("memberships", [])),
       serialize_json_list(catalog.get("rewardActions", [])),
       serialize_json_list(catalog.get("rewardRedeems", [])),
@@ -6363,6 +6480,7 @@ def build_treatments_from_import_data(extracted: dict, existing_treatments: list
         "id": treatment_id,
         "name": title,
         "category": str(existing.get("category") or infer_import_treatment_category_id(title)),
+        "bodyZones": normalize_body_zones(existing.get("bodyZones")),
         "priceCents": int(standard_cents),
         "memberPriceCents": int(member_price_cents or 0),
         "durationMinutes": int(parse_amount_cents(existing.get("durationMinutes")) or 30),
@@ -6406,10 +6524,12 @@ def apply_imported_services_to_clinic_catalog(conn: DBConnectionAdapter, clinic_
   normalized_treatments = []
   for treatment in imported_treatments:
     normalized_treatments.append(
-      {
-        **treatment,
-        "category": normalize_catalog_category_id(treatment.get("category")),
-      }
+      normalize_treatment_body_zones(
+        {
+          **treatment,
+          "category": normalize_catalog_category_id(treatment.get("category")),
+        }
+      )
     )
 
   updated_catalog = {
@@ -9066,7 +9186,7 @@ def update_clinic_catalog():
 
   try:
     categories = resolved_list("categories", 20)
-    treatments = resolved_list("treatments", 300)
+    treatments = normalize_treatment_list(resolved_list("treatments", 300))
     memberships = resolved_list("memberships", 40)
     reward_actions = resolved_list("rewardActions", 80)
     reward_redeems = resolved_list("rewardRedeems", 80)
@@ -9189,7 +9309,7 @@ def import_clinic_catalog():
 
   try:
     categories = resolved_list("categories", 20)
-    treatments = resolved_list("treatments", 300)
+    treatments = normalize_treatment_list(resolved_list("treatments", 300))
     memberships = resolved_list("memberships", 40)
     reward_actions = resolved_list("rewardActions", 80)
     reward_redeems = resolved_list("rewardRedeems", 80)

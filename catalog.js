@@ -38,6 +38,57 @@ const CATEGORY_ID_UI_ALIASES = {
 const CATEGORY_ID_STORAGE_ALIASES = {
   korper: "koerper",
 };
+const BODY_ZONE_OPTIONS = [
+  { id: "face", label: "Gesicht" },
+  { id: "neck", label: "Hals" },
+  { id: "chest", label: "Brust" },
+  { id: "underarms", label: "Achseln" },
+  { id: "upper_arms", label: "Oberarme" },
+  { id: "forearms", label: "Unterarme" },
+  { id: "hands", label: "Hände" },
+  { id: "belly", label: "Bauch" },
+  { id: "bikini", label: "Bikini" },
+  { id: "intimate", label: "Intimbereich" },
+  { id: "upper_legs", label: "Oberschenkel" },
+  { id: "knees", label: "Knie" },
+  { id: "lower_legs", label: "Unterschenkel" },
+  { id: "feet", label: "Füße" },
+];
+const BODY_ZONE_LABEL_BY_ID = Object.fromEntries(BODY_ZONE_OPTIONS.map((item) => [item.id, item.label]));
+const BODY_ZONE_ALIAS_BY_TOKEN = {
+  face: "face",
+  gesicht: "face",
+  neck: "neck",
+  hals: "neck",
+  chest: "chest",
+  brust: "chest",
+  underarms: "underarms",
+  achseln: "underarms",
+  "upper arms": "upper_arms",
+  upper_arms: "upper_arms",
+  oberarme: "upper_arms",
+  forearms: "forearms",
+  unterarme: "forearms",
+  hands: "hands",
+  haende: "hands",
+  hande: "hands",
+  belly: "belly",
+  bauch: "belly",
+  bikini: "bikini",
+  intimate: "intimate",
+  intimbereich: "intimate",
+  "upper legs": "upper_legs",
+  upper_legs: "upper_legs",
+  oberschenkel: "upper_legs",
+  knees: "knees",
+  knie: "knees",
+  "lower legs": "lower_legs",
+  lower_legs: "lower_legs",
+  unterschenkel: "lower_legs",
+  feet: "feet",
+  fuesse: "feet",
+  fusse: "feet",
+};
 
 function showToast(message) {
   toast.textContent = message;
@@ -143,6 +194,52 @@ function storeCategoryId(value) {
   return CATEGORY_ID_STORAGE_ALIASES[normalized] || normalized;
 }
 
+function normalizeBodyZoneToken(value) {
+  let normalized = String(value || "").trim().toLowerCase();
+  normalized = normalized
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized;
+}
+
+function normalizeBodyZoneId(value) {
+  const token = normalizeBodyZoneToken(value);
+  if (!token) return "";
+  if (BODY_ZONE_ALIAS_BY_TOKEN[token]) return BODY_ZONE_ALIAS_BY_TOKEN[token];
+  const compact = token.replace(/ /g, "_");
+  if (BODY_ZONE_LABEL_BY_ID[compact]) return compact;
+  return "";
+}
+
+function normalizeBodyZones(value) {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  raw.forEach((entry) => {
+    const zoneId = normalizeBodyZoneId(entry);
+    if (zoneId) seen.add(zoneId);
+  });
+  return BODY_ZONE_OPTIONS.map((item) => item.id).filter((zoneId) => seen.has(zoneId));
+}
+
+function renderBodyZoneChips(selected = []) {
+  const selectedSet = new Set(normalizeBodyZones(selected));
+  return BODY_ZONE_OPTIONS
+    .map(
+      (item) => `
+        <label class="body-zone-chip ${selectedSet.has(item.id) ? "active" : ""}">
+          <input type="checkbox" data-body-zone-option value="${escapeAttr(item.id)}" ${selectedSet.has(item.id) ? "checked" : ""}>
+          <span>${escapeAttr(item.label)}</span>
+        </label>
+      `
+    )
+    .join("");
+}
+
 function categoryCard(item = {}) {
   return `
     <div class="item-card" data-kind="category">
@@ -187,6 +284,12 @@ function treatmentCard(item = {}) {
       <label>Beschreibung
         <textarea data-field="description" placeholder="Kurzbeschreibung">${escapeAttr(item.description)}</textarea>
       </label>
+      <div>
+        <label>Body-Zonen</label>
+        <div class="body-zone-picker">
+          ${renderBodyZoneChips(item.bodyZones)}
+        </div>
+      </div>
       <div class="field-grid-2">
         <label>Bild URL
           <input data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="/uploads/clinic_x/beispiel.jpg">
@@ -372,6 +475,9 @@ function collectCatalogFromDom() {
       memberPriceCents: toInt(card.querySelector('[data-field="memberPriceCents"]')?.value, 0),
       description: card.querySelector('[data-field="description"]')?.value.trim() || "",
       imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+      bodyZones: Array.from(card.querySelectorAll('input[data-body-zone-option]:checked'))
+        .map((input) => normalizeBodyZoneId(input.value))
+        .filter(Boolean),
     }))
     .filter((item) => item.id && item.name && item.category);
 

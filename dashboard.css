@@ -399,6 +399,58 @@ a.btn:visited {
   line-height: 1.45;
 }
 
+.body-zone-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 280px;
+}
+
+.body-zone-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.body-zone-chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.body-zone-chip span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 32, 51, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.body-zone-chip:hover span {
+  border-color: rgba(22, 32, 51, 0.16);
+  color: var(--ink);
+}
+
+.body-zone-chip input:checked + span {
+  background: linear-gradient(180deg, #eff5ff, #e7effb);
+  border-color: rgba(108, 138, 182, 0.18);
+  color: #33527d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.body-zone-chip input:focus-visible + span {
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
 .color-field {
   gap: 8px;
 }

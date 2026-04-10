@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import FaceContourIcon from '../components/FaceContourIcon';
 import HairFollicleIcon from '../components/HairFollicleIcon';
 import InjectableIcon from '../components/InjectableIcon';
+import BodyZoneSelector from '../components/BodyZoneSelector';
 import { createMowgliTheme } from '../theme/tokens';
+import { FRONT_BODY_ZONES, getBodyZoneLabel } from '../config/bodyZones/frontZones';
 
 function HeaderAction({ styles, theme, icon, onPress, badge = false }) {
   return (
@@ -156,6 +158,10 @@ export default function ShopScreen({
   setCategoryId,
   categoryIconName,
   selectedCategory,
+  bodyMapEnabled,
+  enabledBodyZoneIds,
+  activeBodyZoneId,
+  setActiveBodyZoneId,
   browseItems,
   openTreatment,
   preferredTreatmentImage,
@@ -186,6 +192,18 @@ export default function ShopScreen({
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sortMode, setSortMode] = useState('featured');
+  const categoryLabelMap = useMemo(
+    () => treatmentCategories.reduce((acc, item) => {
+      if (item?.id) acc[String(item.id)] = String(item.label || item.id);
+      return acc;
+    }, {}),
+    [treatmentCategories]
+  );
+  const activeZoneLabel = getBodyZoneLabel(activeBodyZoneId);
+  const visibleZoneIds = useMemo(
+    () => FRONT_BODY_ZONES.map((zone) => zone.id).filter((zoneId) => Array.isArray(enabledBodyZoneIds) && enabledBodyZoneIds.includes(zoneId)),
+    [enabledBodyZoneIds]
+  );
 
   const sortedBrowseItems = useMemo(() => {
     const items = [...browseItems];
@@ -224,60 +242,153 @@ export default function ShopScreen({
 
       {shopTab === 'browse' && !selectedTreatment && (
         <View style={styles.mowgliShopSection}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 }}>
-            <Pressable
-              onPress={() => setFiltersOpen((prev) => !prev)}
-              style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
-            >
-              <Ionicons name="options-outline" size={16} color={theme.textMuted} />
-              <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>Filter</Text>
-            </Pressable>
-            <Pressable
-              onPress={cycleSortMode}
-              style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
-            >
-              <Ionicons name="swap-vertical-outline" size={16} color={theme.textMuted} />
-              <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>{sortLabel}</Text>
-            </Pressable>
-          </View>
+          {bodyMapEnabled ? (
+            <>
+              <View style={localStyles.discoveryHeader}>
+                <View style={localStyles.discoveryCopy}>
+                  <Text style={[styles.mowgliSectionTitle, { color: theme.text }]}>Behandlungsbereiche</Text>
+                  <Text style={[localStyles.discoveryBody, { color: theme.textMuted }]}>
+                    {activeZoneLabel
+                      ? `${activeZoneLabel} · ${sortedBrowseItems.length} passende Treatments`
+                      : 'Wähle einen Körperbereich oder nutze die Suche, um Treatments direkt zu finden.'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={cycleSortMode}
+                  style={({ pressed }) => [pressed && styles.mowgliLiftSoft, localStyles.sortButton]}
+                >
+                  <Ionicons name="swap-vertical-outline" size={16} color={theme.textMuted} />
+                  <Text style={[localStyles.sortButtonText, { color: theme.textMuted }]}>{sortLabel}</Text>
+                </Pressable>
+              </View>
 
-          {filtersOpen && (
-            <View style={styles.mowgliCategoryPillRow}>
-              {treatmentCategories.map((cat) => (
-                <CategoryPill
-                  key={cat.id}
-                  styles={styles}
-                  theme={theme}
-                  cat={cat}
-                  active={categoryId === cat.id}
-                  categoryIconName={categoryIconName}
-                  onPress={() => setCategoryId(cat.id)}
-                />
-              ))}
-            </View>
-          )}
-
-          <View style={styles.mowgliProductGrid}>
-            {sortedBrowseItems.map((item) => (
-              <ProductCard
-                key={item.id}
-                styles={styles}
+              <BodyZoneSelector
                 theme={theme}
-                item={item}
-                onPress={openTreatment}
-                getImageUrl={preferredTreatmentImage}
-                formatPrice={formatPrice}
-                categoryLabel={selectedCategory?.label || item.category || 'Treatment'}
+                zones={FRONT_BODY_ZONES}
+                enabledZoneIds={visibleZoneIds}
+                activeZoneId={activeBodyZoneId}
+                onZoneSelect={setActiveBodyZoneId}
               />
-            ))}
-          </View>
 
-          {sortedBrowseItems.length === 0 && (
-            <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="search-outline" size={18} color={theme.textMuted} />
-              <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Keine Treatments in dieser Kategorie</Text>
-              <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>Passe den Filter an oder wähle eine andere Kategorie.</Text>
-            </View>
+              <View style={localStyles.zoneChipRow}>
+                {visibleZoneIds.map((zoneId) => {
+                  const active = zoneId === activeBodyZoneId;
+                  return (
+                    <Pressable
+                      key={zoneId}
+                      style={({ pressed }) => [
+                        localStyles.zoneChip,
+                        {
+                          backgroundColor: active ? theme.accentSurface : theme.surfaceAlt,
+                          borderColor: active ? theme.accentBorderStrong : theme.border,
+                        },
+                        pressed && styles.mowgliLiftSoft,
+                      ]}
+                      onPress={() => setActiveBodyZoneId(active ? null : zoneId)}
+                    >
+                      <Text style={[localStyles.zoneChipText, { color: active ? theme.accent : theme.textSoft }]}>
+                        {getBodyZoneLabel(zoneId)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {!activeBodyZoneId && (
+                <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Ionicons name="body-outline" size={18} color={theme.textMuted} />
+                  <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Körperbereich auswählen</Text>
+                  <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>
+                    Tippe auf das Modell oder wähle einen Bereich unten, um passende Treatments zu sehen.
+                  </Text>
+                </View>
+              )}
+
+              {!!activeBodyZoneId && (
+                <View style={styles.mowgliProductGrid}>
+                  {sortedBrowseItems.map((item) => (
+                    <ProductCard
+                      key={item.id}
+                      styles={styles}
+                      theme={theme}
+                      item={item}
+                      onPress={openTreatment}
+                      getImageUrl={preferredTreatmentImage}
+                      formatPrice={formatPrice}
+                      categoryLabel={categoryLabelMap[item.category] || item.category || activeZoneLabel || 'Treatment'}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {!!activeBodyZoneId && sortedBrowseItems.length === 0 && (
+                <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Ionicons name="search-outline" size={18} color={theme.textMuted} />
+                  <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Noch keine Treatments für {activeZoneLabel}</Text>
+                  <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>
+                    Diese Zone ist angelegt, aber für diese Klinik derzeit noch keinem Treatment zugeordnet.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 }}>
+                <Pressable
+                  onPress={() => setFiltersOpen((prev) => !prev)}
+                  style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+                >
+                  <Ionicons name="options-outline" size={16} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>Filter</Text>
+                </Pressable>
+                <Pressable
+                  onPress={cycleSortMode}
+                  style={({ pressed }) => [pressed && styles.mowgliLiftSoft, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+                >
+                  <Ionicons name="swap-vertical-outline" size={16} color={theme.textMuted} />
+                  <Text style={{ color: theme.textMuted, fontSize: 13, fontWeight: '500' }}>{sortLabel}</Text>
+                </Pressable>
+              </View>
+
+              {filtersOpen && (
+                <View style={styles.mowgliCategoryPillRow}>
+                  {treatmentCategories.map((cat) => (
+                    <CategoryPill
+                      key={cat.id}
+                      styles={styles}
+                      theme={theme}
+                      cat={cat}
+                      active={categoryId === cat.id}
+                      categoryIconName={categoryIconName}
+                      onPress={() => setCategoryId(cat.id)}
+                    />
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.mowgliProductGrid}>
+                {sortedBrowseItems.map((item) => (
+                  <ProductCard
+                    key={item.id}
+                    styles={styles}
+                    theme={theme}
+                    item={item}
+                    onPress={openTreatment}
+                    getImageUrl={preferredTreatmentImage}
+                    formatPrice={formatPrice}
+                    categoryLabel={selectedCategory?.label || categoryLabelMap[item.category] || item.category || 'Treatment'}
+                  />
+                ))}
+              </View>
+
+              {sortedBrowseItems.length === 0 && (
+                <View style={[styles.mowgliEmptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Ionicons name="search-outline" size={18} color={theme.textMuted} />
+                  <Text style={[styles.mowgliEmptyTitle, { color: theme.text }]}>Keine Treatments in dieser Kategorie</Text>
+                  <Text style={[styles.mowgliEmptyBody, { color: theme.textMuted }]}>Passe den Filter an oder wähle eine andere Kategorie.</Text>
+                </View>
+              )}
+            </>
           )}
         </View>
       )}
@@ -568,3 +679,48 @@ export default function ShopScreen({
     </View>
   );
 }
+
+const localStyles = StyleSheet.create({
+  discoveryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+  discoveryCopy: {
+    flex: 1,
+    gap: 5,
+  },
+  discoveryBody: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 6,
+  },
+  sortButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  zoneChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  zoneChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  zoneChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+});

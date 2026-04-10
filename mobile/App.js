@@ -28,6 +28,7 @@ import AmbientBackground from './src/components/AmbientBackground';
 import BottomNavigation from './src/components/BottomNavigation';
 import HeaderSearchOverlay from './src/overlays/HeaderSearchOverlay';
 import CartOverlay from './src/overlays/CartOverlay';
+import { sanitizeBodyZones } from './src/config/bodyZones/frontZones';
 import {
   THEME,
   SOFT_CARD_SHADOW,
@@ -336,6 +337,21 @@ const TREATMENTS = [
       'Akustische Wellentherapie zur Verbesserung der Hautstruktur bei Cellulite.',
   },
 ];
+
+const DEFAULT_TREATMENT_BODY_ZONES = {
+  't-basic-glow': ['face'],
+  't-microdermabrasion': ['face'],
+  't-med-peeling': ['face'],
+  't-microneedling': ['face', 'neck'],
+  't-clear-brilliant': ['face', 'neck'],
+  't-fraxel': ['face', 'neck', 'chest'],
+  't-laser-hair': ['underarms', 'bikini', 'upper_legs', 'lower_legs'],
+  't-prp': [],
+  't-botox': ['face'],
+  't-lippen': ['face'],
+  't-thermage-face': ['face', 'neck'],
+  't-cellulite-awt': ['belly', 'upper_legs'],
+};
 
 const REWARD_ACTIONS = [
   { id: 'referral', label: 'Freund:in werben', points: 150 },
@@ -646,6 +662,25 @@ function normalizeHomeArticles(baseUrl, articles) {
     heroImageUrl: absolutizeMediaUrl(baseUrl, article?.heroImageUrl),
     coverImageUrl: absolutizeMediaUrl(baseUrl, article?.coverImageUrl),
     thumbnailUrl: absolutizeMediaUrl(baseUrl, article?.thumbnailUrl),
+  }));
+}
+
+function resolveTreatmentBodyZones(treatment) {
+  const explicit = sanitizeBodyZones(treatment?.bodyZones);
+  if (explicit.length) return explicit;
+  const fallback = DEFAULT_TREATMENT_BODY_ZONES[String(treatment?.id || '').trim()] || [];
+  return sanitizeBodyZones(fallback);
+}
+
+function normalizeTreatmentRows(baseUrl, items) {
+  const safeList = Array.isArray(items) ? items : [];
+  return safeList.map((item) => ({
+    ...item,
+    bodyZones: resolveTreatmentBodyZones(item),
+    imageUrl: absolutizeMediaUrl(baseUrl, item?.imageUrl),
+    galleryUrls: Array.isArray(item?.galleryUrls)
+      ? item.galleryUrls.map((entry) => absolutizeMediaUrl(baseUrl, entry)).filter(Boolean)
+      : [],
   }));
 }
 
@@ -1360,6 +1395,7 @@ export default function App() {
   const [rewardsView, setRewardsView] = useState('active');
   const [appointmentSegment, setAppointmentSegment] = useState('upcoming');
   const [categoryId, setCategoryId] = useState('gesicht');
+  const [activeBodyZoneId, setActiveBodyZoneId] = useState(null);
   const [selectedTreatment, setSelectedTreatment] = useState(null);
   const [selectedHomeArticle, setSelectedHomeArticle] = useState(null);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -1368,7 +1404,7 @@ export default function App() {
   const [clinicProfile, setClinicProfile] = useState(CLINIC);
   const [homeArticles, setHomeArticles] = useState(HOME_ARTICLES);
   const [treatmentCategories, setTreatmentCategories] = useState(TREATMENT_CATEGORIES);
-  const [treatments, setTreatments] = useState(TREATMENTS);
+  const [treatments, setTreatments] = useState(() => normalizeTreatmentRows('', TREATMENTS));
   const [memberships, setMemberships] = useState(MEMBERSHIPS);
   const [rewardActions, setRewardActions] = useState(REWARD_ACTIONS);
   const [rewardRedeems, setRewardRedeems] = useState(REWARD_REDEEMS);
@@ -1456,10 +1492,27 @@ export default function App() {
     return memberships.find((item) => item.id === activeMembership) || memberships[0] || fallback;
   }, [activeMembership, memberships]);
 
-  const browseItems = useMemo(
-    () => treatments.filter((item) => item.category === categoryId),
-    [categoryId, treatments]
-  );
+  const enabledBodyZoneIds = useMemo(() => {
+    const seen = new Set();
+    for (const treatment of treatments) {
+      const zones = Array.isArray(treatment?.bodyZones) ? treatment.bodyZones : [];
+      zones.forEach((zoneId) => {
+        const normalized = String(zoneId || '').trim().toLowerCase();
+        if (normalized) seen.add(normalized);
+      });
+    }
+    return Array.from(seen);
+  }, [treatments]);
+
+  const bodyMapEnabled = enabledBodyZoneIds.length > 0;
+
+  const browseItems = useMemo(() => {
+    if (bodyMapEnabled) {
+      if (!activeBodyZoneId) return [];
+      return treatments.filter((item) => Array.isArray(item.bodyZones) && item.bodyZones.includes(activeBodyZoneId));
+    }
+    return treatments.filter((item) => item.category === categoryId);
+  }, [activeBodyZoneId, bodyMapEnabled, categoryId, treatments]);
 
   const selectedAppointmentImageUrl = useMemo(() => {
     if (!selectedAppointment?.treatmentId) return '';
@@ -1607,6 +1660,16 @@ export default function App() {
     if (!short) return 'Membership';
     return `${short} VIP`;
   }, [clinicProfile?.shortName]);
+
+  useEffect(() => {
+    if (!bodyMapEnabled) {
+      if (activeBodyZoneId !== null) setActiveBodyZoneId(null);
+      return;
+    }
+    if (activeBodyZoneId && !enabledBodyZoneIds.includes(activeBodyZoneId)) {
+      setActiveBodyZoneId(null);
+    }
+  }, [activeBodyZoneId, bodyMapEnabled, enabledBodyZoneIds]);
 
   const totalCartCents = useMemo(
     () => cartItems.reduce((sum, item) => sum + item.totalCents, 0),
@@ -1901,15 +1964,10 @@ export default function App() {
     setTreatmentCategories(nextCategories);
     setCategoryId(nextCategories[0]?.id || 'gesicht');
 
-    const normalizedTreatments = nextTreatments.map((item) => ({
-        ...item,
-        imageUrl: absolutizeMediaUrl(normalized, item.imageUrl),
-        galleryUrls: Array.isArray(item.galleryUrls)
-          ? item.galleryUrls.map((entry) => absolutizeMediaUrl(normalized, entry)).filter(Boolean)
-          : [],
-      }));
+    const normalizedTreatments = normalizeTreatmentRows(normalized, nextTreatments);
     setTreatments(normalizedTreatments);
     setSelectedTreatment(null);
+    setActiveBodyZoneId(null);
 
     setMemberships(nextMemberships);
     const fallbackMembership = nextMemberships[0];
@@ -3815,6 +3873,10 @@ function continueToAccessStep() {
             setCategoryId={setCategoryId}
             categoryIconName={categoryIconName}
             selectedCategory={selectedCategory}
+            bodyMapEnabled={bodyMapEnabled}
+            enabledBodyZoneIds={enabledBodyZoneIds}
+            activeBodyZoneId={activeBodyZoneId}
+            setActiveBodyZoneId={setActiveBodyZoneId}
             selectedCategoryMeta={selectedCategoryMeta}
             browseItems={browseItems}
             openTreatment={openTreatment}

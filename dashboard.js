@@ -130,6 +130,57 @@ const CATEGORY_ID_UI_ALIASES = {
 const CATEGORY_ID_STORAGE_ALIASES = {
   korper: "koerper",
 };
+const BODY_ZONE_OPTIONS = [
+  { id: "face", label: "Gesicht" },
+  { id: "neck", label: "Hals" },
+  { id: "chest", label: "Brust" },
+  { id: "underarms", label: "Achseln" },
+  { id: "upper_arms", label: "Oberarme" },
+  { id: "forearms", label: "Unterarme" },
+  { id: "hands", label: "Hände" },
+  { id: "belly", label: "Bauch" },
+  { id: "bikini", label: "Bikini" },
+  { id: "intimate", label: "Intimbereich" },
+  { id: "upper_legs", label: "Oberschenkel" },
+  { id: "knees", label: "Knie" },
+  { id: "lower_legs", label: "Unterschenkel" },
+  { id: "feet", label: "Füße" },
+];
+const BODY_ZONE_LABEL_BY_ID = Object.fromEntries(BODY_ZONE_OPTIONS.map((item) => [item.id, item.label]));
+const BODY_ZONE_ALIAS_BY_TOKEN = {
+  face: "face",
+  gesicht: "face",
+  neck: "neck",
+  hals: "neck",
+  chest: "chest",
+  brust: "chest",
+  underarms: "underarms",
+  achseln: "underarms",
+  "upper arms": "upper_arms",
+  upper_arms: "upper_arms",
+  oberarme: "upper_arms",
+  forearms: "forearms",
+  unterarme: "forearms",
+  hands: "hands",
+  haende: "hands",
+  hande: "hands",
+  belly: "belly",
+  bauch: "belly",
+  bikini: "bikini",
+  intimate: "intimate",
+  intimbereich: "intimate",
+  "upper legs": "upper_legs",
+  upper_legs: "upper_legs",
+  oberschenkel: "upper_legs",
+  knees: "knees",
+  knie: "knees",
+  "lower legs": "lower_legs",
+  lower_legs: "lower_legs",
+  unterschenkel: "lower_legs",
+  feet: "feet",
+  fuesse: "feet",
+  fusse: "feet",
+};
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -202,6 +253,59 @@ function displayCategoryId(value) {
 function storeCategoryId(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return CATEGORY_ID_STORAGE_ALIASES[normalized] || normalized;
+}
+
+function normalizeBodyZoneToken(value) {
+  let normalized = String(value || "").trim().toLowerCase();
+  normalized = normalized
+    .replaceAll("ä", "ae")
+    .replaceAll("ö", "oe")
+    .replaceAll("ü", "ue")
+    .replaceAll("ß", "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return normalized;
+}
+
+function normalizeBodyZoneId(value) {
+  const token = normalizeBodyZoneToken(value);
+  if (!token) return "";
+  if (BODY_ZONE_ALIAS_BY_TOKEN[token]) return BODY_ZONE_ALIAS_BY_TOKEN[token];
+  const compact = token.replace(/ /g, "_");
+  if (BODY_ZONE_LABEL_BY_ID[compact]) return compact;
+  return "";
+}
+
+function normalizeBodyZones(value) {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  const normalized = [];
+  raw.forEach((entry) => {
+    const zoneId = normalizeBodyZoneId(entry);
+    if (!zoneId || seen.has(zoneId)) return;
+    seen.add(zoneId);
+    normalized.push(zoneId);
+  });
+  return BODY_ZONE_OPTIONS.map((item) => item.id).filter((zoneId) => seen.has(zoneId));
+}
+
+function bodyZoneLabel(zoneId) {
+  return BODY_ZONE_LABEL_BY_ID[String(zoneId || "").trim()] || String(zoneId || "");
+}
+
+function renderBodyZoneChips(selected = []) {
+  const selectedSet = new Set(normalizeBodyZones(selected));
+  return BODY_ZONE_OPTIONS
+    .map(
+      (item) => `
+        <label class="body-zone-chip ${selectedSet.has(item.id) ? "active" : ""}">
+          <input type="checkbox" data-body-zone-option value="${escapeAttr(item.id)}" ${selectedSet.has(item.id) ? "checked" : ""}>
+          <span>${escapeAttr(item.label)}</span>
+        </label>
+      `
+    )
+    .join("");
 }
 
 function syncColorFieldPair(textInput, colorInput, fallback) {
@@ -983,7 +1087,12 @@ function normalizeCatalogPayload(payload = {}) {
   const base = defaultCatalog();
   return {
     categories: Array.isArray(payload.categories) ? payload.categories : base.categories,
-    treatments: Array.isArray(payload.treatments) ? payload.treatments : base.treatments,
+    treatments: Array.isArray(payload.treatments)
+      ? payload.treatments.map((item) => ({
+          ...item,
+          bodyZones: normalizeBodyZones(item?.bodyZones),
+        }))
+      : base.treatments,
     memberships: Array.isArray(payload.memberships) ? payload.memberships : base.memberships,
     rewardActions: Array.isArray(payload.rewardActions) ? payload.rewardActions : base.rewardActions,
     rewardRedeems: Array.isArray(payload.rewardRedeems) ? payload.rewardRedeems : base.rewardRedeems,
@@ -1020,12 +1129,17 @@ function renderCatalog() {
           <td><input data-list="treatments" data-field="memberPriceCents" value="${escapeAttr(item.memberPriceCents)}" placeholder="9900"></td>
           <td><input data-list="treatments" data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></td>
           <td><input data-list="treatments" data-field="description" value="${escapeAttr(item.description)}" placeholder="Beschreibung"></td>
+          <td>
+            <div class="body-zone-picker" data-body-zone-picker>
+              ${renderBodyZoneChips(item.bodyZones)}
+            </div>
+          </td>
           <td><button class="row-remove" type="button" data-remove-list="treatments" data-index="${index}">Entfernen</button></td>
         </tr>`
     )
     .join("");
   if (!catalog.treatments.length) {
-    treatmentsBody.innerHTML = '<tr><td colspan="8">Noch keine Treatments.</td></tr>';
+    treatmentsBody.innerHTML = '<tr><td colspan="9">Noch keine Treatments.</td></tr>';
   }
 
   membershipsBody.innerHTML = catalog.memberships
@@ -1110,6 +1224,9 @@ function syncCatalogStateFromDom() {
       const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
       const category = storeCategoryId(row.querySelector('input[data-field="category"]')?.value.trim() || "");
       const description = row.querySelector('input[data-field="description"]')?.value.trim() || "";
+      const bodyZones = Array.from(row.querySelectorAll('input[data-body-zone-option]:checked'))
+        .map((input) => normalizeBodyZoneId(input.value))
+        .filter(Boolean);
       return {
         id,
         name,
@@ -1118,6 +1235,7 @@ function syncCatalogStateFromDom() {
         memberPriceCents: toInt(row.querySelector('input[data-field="memberPriceCents"]')?.value, 0),
         durationMinutes: toInt(row.querySelector('input[data-field="durationMinutes"]')?.value, 0),
         description,
+        bodyZones,
       };
     })
     .filter((item) => item.id && item.name && item.category);
@@ -1668,6 +1786,7 @@ function addCatalogRow(listName) {
       memberPriceCents: 0,
       durationMinutes: 30,
       description: "",
+      bodyZones: [],
     });
   } else if (listName === "memberships") {
     state.catalog.memberships.push({
