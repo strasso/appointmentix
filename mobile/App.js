@@ -122,6 +122,16 @@ function checkoutDefaultPaymentStatus(methodId) {
   return String(methodId || '').trim().toLowerCase() === 'klarna' ? 'pending' : 'paid';
 }
 
+function getCheckoutButtonLabel(cartItems = []) {
+  const safeItems = Array.isArray(cartItems) ? cartItems : [];
+  const hasTreatment = safeItems.some((item) => String(item?.type || 'treatment').toLowerCase() === 'treatment');
+  const hasProduct = safeItems.some((item) => String(item?.type || '').toLowerCase() === 'product');
+  if (hasTreatment && hasProduct) return 'Zahlungspflichtig bestellen';
+  if (hasTreatment) return 'Zahlungspflichtig buchen';
+  if (hasProduct) return 'Jetzt kaufen';
+  return 'Zahlungspflichtig bestellen';
+}
+
 function parseCheckoutReturnUrl(url) {
   const rawUrl = String(url || '').trim();
   if (!rawUrl) return null;
@@ -2858,6 +2868,7 @@ function continueToAccessStep() {
         const item = payload?.lineItem || {};
         const normalizedItem = {
           id: String(item.id || `${selectedTreatment.id}-${Date.now()}`),
+          type: 'treatment',
           treatmentId: String(item.treatmentId || selectedTreatment.id),
           name: String(item.name || selectedTreatment.name),
           units: Math.max(1, Number(item.units || units || 1)),
@@ -2888,6 +2899,7 @@ function continueToAccessStep() {
 
     const fallbackItem = {
       id: `${selectedTreatment.id}-${Date.now()}`,
+      type: 'treatment',
       treatmentId: selectedTreatment.id,
       name: selectedTreatment.name,
       units,
@@ -3510,7 +3522,7 @@ function continueToAccessStep() {
 
   const hasCart = cartItems.length > 0;
   const cartCtaLabel = cartSyncing ? 'Wird hinzugefügt ...' : 'In den Warenkorb';
-  const checkoutCtaLabel = checkoutLoading ? 'Wird verarbeitet ...' : 'Jetzt bezahlen';
+  const checkoutCtaLabel = checkoutLoading ? 'Wird verarbeitet ...' : getCheckoutButtonLabel(cartItems);
   const normalizedPhoneInput = normalizePhone(patientPhone);
   const otpReadyToVerify = Boolean(otpRequestId) && normalizedPhoneInput === otpRequestedPhone;
   const otpCtaLabel = connectLoading
