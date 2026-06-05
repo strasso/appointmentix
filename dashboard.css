@@ -1767,7 +1767,49 @@ td small {
 .icon-btn:active,
 .chip-filter-btn:active,
 .tab:active,
+.subtab:active,
 .rail-nav-item:active { transform: scale(0.96); }
+
+/* ============================================================
+   Sub-tabs (e.g. Katalog: Schnell-Editor / Visueller Editor)
+   ============================================================ */
+.subtabs {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+.subtab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.subtab:hover { color: var(--ink); }
+.subtab.active {
+  background: var(--surface-strong);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.subpanel { display: none; }
+.subpanel.active { display: block; animation: viewIn 280ms var(--ease-out); }
+
+.catalog-embed-card { padding: 0; overflow: hidden; }
+.catalog-embed {
+  display: block;
+  width: 100%;
+  height: 78vh;
+  min-height: 560px;
+  border: 0;
+  background: var(--surface-strong);
+}
 
 /* ============================================================
    Catalog editor — card layout (Etappe: Katalog-Umbau)

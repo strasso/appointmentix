@@ -16,7 +16,7 @@
   <main class="shell">
     <section id="authSection" class="card auth-card">
       <div class="auth-brand">
-        <img class="brand-mark" src="/assets/curabo-icon.png" alt="">
+        <img class="brand-mark" src="/assets/curabo-logo.svg" alt="">
         <strong>CURABO</strong>
       </div>
       <h1>Willkommen zurück</h1>
@@ -59,7 +59,7 @@
     <section id="dashboardSection" class="app hidden">
       <aside class="app-rail">
         <div class="rail-brand">
-          <img class="brand-mark" src="/assets/curabo-icon.png" alt="Curabo Logo">
+          <img class="brand-mark" src="/assets/curabo-logo.svg" alt="Curabo Logo">
           <strong>CURABO</strong>
         </div>
         <nav class="rail-nav" aria-label="Hauptnavigation">
@@ -422,6 +422,12 @@
 
         <!-- KATALOG & APP -->
         <section class="view-panel" data-view-panel="katalog">
+          <div class="subtabs" role="tablist">
+            <button class="subtab active" type="button" data-subtab="editor">Schnell-Editor</button>
+            <button class="subtab" type="button" data-subtab="visual">Visueller Editor</button>
+          </div>
+
+          <div class="subpanel active" data-subpanel="editor">
           <article class="card catalog-card">
             <div class="section-head">
               <div>
@@ -429,7 +435,7 @@
                 <p class="subline">Behandlungen, Mitgliedschaften und App-Inhalte deiner Klinik.</p>
               </div>
               <div class="inline-actions">
-                <a class="btn ghost" href="/catalog">Visueller Editor</a>
+                <a class="btn ghost" href="/catalog" target="_blank" rel="noopener">Vollbild öffnen</a>
                 <button id="exportCatalogBtn" class="btn ghost" type="button">Katalog exportieren</button>
                 <input id="importCatalogInput" class="hidden" type="file" accept="application/json">
                 <button id="importCatalogBtn" class="btn ghost" type="button">Von Website übernehmen</button>
@@ -505,6 +511,13 @@
               </section>
             </form>
           </article>
+          </div>
+
+          <div class="subpanel" data-subpanel="visual">
+            <article class="card catalog-embed-card">
+              <iframe class="catalog-embed" data-src="/catalog?embed=1" title="Visueller Katalog-Editor" loading="lazy"></iframe>
+            </article>
+          </div>
         </section>
 
         <!-- KAMPAGNEN -->

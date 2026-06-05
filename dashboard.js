@@ -2553,6 +2553,30 @@ function bindEvents() {
   window.addEventListener("hashchange", () => {
     if (state.user) showView(viewFromHash(), false);
   });
+  document.querySelectorAll(".subtabs").forEach((bar) => {
+    bar.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button[data-subtab]") : null;
+      if (!button) return;
+      const name = button.getAttribute("data-subtab");
+      const scope = bar.parentElement;
+      if (!scope) return;
+      bar.querySelectorAll("button[data-subtab]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      Array.from(scope.children)
+        .filter((child) => child.matches?.(".subpanel[data-subpanel]"))
+        .forEach((panel) => {
+          const active = panel.getAttribute("data-subpanel") === name;
+          panel.classList.toggle("active", active);
+          if (active) {
+            const frame = panel.querySelector("iframe[data-src]");
+            if (frame && !frame.getAttribute("src")) {
+              frame.setAttribute("src", frame.getAttribute("data-src"));
+            }
+          }
+        });
+    });
+  });
   if (refreshDashboardBtn) {
     refreshDashboardBtn.addEventListener("click", async () => {
       if (!state.user || refreshDashboardBtn.disabled) return;
@@ -2590,7 +2614,7 @@ function bindEvents() {
   document.addEventListener("pointerdown", (event) => {
     const control =
       event.target instanceof Element
-        ? event.target.closest(".btn, .icon-btn, .chip-filter-btn, .tab, .rail-nav-item")
+        ? event.target.closest(".btn, .icon-btn, .chip-filter-btn, .tab, .subtab, .rail-nav-item")
         : null;
     if (!control || control.disabled) return;
     haptics("light");
