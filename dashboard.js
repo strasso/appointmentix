@@ -1448,8 +1448,8 @@ function renderCatalog() {
                 <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></label>
                 <label class="cat-field">Kategorie<select data-field="category">${renderCategoryOptions(item.category, catalog.categories)}</select></label>
                 <label class="cat-field">Dauer (Min)<input data-field="durationMinutes" type="number" min="0" step="5" inputmode="numeric" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></label>
-                <label class="cat-field">Preis (€)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110"></label>
-                <label class="cat-field">Mitgliedspreis (€)<input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99"></label>
+                <label class="cat-field">Preis (€)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110"></label>
+                <label class="cat-field">Mitgliedspreis (€)<input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99"></label>
                 <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="basic-glow" spellcheck="false"></label>
                 <label class="cat-field span-full">Beschreibung<input data-field="description" value="${escapeAttr(item.description)}" placeholder="Kurze Beschreibung für die App"></label>
                 <div class="cat-field span-full">Body-Zonen<div class="body-zone-picker" data-body-zone-picker>${renderBodyZoneChips(item.bodyZones)}</div></div>
@@ -1467,7 +1467,7 @@ function renderCatalog() {
             `<div class="cat-item" data-list="memberships">
               <div class="cat-fields">
                 <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Silber"></label>
-                <label class="cat-field">Preis (€ / Monat)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79"></label>
+                <label class="cat-field">Preis (€ / Monat)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79"></label>
                 <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="silber" spellcheck="false"></label>
                 <label class="cat-field span-full">Inkludierte Behandlungen<input data-field="includedTreatmentIds" value="${escapeAttr(joinCommaList(item.includedTreatmentIds))}" placeholder="basic-glow, med-peeling"><span class="cat-mini-hint">Kürzel der Behandlungen, mit Komma getrennt</span></label>
                 <label class="cat-field span-full">Vorteile<input data-field="perks" value="${escapeAttr(joinCommaList(item.perks))}" placeholder="1 Gratis-Behandlung, 10 % Rabatt"><span class="cat-mini-hint">Mit Komma getrennt</span></label>
@@ -1502,7 +1502,7 @@ function renderCatalog() {
               <div class="cat-fields">
                 <label class="cat-field cat-field-grow">Bezeichnung<input data-field="label" value="${escapeAttr(item.label)}" placeholder="15 € Guthaben"></label>
                 <label class="cat-field cat-field-num">Benötigte Punkte<input data-field="requiredPoints" type="number" min="0" step="1" inputmode="numeric" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></label>
-                <label class="cat-field cat-field-num">Wert (€)<input data-field="valueCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15"></label>
+                <label class="cat-field cat-field-num">Wert (€)<input data-field="valueCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15"></label>
                 <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="r15" spellcheck="false"></label>
               </div>
               ${catalogRemoveButton("rewardRedeems", index)}

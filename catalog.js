@@ -284,10 +284,10 @@ function treatmentCard(item = {}) {
       </div>
       <div class="field-grid-2">
         <label>Preis (€)
-          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
+          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
         </label>
         <label>Mitgliedspreis (€)
-          <input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
+          <input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
         </label>
       </div>
       <label>Beschreibung
@@ -327,7 +327,7 @@ function membershipCard(item = {}) {
           <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
         </label>
         <label>Preis (€ / Monat)
-          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
+          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
         </label>
       </div>
       <label>Inkludierte Treatment IDs (Komma oder Zeile)
@@ -374,7 +374,7 @@ function rewardRedeemCard(item = {}) {
           <input data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250">
         </label>
         <label>Wert (€)
-          <input data-field="valueCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
+          <input data-field="valueCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
         </label>
       </div>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
