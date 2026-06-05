@@ -1845,12 +1845,12 @@ td small {
 /* ============================================================
    Catalog editor — card layout (Etappe: Katalog-Umbau)
    ============================================================ */
-.catalog-grid { gap: 22px; }
+.catalog-grid { gap: 28px; }
 .catalog-block {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 18px;
-  background: var(--surface-muted);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 .catalog-head { margin-bottom: 14px; }
 .catalog-head h3 { font-size: 1.05rem; }
