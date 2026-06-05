@@ -256,6 +256,15 @@ function categoryCard(item = {}) {
   `;
 }
 
+function centsToEuroInput(cents) {
+  const value = Number(cents || 0) / 100;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+function euroToCents(value) {
+  const numeric = parseFloat(String(value ?? "").replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric * 100)) : 0;
+}
+
 function treatmentCard(item = {}) {
   return `
     <div class="item-card" data-kind="treatment">
@@ -274,11 +283,11 @@ function treatmentCard(item = {}) {
         </label>
       </div>
       <div class="field-grid-2">
-        <label>Preis (Cent)
-          <input data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="11000">
+        <label>Preis (€)
+          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
         </label>
-        <label>Member Preis (Cent)
-          <input data-field="memberPriceCents" value="${escapeAttr(item.memberPriceCents)}" placeholder="9900">
+        <label>Mitgliedspreis (€)
+          <input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
         </label>
       </div>
       <label>Beschreibung
@@ -317,8 +326,8 @@ function membershipCard(item = {}) {
         <label>Name
           <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
         </label>
-        <label>Preis (Cent)
-          <input data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="7900">
+        <label>Preis (€ / Monat)
+          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
         </label>
       </div>
       <label>Inkludierte Treatment IDs (Komma oder Zeile)
@@ -364,8 +373,8 @@ function rewardRedeemCard(item = {}) {
         <label>Benötigte Punkte
           <input data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250">
         </label>
-        <label>Wert (Cent)
-          <input data-field="valueCents" value="${escapeAttr(item.valueCents)}" placeholder="1500">
+        <label>Wert (€)
+          <input data-field="valueCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
         </label>
       </div>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
@@ -471,8 +480,8 @@ function collectCatalogFromDom() {
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
       category: storeCategoryId(card.querySelector('[data-field="category"]')?.value.trim() || ""),
       durationMinutes: toInt(card.querySelector('[data-field="durationMinutes"]')?.value, 30),
-      priceCents: toInt(card.querySelector('[data-field="priceCents"]')?.value, 0),
-      memberPriceCents: toInt(card.querySelector('[data-field="memberPriceCents"]')?.value, 0),
+      priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
+      memberPriceCents: euroToCents(card.querySelector('[data-field="memberPriceCents"]')?.value),
       description: card.querySelector('[data-field="description"]')?.value.trim() || "",
       imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
       bodyZones: Array.from(card.querySelectorAll('input[data-body-zone-option]:checked'))
@@ -485,7 +494,7 @@ function collectCatalogFromDom() {
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
-      priceCents: toInt(card.querySelector('[data-field="priceCents"]')?.value, 0),
+      priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
       includedTreatmentIds: splitList(card.querySelector('[data-field="includedTreatmentIds"]')?.value),
       perks: splitList(card.querySelector('[data-field="perks"]')?.value),
     }))
@@ -504,7 +513,7 @@ function collectCatalogFromDom() {
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       label: card.querySelector('[data-field="label"]')?.value.trim() || "",
       requiredPoints: toInt(card.querySelector('[data-field="requiredPoints"]')?.value, 0),
-      valueCents: toInt(card.querySelector('[data-field="valueCents"]')?.value, 0),
+      valueCents: euroToCents(card.querySelector('[data-field="valueCents"]')?.value),
     }))
     .filter((item) => item.id && item.label);
 
