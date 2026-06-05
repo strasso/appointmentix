@@ -289,7 +289,7 @@ function euroStepControl(button) {
   if (!input) return null;
   const dir = Number(button.getAttribute("data-eur-step")) || 1;
   const start = Date.now();
-  const RAMP_MS = 2600;
+  const RAMP_MS = 3800;
   const apply = () => {
     const held = Date.now() - start;
     const progress = Math.min(held / RAMP_MS, 1);
@@ -725,7 +725,7 @@ async function init() {
     }
   });
   document.addEventListener("pointerdown", (event) => {
-    const button = event.target instanceof HTMLElement ? event.target.closest(".eur-step") : null;
+    const button = event.target instanceof Element ? event.target.closest(".eur-step") : null;
     if (!button) return;
     event.preventDefault();
     const stop = euroStepControl(button);
