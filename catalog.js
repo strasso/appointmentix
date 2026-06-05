@@ -258,7 +258,20 @@ function categoryCard(item = {}) {
 
 function centsToEuroInput(cents) {
   const value = Number(cents || 0) / 100;
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return (Number.isInteger(value) ? String(value) : value.toFixed(2)).replace(".", ",");
+}
+
+// Keep euro inputs tidy: digits, one comma, max 2 decimals; dot becomes comma.
+function sanitizeEuroField(element) {
+  if (!element) return;
+  let value = String(element.value).replace(/[^0-9.,]/g, "").replace(/\./g, ",");
+  const firstComma = value.indexOf(",");
+  if (firstComma !== -1) {
+    const intPart = value.slice(0, firstComma);
+    const decPart = value.slice(firstComma + 1).replace(/,/g, "").slice(0, 2);
+    value = `${intPart},${decPart}`;
+  }
+  element.value = value;
 }
 function euroToCents(value) {
   const numeric = parseFloat(String(value ?? "").replace(/\s/g, "").replace(",", "."));
@@ -284,10 +297,10 @@ function treatmentCard(item = {}) {
       </div>
       <div class="field-grid-2">
         <label>Preis (€)
-          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
+          <input data-field="priceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
         </label>
         <label>Mitgliedspreis (€)
-          <input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
+          <input data-field="memberPriceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
         </label>
       </div>
       <label>Beschreibung
@@ -327,7 +340,7 @@ function membershipCard(item = {}) {
           <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
         </label>
         <label>Preis (€ / Monat)
-          <input data-field="priceCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
+          <input data-field="priceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
         </label>
       </div>
       <label>Inkludierte Treatment IDs (Komma oder Zeile)
@@ -374,7 +387,7 @@ function rewardRedeemCard(item = {}) {
           <input data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250">
         </label>
         <label>Wert (€)
-          <input data-field="valueCents" data-unit="euro" type="number" min="0" step="1" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
+          <input data-field="valueCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
         </label>
       </div>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
@@ -663,6 +676,11 @@ async function init() {
   bindRemoveHandlers(rewardRedeemsList);
   bindRemoveHandlers(homeArticlesList);
 
+  document.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLElement && event.target.matches("[data-price-input]")) {
+      sanitizeEuroField(event.target);
+    }
+  });
   addCategoryBtn.addEventListener("click", () => appendCard(categoriesList, categoryCard({})));
   addTreatmentBtn.addEventListener("click", () => appendCard(treatmentsList, treatmentCard({})));
   addMembershipBtn.addEventListener("click", () => appendCard(membershipsList, membershipCard({})));

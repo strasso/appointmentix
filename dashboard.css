@@ -1250,8 +1250,6 @@ td small {
 .rail-brand .brand-mark {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
-  box-shadow: 0 0 0 1px var(--rail-line);
 }
 .rail-brand strong {
   font-size: 0.8rem;
