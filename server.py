@@ -3430,6 +3430,85 @@ def list_patient_appointments(clinic_id: int, patient_email: str, limit: int = 8
   return sorted_rows
 
 
+def list_clinic_appointments(clinic_id: int, limit: int = 200) -> list:
+  safe_limit = max(1, min(limit, 500))
+  with get_db() as conn:
+    rows = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        treatment_id,
+        treatment_name,
+        treatment_duration_minutes,
+        practitioner_name,
+        starts_at,
+        ends_at,
+        location_label,
+        location_address,
+        status,
+        notes,
+        order_id,
+        canceled_at,
+        created_at,
+        updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ?
+      ORDER BY starts_at DESC, id DESC
+      LIMIT ?
+      """,
+      (clinic_id, safe_limit),
+    ).fetchall()
+
+  def sort_key(row):
+    segment = appointment_segment_for_row(row)
+    starts_at = parse_datetime_utc(row["starts_at"])
+    created_at = parse_datetime_utc(row["created_at"]) or utc_now()
+    if segment == "upcoming":
+      return (0, starts_at or created_at, int(row["id"]))
+    base_dt = starts_at or created_at
+    return (1, -base_dt.timestamp(), -int(row["id"]))
+
+  return sorted(list(rows), key=sort_key)
+
+
+def summarize_clinic_appointments(rows) -> dict:
+  summary = {
+    "total": len(rows),
+    "upcoming": 0,
+    "today": 0,
+    "confirmed": 0,
+    "pending": 0,
+    "canceled": 0,
+  }
+  try:
+    today_local = utc_now().astimezone(clinic_local_timezone()).date()
+  except Exception:
+    today_local = utc_now().date()
+  for row in rows:
+    status = normalize_patient_appointment_status(row["status"])
+    segment = appointment_segment_for_row(row)
+    if segment == "upcoming":
+      summary["upcoming"] += 1
+    if status == "canceled":
+      summary["canceled"] += 1
+    elif status == "confirmed":
+      summary["confirmed"] += 1
+    elif status == "pending_confirmation":
+      summary["pending"] += 1
+    starts_at = parse_datetime_utc(row["starts_at"])
+    if starts_at and status != "canceled":
+      try:
+        local_date = starts_at.astimezone(clinic_local_timezone()).date()
+      except Exception:
+        local_date = starts_at.date()
+      if local_date == today_local:
+        summary["today"] += 1
+  return summary
+
+
 def list_patient_appointments_by_order_id(clinic_id: int, order_id: str) -> list:
   safe_order_id = str(order_id or "").strip()
   if clinic_id <= 0 or not safe_order_id:
@@ -10457,6 +10536,32 @@ def clinic_patient_memberships():
     {
       "summary": summary,
       "memberships": [serialize_patient_membership_row(row) for row in rows],
+    }
+  )
+
+
+@app.get("/api/clinic/appointments")
+def clinic_appointments():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"summary": summarize_clinic_appointments([]), "appointments": []})
+
+  try:
+    limit = int(request.args.get("limit", "200"))
+  except ValueError:
+    limit = 200
+
+  rows = list_clinic_appointments(clinic_id, limit)
+  summary = summarize_clinic_appointments(rows)
+
+  return jsonify(
+    {
+      "summary": summary,
+      "appointments": [serialize_patient_appointment_row(row) for row in rows],
     }
   )
 

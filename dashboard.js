@@ -25,6 +25,9 @@ const state = {
   },
   patientMemberships: [],
   membershipSummary: {},
+  appointments: [],
+  appointmentSummary: {},
+  appointmentFilter: "upcoming",
   settingsSnapshot: null,
   catalog: {
     categories: [],
@@ -41,6 +44,40 @@ const dashboardSection = document.getElementById("dashboardSection");
 const sessionLabel = document.getElementById("sessionLabel");
 const logoutBtn = document.getElementById("logoutBtn");
 const toast = document.getElementById("toast");
+const railUserName = document.getElementById("railUserName");
+const railClinicName = document.getElementById("railClinicName");
+const railAvatar = document.getElementById("railAvatar");
+const subscriptionChip = document.getElementById("subscriptionChip");
+const refreshDashboardBtn = document.getElementById("refreshDashboardBtn");
+const onboardRingValue = document.getElementById("onboardRingValue");
+const patientStats = document.getElementById("patientStats");
+const patientsBody = document.getElementById("patientsBody");
+const patientSearch = document.getElementById("patientSearch");
+const appointmentStats = document.getElementById("appointmentStats");
+const appointmentsBody = document.getElementById("appointmentsBody");
+const appointmentSearch = document.getElementById("appointmentSearch");
+const appointmentFilter = document.getElementById("appointmentFilter");
+const viewEyebrow = document.getElementById("viewEyebrow");
+const onboardingCard = document.getElementById("onboardingCard");
+const onboardSteps = document.getElementById("onboardSteps");
+const onboardProgressLabel = document.getElementById("onboardProgressLabel");
+const kpiRevenue = document.getElementById("kpiRevenue");
+const kpiMrr = document.getElementById("kpiMrr");
+const kpiMembers = document.getElementById("kpiMembers");
+const kpiAppUsers = document.getElementById("kpiAppUsers");
+const railNavItems = Array.from(document.querySelectorAll(".rail-nav-item[data-view]"));
+const viewPanels = Array.from(document.querySelectorAll(".view-panel[data-view-panel]"));
+const VIEW_META = {
+  overview: { eyebrow: "Performance Center" },
+  patienten: { eyebrow: "Patienten" },
+  termine: { eyebrow: "Termine" },
+  analyse: { eyebrow: "Analyse" },
+  katalog: { eyebrow: "Katalog & App" },
+  kampagnen: { eyebrow: "Kampagnen" },
+  team: { eyebrow: "Team" },
+  einstellungen: { eyebrow: "Einstellungen" },
+  abo: { eyebrow: "Abo & Rechnungen" },
+};
 
 const tabLogin = document.getElementById("tabLogin");
 const tabRegister = document.getElementById("tabRegister");
@@ -121,7 +158,6 @@ const refreshCampaignsBtn = document.getElementById("refreshCampaignsBtn");
 const runDueCampaignsBtn = document.getElementById("runDueCampaignsBtn");
 const auditLogsBody = document.getElementById("auditLogsBody");
 const refreshAuditBtn = document.getElementById("refreshAuditBtn");
-const sideNavItems = Array.from(document.querySelectorAll(".side-nav-item[data-nav-target]"));
 let metricsResizeTimer = null;
 let metricsResizeFrame = null;
 const CATEGORY_ID_UI_ALIASES = {
@@ -214,6 +250,7 @@ function formatDateOnly(rawDate) {
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
+  haptics("success");
   if (state.toastTimer) {
     window.clearTimeout(state.toastTimer);
   }
@@ -221,6 +258,64 @@ function showToast(message) {
     toast.classList.remove("show");
     state.toastTimer = null;
   }, 2600);
+}
+
+/* ---- Interaction layer: haptics, ripple, count-up (reduced-motion aware) ---- */
+const reduceMotionQuery =
+  typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : { matches: false };
+
+function prefersReducedMotion() {
+  return Boolean(reduceMotionQuery.matches);
+}
+
+const HAPTIC_PATTERNS = { light: 8, medium: 16, success: [6, 30, 10], warn: [14, 40, 14] };
+
+function haptics(kind = "light") {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+  try {
+    navigator.vibrate(HAPTIC_PATTERNS[kind] || HAPTIC_PATTERNS.light);
+  } catch {
+    /* vibration not permitted — ignore */
+  }
+}
+
+function createRipple(event, host) {
+  if (prefersReducedMotion() || !(host instanceof HTMLElement)) return;
+  const rect = host.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const ripple = document.createElement("span");
+  ripple.className = "ripple";
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${(event.clientX ?? rect.left + rect.width / 2) - rect.left - size / 2}px`;
+  ripple.style.top = `${(event.clientY ?? rect.top + rect.height / 2) - rect.top - size / 2}px`;
+  host.appendChild(ripple);
+  ripple.addEventListener("animationend", () => ripple.remove());
+  window.setTimeout(() => ripple.remove(), 700);
+}
+
+function animateCount(element, toValue, formatter) {
+  if (!element) return;
+  const format = typeof formatter === "function" ? formatter : (value) => String(Math.round(value));
+  const target = Number(toValue) || 0;
+  const previous = Number(element.dataset.countValue);
+  element.dataset.countValue = String(target);
+  if (prefersReducedMotion() || !Number.isFinite(previous) || previous === target) {
+    element.textContent = format(target);
+    return;
+  }
+  const duration = 620;
+  const start = performance.now();
+  const from = previous;
+  const step = (now) => {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    element.textContent = format(from + (target - from) * eased);
+    if (progress < 1) window.requestAnimationFrame(step);
+    else element.textContent = format(target);
+  };
+  window.requestAnimationFrame(step);
 }
 
 function humanizeImportError(message) {
@@ -354,14 +449,23 @@ function setSession(user) {
     if (importCatalogBtn) importCatalogBtn.disabled = true;
     if (createCampaignBtn) createCampaignBtn.disabled = true;
     if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = true;
+    if (onboardingCard) onboardingCard.classList.add("hidden");
     setCatalogDisabled(true);
     return;
   }
 
   sessionLabel.textContent = `${user.fullName} • ${user.clinicName} • ${user.role}`;
+  if (railUserName) railUserName.textContent = user.fullName || "—";
+  if (railClinicName) railClinicName.textContent = user.clinicName || "—";
+  if (railAvatar) {
+    const source = String(user.clinicName || user.fullName || "C").trim();
+    railAvatar.textContent = (source[0] || "C").toUpperCase();
+  }
+  setSubscriptionChip(user.subscriptionStatus);
   authSection.classList.add("hidden");
   dashboardSection.classList.remove("hidden");
   logoutBtn.classList.remove("hidden");
+  showView(viewFromHash(), false);
 
   saveSettingsBtn.disabled = !state.isOwner;
   saveCatalogBtn.disabled = !state.isOwner;
@@ -636,73 +740,115 @@ function getCanvasContext(canvas) {
   return context;
 }
 
+const CHART_BRAND = "#b56f80";
+
+function hexToRgba(hex, alpha) {
+  const value = String(hex || "").replace("#", "");
+  if (value.length !== 6) return `rgba(181, 111, 128, ${alpha})`;
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function drawLineChart(canvas, values, options = {}) {
   const context = getCanvasContext(canvas);
   if (!context) return;
   const width = canvas.getBoundingClientRect().width;
   const height = canvas.getBoundingClientRect().height;
-  const paddingTop = Number(options.paddingTop ?? 12);
-  const paddingBottom = Number(options.paddingBottom ?? 20);
-  const paddingLeft = Number(options.paddingLeft ?? 8);
+  const paddingTop = Number(options.paddingTop ?? 14);
+  const paddingBottom = Number(options.paddingBottom ?? 16);
+  const paddingLeft = Number(options.paddingLeft ?? 6);
   const paddingRight = Number(options.paddingRight ?? 8);
   const chartWidth = Math.max(width - paddingLeft - paddingRight, 1);
   const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
   const series = safeSeries(values, 2);
-  const max = Math.max(...series, 1);
-  const min = Number(options.minValue ?? 0);
-  const range = Math.max(max - min, 1);
+  const lineColor = options.lineColor || CHART_BRAND;
+  const baselineY = paddingTop + chartHeight;
 
   context.clearRect(0, 0, width, height);
 
-  const stripeCount = Number(options.stripeCount ?? Math.min(series.length, 18));
-  if (stripeCount > 1) {
-    const stripeWidth = chartWidth / stripeCount;
-    for (let index = 0; index < stripeCount; index += 1) {
-      if (index % 2 !== 0) continue;
-      context.fillStyle = options.stripeColor || "#f2f4f7";
-      context.fillRect(paddingLeft + index * stripeWidth, paddingTop, stripeWidth, chartHeight);
-    }
+  // hairline baseline
+  context.beginPath();
+  context.strokeStyle = "rgba(23, 21, 26, 0.08)";
+  context.lineWidth = 1;
+  context.moveTo(paddingLeft, baselineY + 0.5);
+  context.lineTo(paddingLeft + chartWidth, baselineY + 0.5);
+  context.stroke();
+
+  // empty state — no data yet
+  if (!(Math.max(...series) > 0)) {
+    context.fillStyle = "rgba(108, 104, 115, 0.55)";
+    context.font = "600 12px Inter, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(options.emptyText || "Noch keine Daten", paddingLeft + chartWidth / 2, paddingTop + chartHeight / 2);
+    return;
   }
 
-  context.beginPath();
-  context.strokeStyle = options.lineColor || "#5b7cfa";
-  context.lineWidth = Number(options.lineWidth ?? 2);
-  context.lineJoin = "round";
-  context.lineCap = "round";
-
-  series.forEach((value, index) => {
+  const min = Number(options.minValue ?? 0);
+  const max = Math.max(...series, 1);
+  const range = Math.max(max - min, 1);
+  const points = series.map((value, index) => {
     const x = paddingLeft + (index / Math.max(series.length - 1, 1)) * chartWidth;
     const ratio = (Number(value || 0) - min) / range;
-    const y = paddingTop + chartHeight - ratio * chartHeight;
-    if (index === 0) {
-      context.moveTo(x, y);
-    } else {
-      context.lineTo(x, y);
-    }
+    return [x, paddingTop + chartHeight - ratio * chartHeight];
+  });
+
+  // soft area fill
+  const gradient = context.createLinearGradient(0, paddingTop, 0, baselineY);
+  gradient.addColorStop(0, hexToRgba(lineColor, 0.18));
+  gradient.addColorStop(1, hexToRgba(lineColor, 0));
+  context.beginPath();
+  context.moveTo(points[0][0], baselineY);
+  points.forEach(([x, y]) => context.lineTo(x, y));
+  context.lineTo(points[points.length - 1][0], baselineY);
+  context.closePath();
+  context.fillStyle = gradient;
+  context.fill();
+
+  // primary line
+  context.beginPath();
+  context.strokeStyle = lineColor;
+  context.lineWidth = Number(options.lineWidth ?? 2.25);
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  points.forEach(([x, y], index) => {
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
   });
   context.stroke();
 
+  // optional comparison line (dashed, muted)
   if (Array.isArray(options.secondary) && options.secondary.length) {
     const secondSeries = safeSeries(options.secondary, series.length);
     const secondMax = Math.max(...secondSeries, 1);
     const secondRange = Math.max(secondMax - min, 1);
     context.beginPath();
-    context.strokeStyle = options.secondaryColor || "#c4c8d0";
-    context.lineWidth = 1.8;
-    context.setLineDash([5, 4]);
+    context.strokeStyle = options.secondaryColor || "rgba(23, 21, 26, 0.22)";
+    context.lineWidth = 1.6;
+    context.setLineDash([4, 4]);
     secondSeries.forEach((value, index) => {
       const x = paddingLeft + (index / Math.max(secondSeries.length - 1, 1)) * chartWidth;
       const ratio = (Number(value || 0) - min) / secondRange;
       const y = paddingTop + chartHeight - ratio * chartHeight;
-      if (index === 0) {
-        context.moveTo(x, y);
-      } else {
-        context.lineTo(x, y);
-      }
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
     });
     context.stroke();
     context.setLineDash([]);
   }
+
+  // end-point marker
+  const last = points[points.length - 1];
+  context.beginPath();
+  context.fillStyle = "#ffffff";
+  context.arc(last[0], last[1], 3.6, 0, Math.PI * 2);
+  context.fill();
+  context.beginPath();
+  context.fillStyle = lineColor;
+  context.arc(last[0], last[1], 2.4, 0, Math.PI * 2);
+  context.fill();
 }
 
 function actionToFeedText(action) {
@@ -756,13 +902,18 @@ function renderRevenueSources(summary = {}, memberships = {}, backendSources = [
     const customPlans = Math.max(0, Math.round(revenue * 0.07));
     const shop = Math.max(0, revenue - notificationOffers - customPlans);
     rows = [
-      { label: "Mitgliedschaften", value: mrr, color: "#16a34a" },
-      { label: "Rewards & Guthaben", value: rewardsCash, color: "#5b7cfa" },
-      { label: "Angebotskampagnen", value: notificationOffers, color: "#e91678" },
-      { label: "Sonderpläne", value: customPlans, color: "#b54708" },
-      { label: "Shop", value: shop, color: "#f59e0b" },
+      { label: "Mitgliedschaften", value: mrr, color: "#b56f80" },
+      { label: "Rewards & Guthaben", value: rewardsCash, color: "#cf9aa6" },
+      { label: "Angebotskampagnen", value: notificationOffers, color: "#8c6f9e" },
+      { label: "Sonderpläne", value: customPlans, color: "#c98a5e" },
+      { label: "Shop", value: shop, color: "#6b7280" },
     ];
   }
+
+  // Harmonized brand palette — applied regardless of source so the
+  // legend stays tonal (rose family + warm neutrals), not a rainbow.
+  const SOURCE_PALETTE = ["#b56f80", "#cf9aa6", "#8c6f9e", "#c98a5e", "#6b7280", "#a98a72"];
+  rows = rows.map((row, index) => ({ ...row, color: SOURCE_PALETTE[index % SOURCE_PALETTE.length] }));
 
   const total = Math.max(rows.reduce((sum, row) => sum + row.value, 0), 1);
 
@@ -923,9 +1074,11 @@ function renderMetricsDashboard() {
   const latestRevenue = Number(summary.dailyProcessingCents || revenueByDay[revenueByDay.length - 1] || 0);
   const previousRevenue = revenueByDay[revenueByDay.length - 2] || 0;
   const dailyDelta = previousRevenue > 0 ? ((latestRevenue - previousRevenue) / previousRevenue) * 100 : 0;
-  if (metricDailyProcessingValue) metricDailyProcessingValue.textContent = formatEuro(latestRevenue);
+  if (metricDailyProcessingValue) animateCount(metricDailyProcessingValue, latestRevenue, formatEuro);
   if (metricDailyProcessingDelta && compareMode !== "none" && deltas.dailyProcessingCents) {
     setDeltaBadge(metricDailyProcessingDelta, deltas.dailyProcessingCents, compareMode);
+  } else if (metricDailyProcessingDelta && latestRevenue <= 0 && previousRevenue <= 0) {
+    metricDailyProcessingDelta.classList.add("hidden");
   } else if (metricDailyProcessingDelta) {
     metricDailyProcessingDelta.classList.remove("hidden");
     metricDailyProcessingDelta.textContent = `${dailyDelta >= 0 ? "+" : ""}${dailyDelta.toFixed(1)}%`;
@@ -936,6 +1089,10 @@ function renderMetricsDashboard() {
 
   if (metricNetRevenueValue) metricNetRevenueValue.textContent = formatEuro(revenueTotal);
   if (metricMRRValue) metricMRRValue.textContent = formatEuro(mrrBase);
+  if (kpiRevenue) animateCount(kpiRevenue, revenueTotal, formatEuro);
+  if (kpiMrr) animateCount(kpiMrr, mrrBase, formatEuro);
+  if (kpiMembers) animateCount(kpiMembers, Number(summary.activeMemberships || 0));
+  if (kpiAppUsers) animateCount(kpiAppUsers, activeUsers);
   if (metricAppUserLTVValue) metricAppUserLTVValue.textContent = formatEuro(appUserLtvCents);
   if (metricClientLTVValue) metricClientLTVValue.textContent = formatEuro(clientLtvCents);
   if (metricAppUsersValue) metricAppUsersValue.textContent = String(activeUsers);
@@ -953,18 +1110,18 @@ function renderMetricsDashboard() {
 
   drawLineChart(chartDailyProcessing, normalizeForChart(purchasesByDay), {
     secondary: normalizeForChart(viewsByDay),
-    lineColor: "#5b7cfa",
+    lineColor: CHART_BRAND,
     secondaryColor: "#c4c8d0",
     stripeCount: 12,
   });
-  drawLineChart(chartNetRevenue, normalizeForChart(revenueByDay), { lineColor: "#5b7cfa", stripeCount: 18 });
-  drawLineChart(chartMRR, normalizeForChart(mrrSeries), { lineColor: "#5b7cfa", stripeCount: 12 });
-  drawLineChart(chartAppUserLTV, normalizeForChart(appUserLtvSeries), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartClientLTV, normalizeForChart(clientLtvSeries), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartAppUsers, normalizeForChart(cumulativeSeries(appOpenByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartReferrals, normalizeForChart(cumulativeSeries(referralByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartVisits, normalizeForChart(appOpenByDay), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartReviews, normalizeForChart(cumulativeSeries(reviewByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
+  drawLineChart(chartNetRevenue, normalizeForChart(revenueByDay), { lineColor: CHART_BRAND, stripeCount: 18 });
+  drawLineChart(chartMRR, normalizeForChart(mrrSeries), { lineColor: CHART_BRAND, stripeCount: 12 });
+  drawLineChart(chartAppUserLTV, normalizeForChart(appUserLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartClientLTV, normalizeForChart(clientLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartAppUsers, normalizeForChart(cumulativeSeries(appOpenByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartReferrals, normalizeForChart(cumulativeSeries(referralByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartVisits, normalizeForChart(appOpenByDay), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartReviews, normalizeForChart(cumulativeSeries(reviewByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
 
   renderLiveFeed(auditRows);
   const sourceRows = renderRevenueSources(summary, memberships, state.analytics.revenueSources || []);
@@ -1059,16 +1216,128 @@ function scheduleMetricsRender() {
   }, 120);
 }
 
-function scrollToDashboardTarget(targetId) {
-  if (!targetId) return;
-  const target = document.getElementById(targetId);
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+function showView(viewName, updateHash = true) {
+  const target = VIEW_META[viewName] ? viewName : "overview";
+  railNavItems.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-view") === target);
+  });
+  viewPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.getAttribute("data-view-panel") === target);
+  });
+  if (viewEyebrow && VIEW_META[target]) {
+    viewEyebrow.textContent = VIEW_META[target].eyebrow;
+  }
+  if (target === "analyse") {
+    scheduleMetricsRender();
+  }
+  if (updateHash && state.user) {
+    const nextHash = `#${target}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, "", nextHash);
+    }
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function setActiveSidebarItem(activeButton) {
-  sideNavItems.forEach((button) => {
-    button.classList.toggle("active", button === activeButton);
+function viewFromHash() {
+  const raw = String(window.location.hash || "").replace(/^#/, "").trim();
+  return VIEW_META[raw] ? raw : "overview";
+}
+
+function setSubscriptionChip(status) {
+  if (!subscriptionChip) return;
+  const normalized = String(status || "inactive").toLowerCase();
+  const map = {
+    active: { label: "Abo aktiv", cls: "ok" },
+    trialing: { label: "Testphase", cls: "ok" },
+    past_due: { label: "Zahlung offen", cls: "warn" },
+    canceled: { label: "Abo gekündigt", cls: "warn" },
+    inactive: { label: "Abo inaktiv", cls: "muted" },
+  };
+  const info = map[normalized] || map.inactive;
+  subscriptionChip.textContent = info.label;
+  subscriptionChip.className = `sub-chip ${info.cls}`;
+}
+
+function renderOnboarding() {
+  if (!onboardingCard || !onboardSteps) return;
+  if (!state.user) {
+    onboardingCard.classList.add("hidden");
+    return;
+  }
+  const status = String(state.user.subscriptionStatus || "inactive").toLowerCase();
+  const settings = state.settingsSnapshot || {};
+  const hasTreatments = Boolean(treatmentsBody && treatmentsBody.querySelector("tr"));
+  const hasTeam = Boolean(membersBody && membersBody.querySelectorAll("tr").length > 1);
+  const hasProfile = Boolean(String(settings.website || "").trim() || String(settings.logoUrl || "").trim());
+
+  const steps = [
+    {
+      done: ["active", "trialing"].includes(status),
+      title: "Abo aktivieren",
+      hint: "Schalte App, Shop und Mitgliedschaften frei.",
+      view: "abo",
+    },
+    {
+      done: hasTreatments,
+      title: "Behandlungen anlegen",
+      hint: "Lege deinen Katalog an, damit Patienten buchen können.",
+      view: "katalog",
+    },
+    {
+      done: hasProfile,
+      title: "Klinik-Profil vervollständigen",
+      hint: "Website, Logo und Branding für deine Patienten-App.",
+      view: "einstellungen",
+    },
+    {
+      done: hasTeam,
+      title: "Team einladen",
+      hint: "Lege Staff-Accounts für dein Team an.",
+      view: "team",
+    },
+  ];
+
+  const doneCount = steps.filter((step) => step.done).length;
+  if (onboardProgressLabel) onboardProgressLabel.textContent = `${doneCount}/${steps.length}`;
+  if (onboardRingValue) {
+    const circumference = 157.08;
+    const ratio = steps.length ? doneCount / steps.length : 0;
+    onboardRingValue.style.strokeDashoffset = String(circumference * (1 - ratio));
+  }
+
+  if (doneCount >= steps.length) {
+    onboardingCard.classList.add("hidden");
+    return;
+  }
+  onboardingCard.classList.remove("hidden");
+
+  onboardSteps.innerHTML = "";
+  steps.forEach((step) => {
+    const li = document.createElement("li");
+    li.className = `onboard-step${step.done ? " done" : ""}`;
+    const mark = document.createElement("span");
+    mark.className = "onboard-mark";
+    mark.textContent = step.done ? "✓" : "";
+    const copy = document.createElement("div");
+    copy.className = "onboard-copy";
+    const title = document.createElement("p");
+    title.className = "onboard-title";
+    title.textContent = step.title;
+    const hint = document.createElement("p");
+    hint.className = "onboard-hint";
+    hint.textContent = step.hint;
+    copy.append(title, hint);
+    li.append(mark, copy);
+    if (!step.done) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "btn ghost btn-sm";
+      action.textContent = "Los geht's";
+      action.addEventListener("click", () => showView(step.view));
+      li.append(action);
+    }
+    onboardSteps.append(li);
   });
 }
 
@@ -1484,6 +1753,69 @@ async function loadAnalyticsSummary() {
   renderMetricsDashboard();
 }
 
+const PATIENT_STATUS = {
+  active: { label: "Aktiv", cls: "ok" },
+  trialing: { label: "Test", cls: "ok" },
+  past_due: { label: "Zahlung offen", cls: "warn" },
+  paused: { label: "Pausiert", cls: "muted" },
+  canceled: { label: "Gekündigt", cls: "danger" },
+  inactive: { label: "Inaktiv", cls: "muted" },
+};
+
+function renderPatientStats() {
+  if (!patientStats) return;
+  const summary = state.membershipSummary || {};
+  const chips = [
+    { label: "Gesamt", value: String(Number(summary.total || 0)) },
+    { label: "Aktiv", value: String(Number(summary.active || 0)), cls: "ok" },
+    { label: "Zahlung offen", value: String(Number(summary.pastDue || 0)), cls: "warn" },
+    { label: "Pausiert", value: String(Number(summary.paused || 0)), cls: "muted" },
+    { label: "Gekündigt", value: String(Number(summary.canceled || 0)), cls: "danger" },
+    { label: "MRR", value: formatEuro(Number(summary.mrrCents || 0)), cls: "brand" },
+  ];
+  patientStats.innerHTML = chips
+    .map(
+      (chip) =>
+        `<div class="pstat ${chip.cls || ""}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></div>`
+    )
+    .join("");
+}
+
+function renderPatients() {
+  renderPatientStats();
+  if (!patientsBody) return;
+  const term = String(patientSearch?.value || "").trim().toLowerCase();
+  const rows = (state.patientMemberships || []).filter((row) => {
+    if (!term) return true;
+    return [row.patientName, row.patientEmail, row.membershipName].some((value) =>
+      String(value || "").toLowerCase().includes(term)
+    );
+  });
+
+  if (!rows.length) {
+    patientsBody.innerHTML = `<tr><td colspan="5">${term ? "Keine Treffer." : "Noch keine Patienten."}</td></tr>`;
+    return;
+  }
+
+  patientsBody.innerHTML = rows
+    .map((row) => {
+      const status = PATIENT_STATUS[String(row.status || "inactive").toLowerCase()] || PATIENT_STATUS.inactive;
+      const name = row.patientName || "—";
+      const email = row.patientEmail || "";
+      const plan = row.membershipName || "—";
+      const amount = formatEuro(Number(row.monthlyAmountCents || 0));
+      const next = row.nextChargeAt ? formatDateOnly(row.nextChargeAt) : "—";
+      return `<tr>
+        <td><strong>${escapeHtml(name)}</strong>${email ? `<small>${escapeHtml(email)}</small>` : ""}</td>
+        <td>${escapeHtml(plan)}</td>
+        <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
+        <td>${escapeHtml(amount)}</td>
+        <td>${escapeHtml(next)}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
 async function loadPatientMemberships() {
   const response = await apiRequest("/clinic/patient-memberships?limit=200");
   state.patientMemberships = Array.isArray(response.memberships) ? response.memberships : [];
@@ -1491,6 +1823,87 @@ async function loadPatientMemberships() {
     state.membershipSummary = response.summary;
   }
   renderMetricsDashboard();
+  renderPatients();
+}
+
+const APPOINTMENT_STATUS = {
+  confirmed: { label: "Bestätigt", cls: "ok" },
+  pending_confirmation: { label: "Offen", cls: "warn" },
+  reschedule_requested: { label: "Umbuchung", cls: "warn" },
+  rescheduled: { label: "Umgebucht", cls: "ok" },
+  completed: { label: "Abgeschlossen", cls: "muted" },
+  canceled: { label: "Storniert", cls: "danger" },
+};
+
+function renderAppointmentStats() {
+  if (!appointmentStats) return;
+  const summary = state.appointmentSummary || {};
+  const chips = [
+    { label: "Gesamt", value: String(Number(summary.total || 0)) },
+    { label: "Anstehend", value: String(Number(summary.upcoming || 0)), cls: "brand" },
+    { label: "Heute", value: String(Number(summary.today || 0)), cls: "ok" },
+    { label: "Bestätigt", value: String(Number(summary.confirmed || 0)), cls: "ok" },
+    { label: "Offen", value: String(Number(summary.pending || 0)), cls: "warn" },
+    { label: "Storniert", value: String(Number(summary.canceled || 0)), cls: "danger" },
+  ];
+  appointmentStats.innerHTML = chips
+    .map(
+      (chip) =>
+        `<div class="pstat ${chip.cls || ""}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></div>`
+    )
+    .join("");
+}
+
+function renderAppointments() {
+  renderAppointmentStats();
+  if (!appointmentsBody) return;
+  const term = String(appointmentSearch?.value || "").trim().toLowerCase();
+  const onlyUpcoming = state.appointmentFilter !== "all";
+  const rows = (state.appointments || []).filter((row) => {
+    if (onlyUpcoming && row.segment !== "upcoming") return false;
+    if (!term) return true;
+    return [row.patientName, row.patientEmail, row.treatmentName, row.practitionerName].some((value) =>
+      String(value || "").toLowerCase().includes(term)
+    );
+  });
+
+  if (!rows.length) {
+    const message = term
+      ? "Keine Treffer."
+      : onlyUpcoming
+        ? "Keine anstehenden Termine."
+        : "Noch keine Termine.";
+    appointmentsBody.innerHTML = `<tr><td colspan="5">${message}</td></tr>`;
+    return;
+  }
+
+  appointmentsBody.innerHTML = rows
+    .map((row) => {
+      const status = APPOINTMENT_STATUS[String(row.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation;
+      const when = row.startsAt ? formatDate(row.startsAt) : "—";
+      const duration = Number(row.treatmentDurationMinutes || 0);
+      const patient = row.patientName || row.patientEmail || "—";
+      const treatment = row.treatmentName || "—";
+      const practitioner = row.practitionerName || "—";
+      const durationLabel = duration > 0 ? `<small>${duration} Min</small>` : "";
+      return `<tr>
+        <td><strong>${escapeHtml(when)}</strong></td>
+        <td>${escapeHtml(patient)}</td>
+        <td>${escapeHtml(treatment)}${durationLabel}</td>
+        <td>${escapeHtml(practitioner)}</td>
+        <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function loadAppointments() {
+  const response = await apiRequest("/clinic/appointments?limit=200");
+  state.appointments = Array.isArray(response.appointments) ? response.appointments : [];
+  if (response.summary && typeof response.summary === "object") {
+    state.appointmentSummary = response.summary;
+  }
+  renderAppointments();
 }
 
 async function loadCatalog() {
@@ -1826,10 +2239,12 @@ async function loadDashboardData() {
     loadBillingHistory(),
     loadAnalyticsSummary(),
     loadPatientMemberships(),
+    loadAppointments(),
     loadCatalog(),
     loadCampaigns(),
     loadAuditLogs(),
   ]);
+  renderOnboarding();
 }
 
 function parseAuthForm(form) {
@@ -2119,12 +2534,58 @@ function bindEvents() {
       toggleCampaignStatus(campaignId, nextStatus);
     }
   });
-  sideNavItems.forEach((button) => {
+  railNavItems.forEach((button) => {
     button.addEventListener("click", () => {
-      setActiveSidebarItem(button);
-      const targetId = String(button.getAttribute("data-nav-target") || "").trim();
-      scrollToDashboardTarget(targetId);
+      showView(String(button.getAttribute("data-view") || "overview").trim());
     });
+  });
+  window.addEventListener("hashchange", () => {
+    if (state.user) showView(viewFromHash(), false);
+  });
+  if (refreshDashboardBtn) {
+    refreshDashboardBtn.addEventListener("click", async () => {
+      if (!state.user || refreshDashboardBtn.disabled) return;
+      refreshDashboardBtn.classList.add("spinning");
+      refreshDashboardBtn.disabled = true;
+      try {
+        await loadDashboardData();
+        showToast("Daten aktualisiert");
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        refreshDashboardBtn.classList.remove("spinning");
+        refreshDashboardBtn.disabled = false;
+      }
+    });
+  }
+  if (patientSearch) {
+    patientSearch.addEventListener("input", () => renderPatients());
+  }
+  if (appointmentSearch) {
+    appointmentSearch.addEventListener("input", () => renderAppointments());
+  }
+  if (appointmentFilter) {
+    appointmentFilter.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button[data-appt-filter]") : null;
+      if (!button) return;
+      state.appointmentFilter = String(button.getAttribute("data-appt-filter") || "upcoming");
+      appointmentFilter.querySelectorAll("button[data-appt-filter]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      renderAppointments();
+    });
+  }
+  // Central interaction feedback: haptic tap + ripple on prominent controls.
+  document.addEventListener("pointerdown", (event) => {
+    const control =
+      event.target instanceof Element
+        ? event.target.closest(".btn, .icon-btn, .chip-filter-btn, .tab, .rail-nav-item")
+        : null;
+    if (!control || control.disabled) return;
+    haptics("light");
+    if (control.matches(".rail-nav-item, .btn.primary, .btn.accent")) {
+      createRipple(event, control);
+    }
   });
   window.addEventListener("resize", scheduleMetricsRender);
   dashboardSection.addEventListener("click", (event) => {
