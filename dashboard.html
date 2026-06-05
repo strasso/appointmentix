@@ -442,131 +442,66 @@
                 <div class="catalog-head">
                   <div>
                     <h3>Kategorien</h3>
-                    <p class="field-hint">IDs als Slugs ohne Umlaute anlegen, z. B. <span>korper</span>.</p>
+                    <p class="field-hint">Gruppieren deine Behandlungen in der App, z. B. Gesicht, Körper.</p>
                   </div>
                   <button id="addCategoryBtn" class="btn ghost btn-sm" type="button">+ Kategorie</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Label</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="categoriesBody"></tbody>
-                  </table>
-                </div>
+                <div id="categoriesBody" class="cat-list cat-list-compact"></div>
               </section>
 
               <section class="catalog-block">
                 <div class="catalog-head">
-                  <h3>Treatments</h3>
-                  <button id="addTreatmentBtn" class="btn ghost btn-sm" type="button">+ Treatment</button>
+                  <div>
+                    <h3>Behandlungen</h3>
+                    <p class="field-hint">Was Patient:innen in der App buchen können.</p>
+                  </div>
+                  <button id="addTreatmentBtn" class="btn ghost btn-sm" type="button">+ Behandlung</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Kategorie</th>
-                        <th>Preis (Cent)</th>
-                        <th>Member (Cent)</th>
-                        <th>Min</th>
-                        <th>Beschreibung</th>
-                        <th>Body-Zonen</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="treatmentsBody"></tbody>
-                  </table>
-                </div>
+                <div id="treatmentsBody" class="cat-list"></div>
               </section>
 
               <section class="catalog-block">
                 <div class="catalog-head">
-                  <h3>Mitgliedschaften</h3>
-                  <button id="addMembershipBtn" class="btn ghost btn-sm" type="button">+ Membership</button>
+                  <div>
+                    <h3>Mitgliedschaften</h3>
+                    <p class="field-hint">Wiederkehrende Pläne mit inkludierten Behandlungen und Vorteilen.</p>
+                  </div>
+                  <button id="addMembershipBtn" class="btn ghost btn-sm" type="button">+ Mitgliedschaft</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Preis (Cent)</th>
-                        <th>Inkl. Treatment IDs (Komma)</th>
-                        <th>Perks (Komma)</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="membershipsBody"></tbody>
-                  </table>
-                </div>
+                <div id="membershipsBody" class="cat-list"></div>
               </section>
 
               <section class="catalog-block">
                 <div class="catalog-head">
-                  <h3>Reward Aktionen</h3>
+                  <div>
+                    <h3>Reward-Aktionen</h3>
+                    <p class="field-hint">Wofür Patient:innen Punkte sammeln.</p>
+                  </div>
                   <button id="addRewardActionBtn" class="btn ghost btn-sm" type="button">+ Aktion</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Label</th>
-                        <th>Punkte</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="rewardActionsBody"></tbody>
-                  </table>
-                </div>
+                <div id="rewardActionsBody" class="cat-list"></div>
               </section>
 
               <section class="catalog-block">
                 <div class="catalog-head">
-                  <h3>Reward Einlösungen</h3>
+                  <div>
+                    <h3>Reward-Einlösungen</h3>
+                    <p class="field-hint">Wofür gesammelte Punkte eingelöst werden können.</p>
+                  </div>
                   <button id="addRewardRedeemBtn" class="btn ghost btn-sm" type="button">+ Einlösung</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Label</th>
-                        <th>Benötigte Punkte</th>
-                        <th>Wert (Cent)</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="rewardRedeemsBody"></tbody>
-                  </table>
-                </div>
+                <div id="rewardRedeemsBody" class="cat-list"></div>
               </section>
 
               <section class="catalog-block">
                 <div class="catalog-head">
-                  <h3>Home Artikel</h3>
+                  <div>
+                    <h3>Home-Artikel</h3>
+                    <p class="field-hint">Kurze Inhalte auf der Startseite der Patienten-App.</p>
+                  </div>
                   <button id="addHomeArticleBtn" class="btn ghost btn-sm" type="button">+ Artikel</button>
                 </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Tag</th>
-                        <th>Titel</th>
-                        <th>Text</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody id="homeArticlesBody"></tbody>
-                  </table>
-                </div>
+                <div id="homeArticlesBody" class="cat-list"></div>
               </section>
             </form>
           </article>

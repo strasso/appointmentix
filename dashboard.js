@@ -480,7 +480,7 @@ function setSession(user) {
 
 function setCatalogDisabled(disabled) {
   if (!catalogForm) return;
-  const controls = catalogForm.querySelectorAll("input, textarea, button.row-remove");
+  const controls = catalogForm.querySelectorAll("input, textarea, select, button.row-remove");
   controls.forEach((control) => {
     control.disabled = disabled;
   });
@@ -1369,196 +1369,208 @@ function normalizeCatalogPayload(payload = {}) {
   };
 }
 
+function centsToEuroInput(cents) {
+  const value = Number(cents || 0) / 100;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function euroInputToCents(value) {
+  const numeric = parseFloat(String(value ?? "").replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric * 100)) : 0;
+}
+
+function renderCategoryOptions(selectedId, categories) {
+  const selected = storeCategoryId(selectedId || "");
+  const options = [`<option value=""${selected ? "" : " selected"} disabled>Kategorie wählen…</option>`];
+  let matched = false;
+  (categories || []).forEach((category) => {
+    const stored = storeCategoryId(category.id);
+    if (!stored) return;
+    const isSelected = stored === selected;
+    if (isSelected) matched = true;
+    options.push(
+      `<option value="${escapeAttr(displayCategoryId(stored))}"${isSelected ? " selected" : ""}>${escapeHtml(category.label || displayCategoryId(stored))}</option>`
+    );
+  });
+  if (selected && !matched) {
+    options.push(`<option value="${escapeAttr(displayCategoryId(selected))}" selected>${escapeHtml(displayCategoryId(selected))}</option>`);
+  }
+  return options.join("");
+}
+
+function catalogRemoveButton(listName, index) {
+  return `<button class="row-remove cat-remove" type="button" data-remove-list="${listName}" data-index="${index}" aria-label="Entfernen" title="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
+}
+
+function catalogEmptyState(message) {
+  return `<div class="cat-empty">${escapeHtml(message)}</div>`;
+}
+
 function renderCatalog() {
   const catalog = normalizeCatalogPayload(state.catalog);
   state.catalog = catalog;
 
-  categoriesBody.innerHTML = catalog.categories
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="categories" data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht"></td>
-          <td><input data-list="categories" data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht"></td>
-          <td><button class="row-remove" type="button" data-remove-list="categories" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.categories.length) {
-    categoriesBody.innerHTML = '<tr><td colspan="3">Noch keine Kategorien.</td></tr>';
-  }
+  categoriesBody.innerHTML = catalog.categories.length
+    ? catalog.categories
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="categories">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Bezeichnung<input data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("categories", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Kategorien. Lege z. B. Gesicht oder Körper an.");
 
-  treatmentsBody.innerHTML = catalog.treatments
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="treatments" data-field="id" value="${escapeAttr(item.id)}" placeholder="t-basic-glow"></td>
-          <td><input data-list="treatments" data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></td>
-          <td><input data-list="treatments" data-field="category" value="${escapeAttr(displayCategoryId(item.category))}" placeholder="gesicht"></td>
-          <td><input data-list="treatments" data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="11000"></td>
-          <td><input data-list="treatments" data-field="memberPriceCents" value="${escapeAttr(item.memberPriceCents)}" placeholder="9900"></td>
-          <td><input data-list="treatments" data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></td>
-          <td><input data-list="treatments" data-field="description" value="${escapeAttr(item.description)}" placeholder="Beschreibung"></td>
-          <td>
-            <div class="body-zone-picker" data-body-zone-picker>
-              ${renderBodyZoneChips(item.bodyZones)}
-            </div>
-          </td>
-          <td><button class="row-remove" type="button" data-remove-list="treatments" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.treatments.length) {
-    treatmentsBody.innerHTML = '<tr><td colspan="9">Noch keine Treatments.</td></tr>';
-  }
+  treatmentsBody.innerHTML = catalog.treatments.length
+    ? catalog.treatments
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="treatments">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></label>
+                <label class="cat-field">Kategorie<select data-field="category">${renderCategoryOptions(item.category, catalog.categories)}</select></label>
+                <label class="cat-field">Dauer (Min)<input data-field="durationMinutes" type="number" min="0" step="5" inputmode="numeric" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></label>
+                <label class="cat-field">Preis (€)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110"></label>
+                <label class="cat-field">Mitgliedspreis (€)<input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="basic-glow" spellcheck="false"></label>
+                <label class="cat-field span-full">Beschreibung<input data-field="description" value="${escapeAttr(item.description)}" placeholder="Kurze Beschreibung für die App"></label>
+                <div class="cat-field span-full">Body-Zonen<div class="body-zone-picker" data-body-zone-picker>${renderBodyZoneChips(item.bodyZones)}</div></div>
+              </div>
+              ${catalogRemoveButton("treatments", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Behandlungen. Lege deine erste Behandlung an.");
 
-  membershipsBody.innerHTML = catalog.memberships
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="memberships" data-field="id" value="${escapeAttr(item.id)}" placeholder="silber"></td>
-          <td><input data-list="memberships" data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber"></td>
-          <td><input data-list="memberships" data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="7900"></td>
-          <td><input data-list="memberships" data-field="includedTreatmentIds" value="${escapeAttr(joinCommaList(item.includedTreatmentIds))}" placeholder="t-basic-glow, t-med-peeling"></td>
-          <td><input data-list="memberships" data-field="perks" value="${escapeAttr(joinCommaList(item.perks))}" placeholder="Perk 1, Perk 2"></td>
-          <td><button class="row-remove" type="button" data-remove-list="memberships" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.memberships.length) {
-    membershipsBody.innerHTML = '<tr><td colspan="6">Noch keine Mitgliedschaften.</td></tr>';
-  }
+  membershipsBody.innerHTML = catalog.memberships.length
+    ? catalog.memberships
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="memberships">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Silber"></label>
+                <label class="cat-field">Preis (€ / Monat)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="silber" spellcheck="false"></label>
+                <label class="cat-field span-full">Inkludierte Behandlungen<input data-field="includedTreatmentIds" value="${escapeAttr(joinCommaList(item.includedTreatmentIds))}" placeholder="basic-glow, med-peeling"><span class="cat-mini-hint">Kürzel der Behandlungen, mit Komma getrennt</span></label>
+                <label class="cat-field span-full">Vorteile<input data-field="perks" value="${escapeAttr(joinCommaList(item.perks))}" placeholder="1 Gratis-Behandlung, 10 % Rabatt"><span class="cat-mini-hint">Mit Komma getrennt</span></label>
+              </div>
+              ${catalogRemoveButton("memberships", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Mitgliedschaften.");
 
-  rewardActionsBody.innerHTML = catalog.rewardActions
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="rewardActions" data-field="id" value="${escapeAttr(item.id)}" placeholder="referral"></td>
-          <td><input data-list="rewardActions" data-field="label" value="${escapeAttr(item.label)}" placeholder="Freund:in werben"></td>
-          <td><input data-list="rewardActions" data-field="points" value="${escapeAttr(item.points)}" placeholder="150"></td>
-          <td><button class="row-remove" type="button" data-remove-list="rewardActions" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.rewardActions.length) {
-    rewardActionsBody.innerHTML = '<tr><td colspan="4">Noch keine Reward Aktionen.</td></tr>';
-  }
+  rewardActionsBody.innerHTML = catalog.rewardActions.length
+    ? catalog.rewardActions
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="rewardActions">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Aktion<input data-field="label" value="${escapeAttr(item.label)}" placeholder="Freund:in werben"></label>
+                <label class="cat-field cat-field-num">Punkte<input data-field="points" type="number" min="0" step="1" inputmode="numeric" value="${escapeAttr(item.points)}" placeholder="150"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="referral" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("rewardActions", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Reward-Aktionen.");
 
-  rewardRedeemsBody.innerHTML = catalog.rewardRedeems
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="rewardRedeems" data-field="id" value="${escapeAttr(item.id)}" placeholder="r15"></td>
-          <td><input data-list="rewardRedeems" data-field="label" value="${escapeAttr(item.label)}" placeholder="15 EUR Guthaben"></td>
-          <td><input data-list="rewardRedeems" data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></td>
-          <td><input data-list="rewardRedeems" data-field="valueCents" value="${escapeAttr(item.valueCents)}" placeholder="1500"></td>
-          <td><button class="row-remove" type="button" data-remove-list="rewardRedeems" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.rewardRedeems.length) {
-    rewardRedeemsBody.innerHTML = '<tr><td colspan="5">Noch keine Einlösungen.</td></tr>';
-  }
+  rewardRedeemsBody.innerHTML = catalog.rewardRedeems.length
+    ? catalog.rewardRedeems
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="rewardRedeems">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Bezeichnung<input data-field="label" value="${escapeAttr(item.label)}" placeholder="15 € Guthaben"></label>
+                <label class="cat-field cat-field-num">Benötigte Punkte<input data-field="requiredPoints" type="number" min="0" step="1" inputmode="numeric" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></label>
+                <label class="cat-field cat-field-num">Wert (€)<input data-field="valueCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="r15" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("rewardRedeems", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Reward-Einlösungen.");
 
-  homeArticlesBody.innerHTML = catalog.homeArticles
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="homeArticles" data-field="id" value="${escapeAttr(item.id)}" placeholder="art-1"></td>
-          <td><input data-list="homeArticles" data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education"></td>
-          <td><input data-list="homeArticles" data-field="title" value="${escapeAttr(item.title)}" placeholder="Titel"></td>
-          <td><input data-list="homeArticles" data-field="body" value="${escapeAttr(item.body)}" placeholder="Kurztext"></td>
-          <td><button class="row-remove" type="button" data-remove-list="homeArticles" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.homeArticles.length) {
-    homeArticlesBody.innerHTML = '<tr><td colspan="5">Noch keine Home Artikel.</td></tr>';
-  }
+  homeArticlesBody.innerHTML = catalog.homeArticles.length
+    ? catalog.homeArticles
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="homeArticles">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Titel<input data-field="title" value="${escapeAttr(item.title)}" placeholder="Tipps nach der Behandlung"></label>
+                <label class="cat-field">Tag<input data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="art-1" spellcheck="false"></label>
+                <label class="cat-field span-full">Text<textarea data-field="body" rows="2" placeholder="Kurztext für die App">${escapeHtml(item.body || "")}</textarea></label>
+              </div>
+              ${catalogRemoveButton("homeArticles", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Home-Artikel.");
 
   setCatalogDisabled(!state.isOwner);
 }
 
 function syncCatalogStateFromDom() {
-  const categories = Array.from(categoriesBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = storeCategoryId(row.querySelector('input[data-field="id"]')?.value.trim() || "");
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return { id, label };
-    })
+  const readVal = (row, field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
+  const readEuroCents = (row, field) => euroInputToCents(row.querySelector(`[data-field="${field}"]`)?.value);
+  const readInt = (row, field) => toInt(row.querySelector(`[data-field="${field}"]`)?.value, 0);
+
+  const categories = Array.from(categoriesBody.querySelectorAll(".cat-item"))
+    .map((row) => ({ id: storeCategoryId(readVal(row, "id")), label: readVal(row, "label") }))
     .filter((item) => item.id && item.label);
 
-  const treatments = Array.from(treatmentsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
-      const category = storeCategoryId(row.querySelector('input[data-field="category"]')?.value.trim() || "");
-      const description = row.querySelector('input[data-field="description"]')?.value.trim() || "";
-      const bodyZones = Array.from(row.querySelectorAll('input[data-body-zone-option]:checked'))
+  const treatments = Array.from(treatmentsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      name: readVal(row, "name"),
+      category: storeCategoryId(readVal(row, "category")),
+      priceCents: readEuroCents(row, "priceCents"),
+      memberPriceCents: readEuroCents(row, "memberPriceCents"),
+      durationMinutes: readInt(row, "durationMinutes"),
+      description: readVal(row, "description"),
+      bodyZones: Array.from(row.querySelectorAll("input[data-body-zone-option]:checked"))
         .map((input) => normalizeBodyZoneId(input.value))
-        .filter(Boolean);
-      return {
-        id,
-        name,
-        category,
-        priceCents: toInt(row.querySelector('input[data-field="priceCents"]')?.value, 0),
-        memberPriceCents: toInt(row.querySelector('input[data-field="memberPriceCents"]')?.value, 0),
-        durationMinutes: toInt(row.querySelector('input[data-field="durationMinutes"]')?.value, 0),
-        description,
-        bodyZones,
-      };
-    })
+        .filter(Boolean),
+    }))
     .filter((item) => item.id && item.name && item.category);
 
-  const memberships = Array.from(membershipsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
-      return {
-        id,
-        name,
-        priceCents: toInt(row.querySelector('input[data-field="priceCents"]')?.value, 0),
-        includedTreatmentIds: splitCommaList(row.querySelector('input[data-field="includedTreatmentIds"]')?.value),
-        perks: splitCommaList(row.querySelector('input[data-field="perks"]')?.value),
-      };
-    })
+  const memberships = Array.from(membershipsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      name: readVal(row, "name"),
+      priceCents: readEuroCents(row, "priceCents"),
+      includedTreatmentIds: splitCommaList(row.querySelector('[data-field="includedTreatmentIds"]')?.value),
+      perks: splitCommaList(row.querySelector('[data-field="perks"]')?.value),
+    }))
     .filter((item) => item.id && item.name);
 
-  const rewardActions = Array.from(rewardActionsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return {
-        id,
-        label,
-        points: toInt(row.querySelector('input[data-field="points"]')?.value, 0),
-      };
-    })
+  const rewardActions = Array.from(rewardActionsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({ id: readVal(row, "id"), label: readVal(row, "label"), points: readInt(row, "points") }))
     .filter((item) => item.id && item.label);
 
-  const rewardRedeems = Array.from(rewardRedeemsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return {
-        id,
-        label,
-        requiredPoints: toInt(row.querySelector('input[data-field="requiredPoints"]')?.value, 0),
-        valueCents: toInt(row.querySelector('input[data-field="valueCents"]')?.value, 0),
-      };
-    })
+  const rewardRedeems = Array.from(rewardRedeemsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      label: readVal(row, "label"),
+      requiredPoints: readInt(row, "requiredPoints"),
+      valueCents: readEuroCents(row, "valueCents"),
+    }))
     .filter((item) => item.id && item.label);
 
-  const homeArticles = Array.from(homeArticlesBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const title = row.querySelector('input[data-field="title"]')?.value.trim() || "";
-      return {
-        id,
-        tag: row.querySelector('input[data-field="tag"]')?.value.trim() || "",
-        title,
-        body: row.querySelector('input[data-field="body"]')?.value.trim() || "",
-      };
-    })
+  const homeArticles = Array.from(homeArticlesBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      tag: readVal(row, "tag"),
+      title: readVal(row, "title"),
+      body: readVal(row, "body"),
+    }))
     .filter((item) => item.id && item.title);
 
   state.catalog = { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles };
@@ -2497,9 +2509,8 @@ function bindEvents() {
   addRewardRedeemBtn.addEventListener("click", () => addCatalogRow("rewardRedeems"));
   addHomeArticleBtn.addEventListener("click", () => addCatalogRow("homeArticles"));
   catalogForm.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (!target.matches("button[data-remove-list]")) return;
+    const target = event.target instanceof HTMLElement ? event.target.closest("button[data-remove-list]") : null;
+    if (!target) return;
     const listName = String(target.getAttribute("data-remove-list") || "");
     const index = Number(target.getAttribute("data-index"));
     if (!Number.isFinite(index)) return;
