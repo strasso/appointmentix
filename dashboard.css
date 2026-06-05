@@ -2222,3 +2222,4 @@ td small {
 @media (max-width: 520px) {
   .drawer-panel { width: 100%; }
 }
+.drawer-section { padding-top: 14px; border-top: 1px dashed var(--border-strong); }

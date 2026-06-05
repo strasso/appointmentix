@@ -937,6 +937,16 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
 
+        CREATE TABLE IF NOT EXISTS patient_notes (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          patient_email TEXT NOT NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (clinic_id, patient_email),
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
         CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
           id BIGSERIAL PRIMARY KEY,
           clinic_id BIGINT NOT NULL,
@@ -1244,6 +1254,16 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_email ON patient_appointments(clinic_id, patient_email);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
+
+        CREATE TABLE IF NOT EXISTS patient_notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          patient_email TEXT NOT NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (clinic_id, patient_email),
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
 
         CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -10693,6 +10713,56 @@ def clinic_update_appointment(appointment_id):
 
   row = get_clinic_appointment_row(clinic_id, appointment_id)
   return jsonify({"appointment": serialize_patient_appointment_row(row)})
+
+
+@app.get("/api/clinic/patient-notes")
+def clinic_get_patient_notes():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  email = sanitize_patient_email(request.args.get("email"))
+  if not clinic_id or not email:
+    return jsonify({"patientEmail": email or "", "notes": "", "updatedAt": None})
+  with get_db() as conn:
+    row = conn.execute(
+      "SELECT notes, updated_at FROM patient_notes WHERE clinic_id = ? AND patient_email = ? LIMIT 1",
+      (clinic_id, email),
+    ).fetchone()
+  return jsonify(
+    {
+      "patientEmail": email,
+      "notes": row["notes"] if row else "",
+      "updatedAt": row["updated_at"] if row else None,
+    }
+  )
+
+
+@app.put("/api/clinic/patient-notes")
+def clinic_put_patient_notes():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+  payload = request.get_json(silent=True) or {}
+  email = sanitize_patient_email(payload.get("patientEmail"))
+  if not email:
+    return jsonify({"error": "E-Mail ist für Kundennotizen erforderlich."}), 400
+  notes = str(payload.get("notes") or "").strip()
+  now_iso = utc_now_iso()
+  with get_db() as conn:
+    conn.execute(
+      """
+      INSERT INTO patient_notes (clinic_id, patient_email, notes, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT (clinic_id, patient_email)
+      DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at
+      """,
+      (clinic_id, email, notes, now_iso),
+    )
+  return jsonify({"patientEmail": email, "notes": notes, "updatedAt": now_iso})
 
 
 @app.post("/api/clinic/members")

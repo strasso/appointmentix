@@ -31,6 +31,7 @@ const state = {
   calendarView: "month",
   calendarDate: null,
   editingApptId: null,
+  customerNotesEmail: "",
   settingsSnapshot: null,
   catalog: {
     categories: [],
@@ -2159,11 +2160,26 @@ function openApptDrawer(mode, data = {}) {
     if (apptCancelAppt) apptCancelAppt.classList.add("hidden");
   }
 
+  loadCustomerNotes(fields.patientEmail.value);
   apptDrawer.classList.remove("hidden");
   apptDrawer.setAttribute("aria-hidden", "false");
   window.requestAnimationFrame(() => apptDrawer.classList.add("open"));
   haptics("light");
   window.setTimeout(() => { try { fields.patientName.focus(); } catch { /* noop */ } }, 60);
+}
+
+async function loadCustomerNotes(email) {
+  const field = apptForm && apptForm.elements.customerNotes;
+  if (!field) return;
+  const clean = String(email || "").trim();
+  state.customerNotesEmail = clean;
+  if (!clean) { field.value = ""; return; }
+  try {
+    const response = await apiRequest(`/clinic/patient-notes?email=${encodeURIComponent(clean)}`);
+    if (state.customerNotesEmail === clean) field.value = response.notes || "";
+  } catch {
+    /* notes optional — ignore */
+  }
 }
 
 function closeApptDrawer() {
@@ -2214,6 +2230,14 @@ async function submitApptForm(event) {
     } else {
       await apiRequest("/clinic/appointments", { method: "POST", body: payload });
       showToast("Termin angelegt");
+    }
+    if (payload.patientEmail) {
+      const customerNotes = fields.customerNotes ? fields.customerNotes.value.trim() : "";
+      try {
+        await apiRequest("/clinic/patient-notes", { method: "PUT", body: { patientEmail: payload.patientEmail, notes: customerNotes } });
+      } catch {
+        /* customer notes are non-critical */
+      }
     }
     closeApptDrawer();
     await loadAppointments();
@@ -2973,7 +2997,11 @@ function bindEvents() {
       }
     });
   }
-  if (apptForm) apptForm.addEventListener("submit", submitApptForm);
+  if (apptForm) {
+    apptForm.addEventListener("submit", submitApptForm);
+    const emailField = apptForm.elements.patientEmail;
+    if (emailField) emailField.addEventListener("change", () => loadCustomerNotes(emailField.value));
+  }
   if (apptCancelAppt) apptCancelAppt.addEventListener("click", cancelCurrentAppt);
   if (apptDrawer) {
     apptDrawer.addEventListener("click", (event) => {
