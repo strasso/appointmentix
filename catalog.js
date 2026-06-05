@@ -271,22 +271,36 @@ function euroStepperHtml(field, valueCents, placeholder) {
   </span>`;
 }
 
-// Accelerated stepping: hold to grow the increment 0,10 € → 1 € → 10 €.
+// Snap a raw increment to a clean step (10ct, 20ct, 50ct, 1€, 2€, …).
+const EURO_NICE_STEPS = [10, 20, 50, 100, 200, 500, 1000, 2000];
+function euroNiceStep(rawCents) {
+  let step = EURO_NICE_STEPS[0];
+  for (const candidate of EURO_NICE_STEPS) {
+    if (rawCents >= candidate) step = candidate;
+  }
+  return step;
+}
+
+// Accelerated stepping with an ease-in curve: a tap nudges by 0,10 €, holding
+// smoothly speeds up the increment (0,10 € → … → 20 €). Works from an empty field.
 function euroStepControl(button) {
   const wrap = button.closest(".eur-stepper");
   const input = wrap && wrap.querySelector("input[data-price-input]");
   if (!input) return null;
   const dir = Number(button.getAttribute("data-eur-step")) || 1;
   const start = Date.now();
-  const tick = () => {
+  const RAMP_MS = 2600;
+  const apply = () => {
     const held = Date.now() - start;
-    const stepCents = held > 2400 ? 1000 : held > 1100 ? 100 : 10;
-    const next = Math.max(0, euroToCents(input.value) + dir * stepCents);
-    input.value = centsToEuroInput(next);
+    const progress = Math.min(held / RAMP_MS, 1);
+    const eased = progress * progress * progress; // ease-in (cubic)
+    const stepCents = euroNiceStep(10 + eased * (2000 - 10));
+    const current = euroToCents(input.value); // empty/invalid → 0
+    input.value = centsToEuroInput(Math.max(0, current + dir * stepCents));
   };
-  tick();
+  apply();
   let repeat = null;
-  const delay = window.setTimeout(() => { repeat = window.setInterval(tick, 110); }, 330);
+  const delay = window.setTimeout(() => { repeat = window.setInterval(apply, 80); }, 300);
   return () => { window.clearTimeout(delay); if (repeat) window.clearInterval(repeat); };
 }
 
