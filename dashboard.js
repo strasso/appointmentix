@@ -28,6 +28,8 @@ const state = {
   appointments: [],
   appointmentSummary: {},
   appointmentFilter: "upcoming",
+  calendarView: "month",
+  calendarDate: null,
   settingsSnapshot: null,
   catalog: {
     categories: [],
@@ -57,6 +59,9 @@ const appointmentStats = document.getElementById("appointmentStats");
 const appointmentsBody = document.getElementById("appointmentsBody");
 const appointmentSearch = document.getElementById("appointmentSearch");
 const appointmentFilter = document.getElementById("appointmentFilter");
+const calTitle = document.getElementById("calTitle");
+const calBody = document.getElementById("calBody");
+const calViewSwitch = document.getElementById("calViewSwitch");
 const viewEyebrow = document.getElementById("viewEyebrow");
 const onboardingCard = document.getElementById("onboardingCard");
 const onboardSteps = document.getElementById("onboardSteps");
@@ -1645,6 +1650,20 @@ function renderTopTreatments(rows = []) {
   renderMetricsDashboard();
 }
 
+const CAMPAIGN_TRIGGER_LABELS = {
+  broadcast: "Rundnachricht (an alle)",
+  inactive_30d: "Inaktiv seit 30 Tagen",
+  abandoned_cart_24h: "Warenkorb abgebrochen (24 h)",
+  membership_past_due: "Mitgliedschaft überfällig",
+  membership_canceled_winback: "Gekündigt – Rückgewinnung",
+};
+const CAMPAIGN_CHANNEL_LABELS = { in_app: "In-App", push: "Push", email: "E-Mail", sms: "SMS" };
+const CAMPAIGN_STATUS_META = {
+  draft: { label: "Entwurf", cls: "muted" },
+  active: { label: "Aktiv", cls: "ok" },
+  paused: { label: "Pausiert", cls: "warn" },
+};
+
 function renderCampaigns(rows = []) {
   campaignsBody.innerHTML = "";
   if (!rows.length) {
@@ -1653,12 +1672,13 @@ function renderCampaigns(rows = []) {
   }
 
   campaignsBody.innerHTML = rows
-    .map(
-      (row) =>
-        `<tr>
-          <td>${row.name || "-"}</td>
-          <td>${row.triggerType || "-"}</td>
-          <td>${row.status || "-"}</td>
+    .map((row) => {
+      const trigger = CAMPAIGN_TRIGGER_LABELS[row.triggerType] || row.triggerType || "—";
+      const status = CAMPAIGN_STATUS_META[row.status] || { label: row.status || "—", cls: "muted" };
+      return `<tr>
+          <td><strong>${escapeHtml(row.name || "—")}</strong></td>
+          <td>${escapeHtml(trigger)}</td>
+          <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
           <td>${row.totalRuns || 0}</td>
           <td>${row.totalAudience || 0}</td>
           <td class="campaign-actions">${
@@ -1671,8 +1691,8 @@ function renderCampaigns(rows = []) {
               `
               : "-"
           }</td>
-        </tr>`
-    )
+        </tr>`;
+    })
     .join("");
 }
 
@@ -1915,7 +1935,176 @@ async function loadAppointments() {
   if (response.summary && typeof response.summary === "object") {
     state.appointmentSummary = response.summary;
   }
-  renderAppointments();
+  renderAppointmentStats();
+  renderCalendar();
+}
+
+/* ============================================================
+   Termine-Kalender (Monat / Woche / Tag)
+   ============================================================ */
+const CAL_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const calTimeFmt = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+function calStartOfDay(date) { const x = new Date(date); x.setHours(0, 0, 0, 0); return x; }
+function calAddDays(date, n) { const x = new Date(date); x.setDate(x.getDate() + n); return x; }
+function calSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function calStartOfWeek(date) { const x = calStartOfDay(date); return calAddDays(x, -((x.getDay() + 6) % 7)); }
+function calParseStart(appt) {
+  if (!appt || !appt.startsAt) return null;
+  const d = new Date(appt.startsAt);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function calApptMinutes(appt) {
+  const minutes = Number(appt.treatmentDurationMinutes || 0);
+  return minutes > 0 ? minutes : 30;
+}
+function ensureCalendarDate() {
+  if (!(state.calendarDate instanceof Date)) state.calendarDate = calStartOfDay(new Date());
+  return state.calendarDate;
+}
+function calEventsForDay(date) {
+  return (state.appointments || [])
+    .map((appt) => ({ appt, start: calParseStart(appt) }))
+    .filter((entry) => entry.start && calSameDay(entry.start, date))
+    .sort((a, b) => a.start - b.start)
+    .map((entry) => entry.appt);
+}
+function calStatusCls(appt) {
+  return (APPOINTMENT_STATUS[String(appt.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation).cls;
+}
+
+function renderCalendar() {
+  if (!calBody) return;
+  const view = state.calendarView || "month";
+  if (calViewSwitch) {
+    calViewSwitch.querySelectorAll("[data-cal-view]").forEach((button) => {
+      button.classList.toggle("active", button.getAttribute("data-cal-view") === view);
+    });
+  }
+  if (view === "week") renderCalTimeGrid(calWeekDays());
+  else if (view === "day") renderCalTimeGrid([ensureCalendarDate()]);
+  else renderCalMonth();
+}
+
+function calWeekDays() {
+  const start = calStartOfWeek(ensureCalendarDate());
+  return Array.from({ length: 7 }, (_, i) => calAddDays(start, i));
+}
+
+function renderCalMonth() {
+  const anchor = ensureCalendarDate();
+  if (calTitle) calTitle.textContent = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(anchor);
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const gridStart = calStartOfWeek(first);
+  const today = calStartOfDay(new Date());
+
+  let cells = "";
+  for (let i = 0; i < 42; i += 1) {
+    const day = calAddDays(gridStart, i);
+    const inMonth = day.getMonth() === anchor.getMonth();
+    const events = calEventsForDay(day);
+    const shown = events.slice(0, 3);
+    const more = events.length - shown.length;
+    cells += `<div class="cal-cell${inMonth ? "" : " cal-out"}${calSameDay(day, today) ? " cal-today" : ""}">
+      <div class="cal-cell-date">${day.getDate()}</div>
+      <div class="cal-cell-events">
+        ${shown.map((appt) => calMonthChip(appt)).join("")}
+        ${more > 0 ? `<button class="cal-more" type="button" data-cal-goto="${day.toISOString()}">+${more} weitere</button>` : ""}
+      </div>
+    </div>`;
+  }
+  calBody.innerHTML = `<div class="cal-weekhead">${CAL_WEEKDAYS.map((d) => `<div>${d}</div>`).join("")}</div><div class="cal-grid">${cells}</div>`;
+}
+
+function calMonthChip(appt) {
+  const start = calParseStart(appt);
+  const time = start ? calTimeFmt.format(start) : "";
+  const text = appt.patientName || appt.patientEmail || appt.treatmentName || "Termin";
+  const tip = `${time} · ${appt.patientName || "—"} · ${appt.treatmentName || ""}`.trim();
+  return `<button class="cal-chip ${calStatusCls(appt)}" type="button" data-appt-id="${appt.id}" title="${escapeAttr(tip)}"><span class="cal-chip-time">${escapeHtml(time)}</span><span class="cal-chip-text">${escapeHtml(text)}</span></button>`;
+}
+
+function renderCalTimeGrid(days) {
+  const today = calStartOfDay(new Date());
+  if (days.length === 1) {
+    if (calTitle) calTitle.textContent = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(days[0]);
+  } else if (calTitle) {
+    const fmtShort = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
+    const fmtLong = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short", year: "numeric" });
+    calTitle.textContent = `${fmtShort.format(days[0])} – ${fmtLong.format(days[6])}`;
+  }
+
+  let minHour = 8;
+  let maxHour = 18;
+  days.forEach((day) => {
+    calEventsForDay(day).forEach((appt) => {
+      const start = calParseStart(appt);
+      const endMin = start.getHours() * 60 + start.getMinutes() + calApptMinutes(appt);
+      minHour = Math.min(minHour, start.getHours());
+      maxHour = Math.max(maxHour, Math.ceil(endMin / 60));
+    });
+  });
+  minHour = Math.max(0, Math.min(minHour, 8));
+  maxHour = Math.min(24, Math.max(maxHour, 18));
+  const hourPx = 52;
+  const totalMin = (maxHour - minHour) * 60;
+
+  const dayHeads = days
+    .map((day) => `<div class="cal-tg-dayhead${calSameDay(day, today) ? " cal-today" : ""}"><span class="cal-tg-dow">${CAL_WEEKDAYS[(day.getDay() + 6) % 7]}</span><span class="cal-tg-date">${day.getDate()}</span></div>`)
+    .join("");
+
+  let axis = "";
+  for (let h = minHour; h < maxHour; h += 1) {
+    axis += `<div class="cal-tg-hour" style="height:${hourPx}px"><span>${String(h).padStart(2, "0")}:00</span></div>`;
+  }
+
+  const cols = days
+    .map((day) => {
+      const slots = Array.from({ length: maxHour - minHour }, () => `<div class="cal-tg-slot" style="height:${hourPx}px"></div>`).join("");
+      const blocks = calEventsForDay(day)
+        .map((appt) => {
+          const start = calParseStart(appt);
+          const startMin = start.getHours() * 60 + start.getMinutes();
+          const top = ((startMin - minHour * 60) / totalMin) * 100;
+          const height = (calApptMinutes(appt) / totalMin) * 100;
+          const time = calTimeFmt.format(start);
+          return `<button class="cal-block ${calStatusCls(appt)}" type="button" data-appt-id="${appt.id}" style="top:${top}%;height:calc(${height}% - 3px)"><span class="cal-block-time">${escapeHtml(time)}</span><span class="cal-block-title">${escapeHtml(appt.patientName || appt.treatmentName || "Termin")}</span><span class="cal-block-sub">${escapeHtml(appt.treatmentName || "")}</span></button>`;
+        })
+        .join("");
+      return `<div class="cal-tg-col${calSameDay(day, today) ? " cal-today" : ""}">${slots}<div class="cal-tg-events">${blocks}</div></div>`;
+    })
+    .join("");
+
+  const colsTemplate = `56px repeat(${days.length}, minmax(0, 1fr))`;
+  calBody.innerHTML = `<div class="cal-tg">
+    <div class="cal-tg-head" style="grid-template-columns:${colsTemplate}"><div class="cal-tg-corner"></div>${dayHeads}</div>
+    <div class="cal-tg-scroll"><div class="cal-tg-body" style="grid-template-columns:${colsTemplate}"><div class="cal-tg-axis">${axis}</div>${cols}</div></div>
+  </div>`;
+}
+
+function calNavigate(direction) {
+  const view = state.calendarView || "month";
+  if (direction === "today") {
+    state.calendarDate = calStartOfDay(new Date());
+  } else {
+    const sign = direction === "next" ? 1 : -1;
+    const current = ensureCalendarDate();
+    if (view === "month") state.calendarDate = new Date(current.getFullYear(), current.getMonth() + sign, 1);
+    else if (view === "week") state.calendarDate = calAddDays(current, 7 * sign);
+    else state.calendarDate = calAddDays(current, sign);
+  }
+  renderCalendar();
+}
+
+function showAppointmentDetail(appt) {
+  const start = calParseStart(appt);
+  const meta = APPOINTMENT_STATUS[String(appt.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation;
+  const when = start ? new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(start) : "—";
+  const parts = [appt.patientName || appt.patientEmail || "—", appt.treatmentName || "Termin", when, meta.label];
+  if (appt.practitionerName) parts.push(appt.practitionerName);
+  showToast(parts.join("  ·  "));
 }
 
 async function loadCatalog() {
@@ -2608,6 +2797,40 @@ function bindEvents() {
         item.classList.toggle("active", item === button);
       });
       renderAppointments();
+    });
+  }
+  const calToolbar = document.querySelector(".cal-toolbar");
+  if (calToolbar) {
+    calToolbar.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      const navBtn = event.target.closest("[data-cal-nav]");
+      if (navBtn) {
+        calNavigate(navBtn.getAttribute("data-cal-nav"));
+        return;
+      }
+      const viewBtn = event.target.closest("[data-cal-view]");
+      if (viewBtn) {
+        state.calendarView = viewBtn.getAttribute("data-cal-view");
+        renderCalendar();
+      }
+    });
+  }
+  if (calBody) {
+    calBody.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      const goto = event.target.closest("[data-cal-goto]");
+      if (goto) {
+        state.calendarDate = calStartOfDay(new Date(goto.getAttribute("data-cal-goto")));
+        state.calendarView = "day";
+        renderCalendar();
+        return;
+      }
+      const evt = event.target.closest("[data-appt-id]");
+      if (evt) {
+        const id = Number(evt.getAttribute("data-appt-id"));
+        const appt = (state.appointments || []).find((item) => Number(item.id) === id);
+        if (appt) showAppointmentDetail(appt);
+      }
     });
   }
   // Central interaction feedback: haptic tap + ripple on prominent controls.
