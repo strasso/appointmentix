@@ -296,7 +296,12 @@ function euroStepControl(button) {
     const eased = progress * progress * progress; // ease-in (cubic)
     const stepCents = euroNiceStep(10 + eased * (2000 - 10));
     const current = euroToCents(input.value); // empty/invalid → 0
-    input.value = centsToEuroInput(Math.max(0, current + dir * stepCents));
+    // Snap to the step grid in the travel direction so values stay clean
+    // (e.g. holding into 1 € steps lands on whole euros, not 1,40).
+    const next = dir > 0
+      ? (Math.floor(current / stepCents) + 1) * stepCents
+      : (Math.ceil(current / stepCents) - 1) * stepCents;
+    input.value = centsToEuroInput(Math.max(0, next));
   };
   apply();
   let repeat = null;
