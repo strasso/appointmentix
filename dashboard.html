@@ -222,10 +222,13 @@
                 </div>
                 <h2 class="cal-title" id="calTitle">—</h2>
               </div>
-              <div class="metrics-chip-row" id="calViewSwitch">
-                <button class="chip-filter-btn active" type="button" data-cal-view="month">Monat</button>
-                <button class="chip-filter-btn" type="button" data-cal-view="week">Woche</button>
-                <button class="chip-filter-btn" type="button" data-cal-view="day">Tag</button>
+              <div class="cal-toolbar-right">
+                <div class="metrics-chip-row" id="calViewSwitch">
+                  <button class="chip-filter-btn active" type="button" data-cal-view="month">Monat</button>
+                  <button class="chip-filter-btn" type="button" data-cal-view="week">Woche</button>
+                  <button class="chip-filter-btn" type="button" data-cal-view="day">Tag</button>
+                </div>
+                <button id="apptNewBtn" class="btn primary btn-sm" type="button" data-cal-new>+ Termin</button>
               </div>
             </div>
             <div id="calBody" class="cal-body"></div>
@@ -719,6 +722,67 @@
         </section>
       </div>
     </section>
+
+    <div id="apptDrawer" class="drawer hidden" aria-hidden="true">
+      <div class="drawer-backdrop" data-drawer-close></div>
+      <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="apptDrawerTitle">
+        <header class="drawer-head">
+          <div>
+            <p class="eyebrow" id="apptDrawerMode">Neuer Termin</p>
+            <h3 id="apptDrawerTitle">Termin</h3>
+          </div>
+          <button class="icon-btn" type="button" data-drawer-close aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </header>
+        <form id="apptForm" class="drawer-body">
+          <label>Patient:in
+            <input name="patientName" type="text" placeholder="Vor- und Nachname" required>
+          </label>
+          <label>E-Mail (optional)
+            <input name="patientEmail" type="email" placeholder="patient@email.de">
+          </label>
+          <label>Behandlung
+            <input name="treatmentName" type="text" list="apptTreatmentList" placeholder="z. B. HydraFacial" autocomplete="off">
+            <datalist id="apptTreatmentList"></datalist>
+          </label>
+          <div class="row-2">
+            <label>Datum
+              <input name="date" type="date" required>
+            </label>
+            <label>Uhrzeit
+              <input name="time" type="time" step="300" required>
+            </label>
+          </div>
+          <div class="row-2">
+            <label>Dauer (Min)
+              <input name="durationMinutes" type="number" min="5" step="5" value="30">
+            </label>
+            <label>Behandler:in
+              <input name="practitionerName" type="text" placeholder="optional">
+            </label>
+          </div>
+          <label>Status
+            <select name="status">
+              <option value="confirmed">Bestätigt</option>
+              <option value="pending_confirmation">Offen</option>
+              <option value="rescheduled">Umgebucht</option>
+              <option value="completed">Abgeschlossen</option>
+              <option value="canceled">Storniert</option>
+            </select>
+          </label>
+          <label>Notizen zum Termin
+            <textarea name="notes" rows="4" placeholder="Notizen, Wünsche, Hinweise …"></textarea>
+          </label>
+          <p id="apptFormError" class="message"></p>
+        </form>
+        <footer class="drawer-foot">
+          <button id="apptCancelAppt" class="btn ghost hidden" type="button">Stornieren</button>
+          <div class="drawer-foot-main">
+            <button class="btn ghost" type="button" data-drawer-close>Schließen</button>
+            <button id="apptSaveBtn" class="btn primary" type="submit" form="apptForm">Speichern</button>
+          </div>
+        </footer>
+      </aside>
+    </div>
 
     <div id="toast" class="toast"></div>
   </main>

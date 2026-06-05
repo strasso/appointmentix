@@ -2150,3 +2150,75 @@ td small {
   .cal-chip-text { display: none; }
   .cal-tg-scroll { max-height: 70vh; }
 }
+
+/* Clickable create affordances */
+.cal-cell { cursor: pointer; }
+.cal-tg-slot { cursor: pointer; transition: background 120ms var(--ease); }
+.cal-tg-slot:hover { background: var(--brand-wash); }
+.cal-cell .cal-chip,
+.cal-cell .cal-more { cursor: pointer; }
+.cal-toolbar-right { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ============================================================
+   Termin-Drawer (anlegen / bearbeiten / Notizen)
+   ============================================================ */
+.drawer { position: fixed; inset: 0; z-index: 80; }
+.drawer.hidden { display: none !important; }
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 18, 24, 0.42);
+  opacity: 0;
+  transition: opacity 220ms var(--ease);
+}
+.drawer.open .drawer-backdrop { opacity: 1; }
+.drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-strong);
+  box-shadow: -24px 0 64px rgba(20, 18, 24, 0.20);
+  transform: translateX(100%);
+  transition: transform 240ms var(--ease-out);
+}
+.drawer.open .drawer-panel { transform: none; }
+.drawer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.drawer-head h3 { font-size: 1.18rem; margin-top: 2px; }
+.drawer-head .icon-btn { width: 34px; height: 34px; border: 1px solid var(--border-strong); }
+.drawer-head .icon-btn svg { width: 16px; height: 16px; }
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.drawer-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+.drawer-foot-main { display: flex; gap: 10px; margin-left: auto; }
+.drawer .message { min-height: 0; margin: 0; }
+#apptCancelAppt { color: var(--danger); }
+#apptCancelAppt:hover { background: var(--danger-soft); border-color: rgba(178, 58, 85, 0.3); color: var(--danger); }
+
+@media (max-width: 520px) {
+  .drawer-panel { width: 100%; }
+}

@@ -10566,6 +10566,135 @@ def clinic_appointments():
   )
 
 
+def get_clinic_appointment_row(clinic_id: int, appointment_id: int):
+  if appointment_id <= 0:
+    return None
+  with get_db() as conn:
+    return conn.execute(
+      """
+      SELECT
+        id, clinic_id, patient_email, patient_name, treatment_id, treatment_name,
+        treatment_duration_minutes, practitioner_name, starts_at, ends_at,
+        location_label, location_address, status, notes, order_id, canceled_at,
+        created_at, updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND id = ?
+      LIMIT 1
+      """,
+      (clinic_id, appointment_id),
+    ).fetchone()
+
+
+@app.post("/api/clinic/appointments")
+def clinic_create_appointment():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  patient_name = sanitize_patient_name(payload.get("patientName"))
+  if not patient_name:
+    return jsonify({"error": "Name der Patient:in ist erforderlich."}), 400
+  starts_at = normalize_optional_datetime_value(payload.get("startsAt"))
+  if not starts_at:
+    return jsonify({"error": "Startzeit ist erforderlich."}), 400
+
+  duration = max(5, min(int(payload.get("durationMinutes") or 30), 600))
+  parsed_start = parse_datetime_utc(starts_at)
+  ends_at = (parsed_start + timedelta(minutes=duration)).isoformat() if parsed_start else None
+  treatment_name = str(payload.get("treatmentName") or "").strip() or "Termin"
+  status = normalize_patient_appointment_status(payload.get("status") or "confirmed", "confirmed")
+  notes = str(payload.get("notes") or "").strip()
+  practitioner = str(payload.get("practitionerName") or "").strip()
+  patient_email = sanitize_patient_email(payload.get("patientEmail")) or ""
+  now_iso = utc_now_iso()
+
+  with get_db() as conn:
+    appointment_id = insert_and_get_id(
+      conn,
+      """
+      INSERT INTO patient_appointments (
+        clinic_id, patient_email, patient_name, treatment_id, treatment_name,
+        treatment_duration_minutes, practitioner_name, starts_at, ends_at,
+        location_label, location_address, status, notes, order_id, canceled_at,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      (
+        clinic_id, patient_email, patient_name, str(payload.get("treatmentId") or "").strip(),
+        treatment_name, duration, practitioner, starts_at, ends_at, "", "", status, notes, "",
+        now_iso if status == "canceled" else None, now_iso, now_iso,
+      ),
+    )
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  if not row:
+    return jsonify({"error": "Termin konnte nicht erstellt werden."}), 500
+  return jsonify({"appointment": serialize_patient_appointment_row(row)}), 201
+
+
+@app.put("/api/clinic/appointments/<int:appointment_id>")
+def clinic_update_appointment(appointment_id):
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  if not row:
+    return jsonify({"error": "Termin nicht gefunden."}), 404
+
+  payload = request.get_json(silent=True) or {}
+  fields: dict[str, object] = {}
+  if "patientName" in payload:
+    fields["patient_name"] = sanitize_patient_name(payload.get("patientName")) or row["patient_name"]
+  if "patientEmail" in payload:
+    fields["patient_email"] = sanitize_patient_email(payload.get("patientEmail")) or ""
+  if "treatmentName" in payload:
+    fields["treatment_name"] = str(payload.get("treatmentName") or "").strip() or "Termin"
+  if "practitionerName" in payload:
+    fields["practitioner_name"] = str(payload.get("practitionerName") or "").strip()
+  if "notes" in payload:
+    fields["notes"] = str(payload.get("notes") or "").strip()
+  if "durationMinutes" in payload:
+    fields["treatment_duration_minutes"] = max(5, min(int(payload.get("durationMinutes") or 30), 600))
+  if "startsAt" in payload:
+    normalized = normalize_optional_datetime_value(payload.get("startsAt"))
+    if normalized:
+      fields["starts_at"] = normalized
+  if "status" in payload:
+    new_status = normalize_patient_appointment_status(payload.get("status"), row["status"] or "pending_confirmation")
+    fields["status"] = new_status
+    fields["canceled_at"] = utc_now_iso() if new_status == "canceled" else None
+
+  if not fields:
+    return jsonify({"appointment": serialize_patient_appointment_row(row)})
+
+  new_start = fields.get("starts_at", row["starts_at"])
+  new_duration = fields.get("treatment_duration_minutes", row["treatment_duration_minutes"])
+  if ("starts_at" in fields or "treatment_duration_minutes" in fields) and new_start:
+    parsed_start = parse_datetime_utc(new_start)
+    if parsed_start:
+      fields["ends_at"] = (parsed_start + timedelta(minutes=int(new_duration or 0))).isoformat()
+
+  fields["updated_at"] = utc_now_iso()
+  set_clause = ", ".join(f"{column} = ?" for column in fields)
+  with get_db() as conn:
+    conn.execute(
+      f"UPDATE patient_appointments SET {set_clause} WHERE clinic_id = ? AND id = ?",
+      (*fields.values(), clinic_id, appointment_id),
+    )
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  return jsonify({"appointment": serialize_patient_appointment_row(row)})
+
+
 @app.post("/api/clinic/members")
 def create_clinic_member():
   owner_row, auth_error = require_owner_row()

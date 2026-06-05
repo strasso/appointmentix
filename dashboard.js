@@ -30,6 +30,7 @@ const state = {
   appointmentFilter: "upcoming",
   calendarView: "month",
   calendarDate: null,
+  editingApptId: null,
   settingsSnapshot: null,
   catalog: {
     categories: [],
@@ -62,6 +63,13 @@ const appointmentFilter = document.getElementById("appointmentFilter");
 const calTitle = document.getElementById("calTitle");
 const calBody = document.getElementById("calBody");
 const calViewSwitch = document.getElementById("calViewSwitch");
+const apptDrawer = document.getElementById("apptDrawer");
+const apptForm = document.getElementById("apptForm");
+const apptFormError = document.getElementById("apptFormError");
+const apptDrawerTitle = document.getElementById("apptDrawerTitle");
+const apptDrawerMode = document.getElementById("apptDrawerMode");
+const apptCancelAppt = document.getElementById("apptCancelAppt");
+const apptTreatmentList = document.getElementById("apptTreatmentList");
 const viewEyebrow = document.getElementById("viewEyebrow");
 const onboardingCard = document.getElementById("onboardingCard");
 const onboardSteps = document.getElementById("onboardSteps");
@@ -2007,7 +2015,8 @@ function renderCalMonth() {
     const events = calEventsForDay(day);
     const shown = events.slice(0, 3);
     const more = events.length - shown.length;
-    cells += `<div class="cal-cell${inMonth ? "" : " cal-out"}${calSameDay(day, today) ? " cal-today" : ""}">
+    const createIso = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 10, 0).toISOString();
+    cells += `<div class="cal-cell${inMonth ? "" : " cal-out"}${calSameDay(day, today) ? " cal-today" : ""}" data-cal-create="${createIso}">
       <div class="cal-cell-date">${day.getDate()}</div>
       <div class="cal-cell-events">
         ${shown.map((appt) => calMonthChip(appt)).join("")}
@@ -2062,7 +2071,10 @@ function renderCalTimeGrid(days) {
 
   const cols = days
     .map((day) => {
-      const slots = Array.from({ length: maxHour - minHour }, () => `<div class="cal-tg-slot" style="height:${hourPx}px"></div>`).join("");
+      const slots = Array.from({ length: maxHour - minHour }, (_, i) => {
+        const slotIso = new Date(day.getFullYear(), day.getMonth(), day.getDate(), minHour + i, 0).toISOString();
+        return `<div class="cal-tg-slot" data-cal-create="${slotIso}" style="height:${hourPx}px"></div>`;
+      }).join("");
       const blocks = calEventsForDay(day)
         .map((appt) => {
           const start = calParseStart(appt);
@@ -2098,13 +2110,130 @@ function calNavigate(direction) {
   renderCalendar();
 }
 
-function showAppointmentDetail(appt) {
-  const start = calParseStart(appt);
-  const meta = APPOINTMENT_STATUS[String(appt.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation;
-  const when = start ? new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(start) : "—";
-  const parts = [appt.patientName || appt.patientEmail || "—", appt.treatmentName || "Termin", when, meta.label];
-  if (appt.practitionerName) parts.push(appt.practitionerName);
-  showToast(parts.join("  ·  "));
+/* ---- Termin-Drawer: anlegen / bearbeiten / Notizen ---- */
+function calPad2(value) { return String(value).padStart(2, "0"); }
+function calDateInputValue(date) { return `${date.getFullYear()}-${calPad2(date.getMonth() + 1)}-${calPad2(date.getDate())}`; }
+function calTimeInputValue(date) { return `${calPad2(date.getHours())}:${calPad2(date.getMinutes())}`; }
+
+function populateTreatmentDatalist() {
+  if (!apptTreatmentList) return;
+  const treatments = (state.catalog && state.catalog.treatments) || [];
+  apptTreatmentList.innerHTML = treatments
+    .filter((item) => item && item.name)
+    .map((item) => `<option value="${escapeAttr(item.name)}"></option>`)
+    .join("");
+}
+
+function openApptDrawer(mode, data = {}) {
+  if (!apptDrawer || !apptForm) return;
+  populateTreatmentDatalist();
+  if (apptFormError) apptFormError.textContent = "";
+  const fields = apptForm.elements;
+
+  if (mode === "edit" && data.id != null) {
+    state.editingApptId = Number(data.id);
+    const start = calParseStart(data) || new Date();
+    if (apptDrawerMode) apptDrawerMode.textContent = "Termin bearbeiten";
+    if (apptDrawerTitle) apptDrawerTitle.textContent = data.patientName || data.treatmentName || "Termin";
+    fields.patientName.value = data.patientName || "";
+    fields.patientEmail.value = data.patientEmail || "";
+    fields.treatmentName.value = data.treatmentName || "";
+    fields.date.value = calDateInputValue(start);
+    fields.time.value = calTimeInputValue(start);
+    fields.durationMinutes.value = data.treatmentDurationMinutes || 30;
+    fields.practitionerName.value = data.practitionerName || "";
+    fields.status.value = String(data.status || "confirmed").toLowerCase();
+    fields.notes.value = data.notes || "";
+    if (apptCancelAppt) apptCancelAppt.classList.toggle("hidden", String(data.status || "") === "canceled");
+  } else {
+    state.editingApptId = null;
+    let start = data.startsAt ? new Date(data.startsAt) : new Date();
+    if (Number.isNaN(start.getTime())) start = new Date();
+    if (apptDrawerMode) apptDrawerMode.textContent = "Neuer Termin";
+    if (apptDrawerTitle) apptDrawerTitle.textContent = "Neuer Termin";
+    apptForm.reset();
+    fields.date.value = calDateInputValue(start);
+    fields.time.value = calTimeInputValue(start);
+    fields.durationMinutes.value = 30;
+    fields.status.value = "confirmed";
+    if (apptCancelAppt) apptCancelAppt.classList.add("hidden");
+  }
+
+  apptDrawer.classList.remove("hidden");
+  apptDrawer.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => apptDrawer.classList.add("open"));
+  haptics("light");
+  window.setTimeout(() => { try { fields.patientName.focus(); } catch { /* noop */ } }, 60);
+}
+
+function closeApptDrawer() {
+  if (!apptDrawer) return;
+  apptDrawer.classList.remove("open");
+  apptDrawer.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => apptDrawer.classList.add("hidden"), 220);
+}
+
+function apptStartIso() {
+  const fields = apptForm.elements;
+  const date = String(fields.date.value || "").trim();
+  const time = String(fields.time.value || "").trim() || "00:00";
+  if (!date) return null;
+  const parsed = new Date(`${date}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+async function submitApptForm(event) {
+  event.preventDefault();
+  if (apptFormError) apptFormError.textContent = "";
+  const fields = apptForm.elements;
+  const startsAt = apptStartIso();
+  if (!String(fields.patientName.value || "").trim()) {
+    if (apptFormError) apptFormError.textContent = "Bitte Name der Patient:in eingeben.";
+    return;
+  }
+  if (!startsAt) {
+    if (apptFormError) apptFormError.textContent = "Bitte Datum und Uhrzeit wählen.";
+    return;
+  }
+  const payload = {
+    patientName: fields.patientName.value.trim(),
+    patientEmail: fields.patientEmail.value.trim(),
+    treatmentName: fields.treatmentName.value.trim(),
+    startsAt,
+    durationMinutes: Number(fields.durationMinutes.value) || 30,
+    practitionerName: fields.practitionerName.value.trim(),
+    status: fields.status.value,
+    notes: fields.notes.value.trim(),
+  };
+  const saveBtn = document.getElementById("apptSaveBtn");
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    if (state.editingApptId) {
+      await apiRequest(`/clinic/appointments/${state.editingApptId}`, { method: "PUT", body: payload });
+      showToast("Termin aktualisiert");
+    } else {
+      await apiRequest("/clinic/appointments", { method: "POST", body: payload });
+      showToast("Termin angelegt");
+    }
+    closeApptDrawer();
+    await loadAppointments();
+  } catch (error) {
+    if (apptFormError) apptFormError.textContent = error.message || "Speichern fehlgeschlagen.";
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function cancelCurrentAppt() {
+  if (!state.editingApptId) return;
+  try {
+    await apiRequest(`/clinic/appointments/${state.editingApptId}`, { method: "PUT", body: { status: "canceled" } });
+    showToast("Termin storniert");
+    closeApptDrawer();
+    await loadAppointments();
+  } catch (error) {
+    if (apptFormError) apptFormError.textContent = error.message;
+  }
 }
 
 async function loadCatalog() {
@@ -2812,12 +2941,25 @@ function bindEvents() {
       if (viewBtn) {
         state.calendarView = viewBtn.getAttribute("data-cal-view");
         renderCalendar();
+        return;
+      }
+      if (event.target.closest("[data-cal-new]")) {
+        const base = ensureCalendarDate();
+        const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 10, 0);
+        openApptDrawer("create", { startsAt: start.toISOString() });
       }
     });
   }
   if (calBody) {
     calBody.addEventListener("click", (event) => {
       if (!(event.target instanceof Element)) return;
+      const evt = event.target.closest("[data-appt-id]");
+      if (evt) {
+        const id = Number(evt.getAttribute("data-appt-id"));
+        const appt = (state.appointments || []).find((item) => Number(item.id) === id);
+        if (appt) openApptDrawer("edit", appt);
+        return;
+      }
       const goto = event.target.closest("[data-cal-goto]");
       if (goto) {
         state.calendarDate = calStartOfDay(new Date(goto.getAttribute("data-cal-goto")));
@@ -2825,14 +2967,22 @@ function bindEvents() {
         renderCalendar();
         return;
       }
-      const evt = event.target.closest("[data-appt-id]");
-      if (evt) {
-        const id = Number(evt.getAttribute("data-appt-id"));
-        const appt = (state.appointments || []).find((item) => Number(item.id) === id);
-        if (appt) showAppointmentDetail(appt);
+      const createEl = event.target.closest("[data-cal-create]");
+      if (createEl) {
+        openApptDrawer("create", { startsAt: createEl.getAttribute("data-cal-create") });
       }
     });
   }
+  if (apptForm) apptForm.addEventListener("submit", submitApptForm);
+  if (apptCancelAppt) apptCancelAppt.addEventListener("click", cancelCurrentAppt);
+  if (apptDrawer) {
+    apptDrawer.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-drawer-close]")) closeApptDrawer();
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
+  });
   // Central interaction feedback: haptic tap + ripple on prominent controls.
   document.addEventListener("pointerdown", (event) => {
     const control =
