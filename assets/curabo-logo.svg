@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Curabo">
+  <defs>
+    <linearGradient id="cbTeal" x1="18%" y1="6%" x2="78%" y2="82%">
+      <stop offset="0%" stop-color="#48f2dc"/>
+      <stop offset="100%" stop-color="#1ec9c4"/>
+    </linearGradient>
+    <linearGradient id="cbPink" x1="88%" y1="22%" x2="34%" y2="96%">
+      <stop offset="0%" stop-color="#ff5f92"/>
+      <stop offset="100%" stop-color="#ef3f7d"/>
+    </linearGradient>
+    <linearGradient id="cbBlue" x1="28%" y1="98%" x2="74%" y2="20%">
+      <stop offset="0%" stop-color="#7d5fe6"/>
+      <stop offset="100%" stop-color="#4f7ef0"/>
+    </linearGradient>
+    <clipPath id="cbClip"><circle cx="60" cy="60" r="47"/></clipPath>
+    <filter id="cbShadow" x="-25%" y="-25%" width="150%" height="155%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3.4" flood-color="#3a1b4d" flood-opacity="0.20"/>
+    </filter>
+  </defs>
+  <g filter="url(#cbShadow)">
+    <g clip-path="url(#cbClip)" transform="rotate(-12 60 60)">
+      <path d="M60 60 C49 45 31 41 31 22 A29 29 0 1 1 89 22 C89 41 71 45 60 60 Z" fill="url(#cbTeal)" transform="rotate(0 60 60)"/>
+      <path d="M60 60 C49 45 31 41 31 22 A29 29 0 1 1 89 22 C89 41 71 45 60 60 Z" fill="url(#cbPink)" transform="rotate(120 60 60)"/>
+      <path d="M60 60 C49 45 31 41 31 22 A29 29 0 1 1 89 22 C89 41 71 45 60 60 Z" fill="url(#cbBlue)" transform="rotate(240 60 60)"/>
+    </g>
+  </g>
+</svg>

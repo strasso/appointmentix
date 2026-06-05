@@ -937,6 +937,16 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
 
+        CREATE TABLE IF NOT EXISTS patient_notes (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          patient_email TEXT NOT NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (clinic_id, patient_email),
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
         CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
           id BIGSERIAL PRIMARY KEY,
           clinic_id BIGINT NOT NULL,
@@ -1244,6 +1254,16 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_email ON patient_appointments(clinic_id, patient_email);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_clinic_status ON patient_appointments(clinic_id, status);
         CREATE INDEX IF NOT EXISTS idx_patient_appointments_order ON patient_appointments(order_id);
+
+        CREATE TABLE IF NOT EXISTS patient_notes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          patient_email TEXT NOT NULL,
+          notes TEXT NOT NULL DEFAULT '',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (clinic_id, patient_email),
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
 
         CREATE TABLE IF NOT EXISTS patient_checkout_sessions (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3428,6 +3448,85 @@ def list_patient_appointments(clinic_id: int, patient_email: str, limit: int = 8
 
   sorted_rows = sorted(list(rows), key=sort_key)
   return sorted_rows
+
+
+def list_clinic_appointments(clinic_id: int, limit: int = 200) -> list:
+  safe_limit = max(1, min(limit, 500))
+  with get_db() as conn:
+    rows = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        treatment_id,
+        treatment_name,
+        treatment_duration_minutes,
+        practitioner_name,
+        starts_at,
+        ends_at,
+        location_label,
+        location_address,
+        status,
+        notes,
+        order_id,
+        canceled_at,
+        created_at,
+        updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ?
+      ORDER BY starts_at DESC, id DESC
+      LIMIT ?
+      """,
+      (clinic_id, safe_limit),
+    ).fetchall()
+
+  def sort_key(row):
+    segment = appointment_segment_for_row(row)
+    starts_at = parse_datetime_utc(row["starts_at"])
+    created_at = parse_datetime_utc(row["created_at"]) or utc_now()
+    if segment == "upcoming":
+      return (0, starts_at or created_at, int(row["id"]))
+    base_dt = starts_at or created_at
+    return (1, -base_dt.timestamp(), -int(row["id"]))
+
+  return sorted(list(rows), key=sort_key)
+
+
+def summarize_clinic_appointments(rows) -> dict:
+  summary = {
+    "total": len(rows),
+    "upcoming": 0,
+    "today": 0,
+    "confirmed": 0,
+    "pending": 0,
+    "canceled": 0,
+  }
+  try:
+    today_local = utc_now().astimezone(clinic_local_timezone()).date()
+  except Exception:
+    today_local = utc_now().date()
+  for row in rows:
+    status = normalize_patient_appointment_status(row["status"])
+    segment = appointment_segment_for_row(row)
+    if segment == "upcoming":
+      summary["upcoming"] += 1
+    if status == "canceled":
+      summary["canceled"] += 1
+    elif status == "confirmed":
+      summary["confirmed"] += 1
+    elif status == "pending_confirmation":
+      summary["pending"] += 1
+    starts_at = parse_datetime_utc(row["starts_at"])
+    if starts_at and status != "canceled":
+      try:
+        local_date = starts_at.astimezone(clinic_local_timezone()).date()
+      except Exception:
+        local_date = starts_at.date()
+      if local_date == today_local:
+        summary["today"] += 1
+  return summary
 
 
 def list_patient_appointments_by_order_id(clinic_id: int, order_id: str) -> list:
@@ -10459,6 +10558,211 @@ def clinic_patient_memberships():
       "memberships": [serialize_patient_membership_row(row) for row in rows],
     }
   )
+
+
+@app.get("/api/clinic/appointments")
+def clinic_appointments():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"summary": summarize_clinic_appointments([]), "appointments": []})
+
+  try:
+    limit = int(request.args.get("limit", "200"))
+  except ValueError:
+    limit = 200
+
+  rows = list_clinic_appointments(clinic_id, limit)
+  summary = summarize_clinic_appointments(rows)
+
+  return jsonify(
+    {
+      "summary": summary,
+      "appointments": [serialize_patient_appointment_row(row) for row in rows],
+    }
+  )
+
+
+def get_clinic_appointment_row(clinic_id: int, appointment_id: int):
+  if appointment_id <= 0:
+    return None
+  with get_db() as conn:
+    return conn.execute(
+      """
+      SELECT
+        id, clinic_id, patient_email, patient_name, treatment_id, treatment_name,
+        treatment_duration_minutes, practitioner_name, starts_at, ends_at,
+        location_label, location_address, status, notes, order_id, canceled_at,
+        created_at, updated_at
+      FROM patient_appointments
+      WHERE clinic_id = ? AND id = ?
+      LIMIT 1
+      """,
+      (clinic_id, appointment_id),
+    ).fetchone()
+
+
+@app.post("/api/clinic/appointments")
+def clinic_create_appointment():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  patient_name = sanitize_patient_name(payload.get("patientName"))
+  if not patient_name:
+    return jsonify({"error": "Name der Patient:in ist erforderlich."}), 400
+  starts_at = normalize_optional_datetime_value(payload.get("startsAt"))
+  if not starts_at:
+    return jsonify({"error": "Startzeit ist erforderlich."}), 400
+
+  duration = max(5, min(int(payload.get("durationMinutes") or 30), 600))
+  parsed_start = parse_datetime_utc(starts_at)
+  ends_at = (parsed_start + timedelta(minutes=duration)).isoformat() if parsed_start else None
+  treatment_name = str(payload.get("treatmentName") or "").strip() or "Termin"
+  status = normalize_patient_appointment_status(payload.get("status") or "confirmed", "confirmed")
+  notes = str(payload.get("notes") or "").strip()
+  practitioner = str(payload.get("practitionerName") or "").strip()
+  patient_email = sanitize_patient_email(payload.get("patientEmail")) or ""
+  now_iso = utc_now_iso()
+
+  with get_db() as conn:
+    appointment_id = insert_and_get_id(
+      conn,
+      """
+      INSERT INTO patient_appointments (
+        clinic_id, patient_email, patient_name, treatment_id, treatment_name,
+        treatment_duration_minutes, practitioner_name, starts_at, ends_at,
+        location_label, location_address, status, notes, order_id, canceled_at,
+        created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      (
+        clinic_id, patient_email, patient_name, str(payload.get("treatmentId") or "").strip(),
+        treatment_name, duration, practitioner, starts_at, ends_at, "", "", status, notes, "",
+        now_iso if status == "canceled" else None, now_iso, now_iso,
+      ),
+    )
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  if not row:
+    return jsonify({"error": "Termin konnte nicht erstellt werden."}), 500
+  return jsonify({"appointment": serialize_patient_appointment_row(row)}), 201
+
+
+@app.put("/api/clinic/appointments/<int:appointment_id>")
+def clinic_update_appointment(appointment_id):
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  if not row:
+    return jsonify({"error": "Termin nicht gefunden."}), 404
+
+  payload = request.get_json(silent=True) or {}
+  fields: dict[str, object] = {}
+  if "patientName" in payload:
+    fields["patient_name"] = sanitize_patient_name(payload.get("patientName")) or row["patient_name"]
+  if "patientEmail" in payload:
+    fields["patient_email"] = sanitize_patient_email(payload.get("patientEmail")) or ""
+  if "treatmentName" in payload:
+    fields["treatment_name"] = str(payload.get("treatmentName") or "").strip() or "Termin"
+  if "practitionerName" in payload:
+    fields["practitioner_name"] = str(payload.get("practitionerName") or "").strip()
+  if "notes" in payload:
+    fields["notes"] = str(payload.get("notes") or "").strip()
+  if "durationMinutes" in payload:
+    fields["treatment_duration_minutes"] = max(5, min(int(payload.get("durationMinutes") or 30), 600))
+  if "startsAt" in payload:
+    normalized = normalize_optional_datetime_value(payload.get("startsAt"))
+    if normalized:
+      fields["starts_at"] = normalized
+  if "status" in payload:
+    new_status = normalize_patient_appointment_status(payload.get("status"), row["status"] or "pending_confirmation")
+    fields["status"] = new_status
+    fields["canceled_at"] = utc_now_iso() if new_status == "canceled" else None
+
+  if not fields:
+    return jsonify({"appointment": serialize_patient_appointment_row(row)})
+
+  new_start = fields.get("starts_at", row["starts_at"])
+  new_duration = fields.get("treatment_duration_minutes", row["treatment_duration_minutes"])
+  if ("starts_at" in fields or "treatment_duration_minutes" in fields) and new_start:
+    parsed_start = parse_datetime_utc(new_start)
+    if parsed_start:
+      fields["ends_at"] = (parsed_start + timedelta(minutes=int(new_duration or 0))).isoformat()
+
+  fields["updated_at"] = utc_now_iso()
+  set_clause = ", ".join(f"{column} = ?" for column in fields)
+  with get_db() as conn:
+    conn.execute(
+      f"UPDATE patient_appointments SET {set_clause} WHERE clinic_id = ? AND id = ?",
+      (*fields.values(), clinic_id, appointment_id),
+    )
+
+  row = get_clinic_appointment_row(clinic_id, appointment_id)
+  return jsonify({"appointment": serialize_patient_appointment_row(row)})
+
+
+@app.get("/api/clinic/patient-notes")
+def clinic_get_patient_notes():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  email = sanitize_patient_email(request.args.get("email"))
+  if not clinic_id or not email:
+    return jsonify({"patientEmail": email or "", "notes": "", "updatedAt": None})
+  with get_db() as conn:
+    row = conn.execute(
+      "SELECT notes, updated_at FROM patient_notes WHERE clinic_id = ? AND patient_email = ? LIMIT 1",
+      (clinic_id, email),
+    ).fetchone()
+  return jsonify(
+    {
+      "patientEmail": email,
+      "notes": row["notes"] if row else "",
+      "updatedAt": row["updated_at"] if row else None,
+    }
+  )
+
+
+@app.put("/api/clinic/patient-notes")
+def clinic_put_patient_notes():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+  payload = request.get_json(silent=True) or {}
+  email = sanitize_patient_email(payload.get("patientEmail"))
+  if not email:
+    return jsonify({"error": "E-Mail ist für Kundennotizen erforderlich."}), 400
+  notes = str(payload.get("notes") or "").strip()
+  now_iso = utc_now_iso()
+  with get_db() as conn:
+    conn.execute(
+      """
+      INSERT INTO patient_notes (clinic_id, patient_email, notes, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT (clinic_id, patient_email)
+      DO UPDATE SET notes = excluded.notes, updated_at = excluded.updated_at
+      """,
+      (clinic_id, email, notes, now_iso),
+    )
+  return jsonify({"patientEmail": email, "notes": notes, "updatedAt": now_iso})
 
 
 @app.post("/api/clinic/members")

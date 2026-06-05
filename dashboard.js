@@ -25,6 +25,13 @@ const state = {
   },
   patientMemberships: [],
   membershipSummary: {},
+  appointments: [],
+  appointmentSummary: {},
+  appointmentFilter: "upcoming",
+  calendarView: "month",
+  calendarDate: null,
+  editingApptId: null,
+  customerNotesEmail: "",
   settingsSnapshot: null,
   catalog: {
     categories: [],
@@ -41,6 +48,50 @@ const dashboardSection = document.getElementById("dashboardSection");
 const sessionLabel = document.getElementById("sessionLabel");
 const logoutBtn = document.getElementById("logoutBtn");
 const toast = document.getElementById("toast");
+const railUserName = document.getElementById("railUserName");
+const railClinicName = document.getElementById("railClinicName");
+const railAvatar = document.getElementById("railAvatar");
+const subscriptionChip = document.getElementById("subscriptionChip");
+const refreshDashboardBtn = document.getElementById("refreshDashboardBtn");
+const onboardRingValue = document.getElementById("onboardRingValue");
+const patientStats = document.getElementById("patientStats");
+const patientsBody = document.getElementById("patientsBody");
+const patientSearch = document.getElementById("patientSearch");
+const appointmentStats = document.getElementById("appointmentStats");
+const appointmentsBody = document.getElementById("appointmentsBody");
+const appointmentSearch = document.getElementById("appointmentSearch");
+const appointmentFilter = document.getElementById("appointmentFilter");
+const calTitle = document.getElementById("calTitle");
+const calBody = document.getElementById("calBody");
+const calViewSwitch = document.getElementById("calViewSwitch");
+const apptDrawer = document.getElementById("apptDrawer");
+const apptForm = document.getElementById("apptForm");
+const apptFormError = document.getElementById("apptFormError");
+const apptDrawerTitle = document.getElementById("apptDrawerTitle");
+const apptDrawerMode = document.getElementById("apptDrawerMode");
+const apptCancelAppt = document.getElementById("apptCancelAppt");
+const apptTreatmentList = document.getElementById("apptTreatmentList");
+const viewEyebrow = document.getElementById("viewEyebrow");
+const onboardingCard = document.getElementById("onboardingCard");
+const onboardSteps = document.getElementById("onboardSteps");
+const onboardProgressLabel = document.getElementById("onboardProgressLabel");
+const kpiRevenue = document.getElementById("kpiRevenue");
+const kpiMrr = document.getElementById("kpiMrr");
+const kpiMembers = document.getElementById("kpiMembers");
+const kpiAppUsers = document.getElementById("kpiAppUsers");
+const railNavItems = Array.from(document.querySelectorAll(".rail-nav-item[data-view]"));
+const viewPanels = Array.from(document.querySelectorAll(".view-panel[data-view-panel]"));
+const VIEW_META = {
+  overview: { eyebrow: "Performance Center" },
+  patienten: { eyebrow: "Patienten" },
+  termine: { eyebrow: "Termine" },
+  analyse: { eyebrow: "Analyse" },
+  katalog: { eyebrow: "Katalog & App" },
+  kampagnen: { eyebrow: "Kampagnen" },
+  team: { eyebrow: "Team" },
+  einstellungen: { eyebrow: "Einstellungen" },
+  abo: { eyebrow: "Abo & Rechnungen" },
+};
 
 const tabLogin = document.getElementById("tabLogin");
 const tabRegister = document.getElementById("tabRegister");
@@ -121,7 +172,6 @@ const refreshCampaignsBtn = document.getElementById("refreshCampaignsBtn");
 const runDueCampaignsBtn = document.getElementById("runDueCampaignsBtn");
 const auditLogsBody = document.getElementById("auditLogsBody");
 const refreshAuditBtn = document.getElementById("refreshAuditBtn");
-const sideNavItems = Array.from(document.querySelectorAll(".side-nav-item[data-nav-target]"));
 let metricsResizeTimer = null;
 let metricsResizeFrame = null;
 const CATEGORY_ID_UI_ALIASES = {
@@ -214,6 +264,7 @@ function formatDateOnly(rawDate) {
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add("show");
+  haptics("success");
   if (state.toastTimer) {
     window.clearTimeout(state.toastTimer);
   }
@@ -221,6 +272,64 @@ function showToast(message) {
     toast.classList.remove("show");
     state.toastTimer = null;
   }, 2600);
+}
+
+/* ---- Interaction layer: haptics, ripple, count-up (reduced-motion aware) ---- */
+const reduceMotionQuery =
+  typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : { matches: false };
+
+function prefersReducedMotion() {
+  return Boolean(reduceMotionQuery.matches);
+}
+
+const HAPTIC_PATTERNS = { light: 8, medium: 16, success: [6, 30, 10], warn: [14, 40, 14] };
+
+function haptics(kind = "light") {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+  try {
+    navigator.vibrate(HAPTIC_PATTERNS[kind] || HAPTIC_PATTERNS.light);
+  } catch {
+    /* vibration not permitted — ignore */
+  }
+}
+
+function createRipple(event, host) {
+  if (prefersReducedMotion() || !(host instanceof HTMLElement)) return;
+  const rect = host.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const ripple = document.createElement("span");
+  ripple.className = "ripple";
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${(event.clientX ?? rect.left + rect.width / 2) - rect.left - size / 2}px`;
+  ripple.style.top = `${(event.clientY ?? rect.top + rect.height / 2) - rect.top - size / 2}px`;
+  host.appendChild(ripple);
+  ripple.addEventListener("animationend", () => ripple.remove());
+  window.setTimeout(() => ripple.remove(), 700);
+}
+
+function animateCount(element, toValue, formatter) {
+  if (!element) return;
+  const format = typeof formatter === "function" ? formatter : (value) => String(Math.round(value));
+  const target = Number(toValue) || 0;
+  const previous = Number(element.dataset.countValue);
+  element.dataset.countValue = String(target);
+  if (prefersReducedMotion() || !Number.isFinite(previous) || previous === target) {
+    element.textContent = format(target);
+    return;
+  }
+  const duration = 620;
+  const start = performance.now();
+  const from = previous;
+  const step = (now) => {
+    const progress = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    element.textContent = format(from + (target - from) * eased);
+    if (progress < 1) window.requestAnimationFrame(step);
+    else element.textContent = format(target);
+  };
+  window.requestAnimationFrame(step);
 }
 
 function humanizeImportError(message) {
@@ -354,14 +463,23 @@ function setSession(user) {
     if (importCatalogBtn) importCatalogBtn.disabled = true;
     if (createCampaignBtn) createCampaignBtn.disabled = true;
     if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = true;
+    if (onboardingCard) onboardingCard.classList.add("hidden");
     setCatalogDisabled(true);
     return;
   }
 
   sessionLabel.textContent = `${user.fullName} • ${user.clinicName} • ${user.role}`;
+  if (railUserName) railUserName.textContent = user.fullName || "—";
+  if (railClinicName) railClinicName.textContent = user.clinicName || "—";
+  if (railAvatar) {
+    const source = String(user.clinicName || user.fullName || "C").trim();
+    railAvatar.textContent = (source[0] || "C").toUpperCase();
+  }
+  setSubscriptionChip(user.subscriptionStatus);
   authSection.classList.add("hidden");
   dashboardSection.classList.remove("hidden");
   logoutBtn.classList.remove("hidden");
+  showView(viewFromHash(), false);
 
   saveSettingsBtn.disabled = !state.isOwner;
   saveCatalogBtn.disabled = !state.isOwner;
@@ -376,7 +494,7 @@ function setSession(user) {
 
 function setCatalogDisabled(disabled) {
   if (!catalogForm) return;
-  const controls = catalogForm.querySelectorAll("input, textarea, button.row-remove");
+  const controls = catalogForm.querySelectorAll("input, textarea, select, button.row-remove");
   controls.forEach((control) => {
     control.disabled = disabled;
   });
@@ -636,73 +754,115 @@ function getCanvasContext(canvas) {
   return context;
 }
 
+const CHART_BRAND = "#b56f80";
+
+function hexToRgba(hex, alpha) {
+  const value = String(hex || "").replace("#", "");
+  if (value.length !== 6) return `rgba(181, 111, 128, ${alpha})`;
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 function drawLineChart(canvas, values, options = {}) {
   const context = getCanvasContext(canvas);
   if (!context) return;
   const width = canvas.getBoundingClientRect().width;
   const height = canvas.getBoundingClientRect().height;
-  const paddingTop = Number(options.paddingTop ?? 12);
-  const paddingBottom = Number(options.paddingBottom ?? 20);
-  const paddingLeft = Number(options.paddingLeft ?? 8);
+  const paddingTop = Number(options.paddingTop ?? 14);
+  const paddingBottom = Number(options.paddingBottom ?? 16);
+  const paddingLeft = Number(options.paddingLeft ?? 6);
   const paddingRight = Number(options.paddingRight ?? 8);
   const chartWidth = Math.max(width - paddingLeft - paddingRight, 1);
   const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
   const series = safeSeries(values, 2);
-  const max = Math.max(...series, 1);
-  const min = Number(options.minValue ?? 0);
-  const range = Math.max(max - min, 1);
+  const lineColor = options.lineColor || CHART_BRAND;
+  const baselineY = paddingTop + chartHeight;
 
   context.clearRect(0, 0, width, height);
 
-  const stripeCount = Number(options.stripeCount ?? Math.min(series.length, 18));
-  if (stripeCount > 1) {
-    const stripeWidth = chartWidth / stripeCount;
-    for (let index = 0; index < stripeCount; index += 1) {
-      if (index % 2 !== 0) continue;
-      context.fillStyle = options.stripeColor || "#f2f4f7";
-      context.fillRect(paddingLeft + index * stripeWidth, paddingTop, stripeWidth, chartHeight);
-    }
+  // hairline baseline
+  context.beginPath();
+  context.strokeStyle = "rgba(23, 21, 26, 0.08)";
+  context.lineWidth = 1;
+  context.moveTo(paddingLeft, baselineY + 0.5);
+  context.lineTo(paddingLeft + chartWidth, baselineY + 0.5);
+  context.stroke();
+
+  // empty state — no data yet
+  if (!(Math.max(...series) > 0)) {
+    context.fillStyle = "rgba(108, 104, 115, 0.55)";
+    context.font = "600 12px Inter, sans-serif";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(options.emptyText || "Noch keine Daten", paddingLeft + chartWidth / 2, paddingTop + chartHeight / 2);
+    return;
   }
 
-  context.beginPath();
-  context.strokeStyle = options.lineColor || "#5b7cfa";
-  context.lineWidth = Number(options.lineWidth ?? 2);
-  context.lineJoin = "round";
-  context.lineCap = "round";
-
-  series.forEach((value, index) => {
+  const min = Number(options.minValue ?? 0);
+  const max = Math.max(...series, 1);
+  const range = Math.max(max - min, 1);
+  const points = series.map((value, index) => {
     const x = paddingLeft + (index / Math.max(series.length - 1, 1)) * chartWidth;
     const ratio = (Number(value || 0) - min) / range;
-    const y = paddingTop + chartHeight - ratio * chartHeight;
-    if (index === 0) {
-      context.moveTo(x, y);
-    } else {
-      context.lineTo(x, y);
-    }
+    return [x, paddingTop + chartHeight - ratio * chartHeight];
+  });
+
+  // soft area fill
+  const gradient = context.createLinearGradient(0, paddingTop, 0, baselineY);
+  gradient.addColorStop(0, hexToRgba(lineColor, 0.18));
+  gradient.addColorStop(1, hexToRgba(lineColor, 0));
+  context.beginPath();
+  context.moveTo(points[0][0], baselineY);
+  points.forEach(([x, y]) => context.lineTo(x, y));
+  context.lineTo(points[points.length - 1][0], baselineY);
+  context.closePath();
+  context.fillStyle = gradient;
+  context.fill();
+
+  // primary line
+  context.beginPath();
+  context.strokeStyle = lineColor;
+  context.lineWidth = Number(options.lineWidth ?? 2.25);
+  context.lineJoin = "round";
+  context.lineCap = "round";
+  points.forEach(([x, y], index) => {
+    if (index === 0) context.moveTo(x, y);
+    else context.lineTo(x, y);
   });
   context.stroke();
 
+  // optional comparison line (dashed, muted)
   if (Array.isArray(options.secondary) && options.secondary.length) {
     const secondSeries = safeSeries(options.secondary, series.length);
     const secondMax = Math.max(...secondSeries, 1);
     const secondRange = Math.max(secondMax - min, 1);
     context.beginPath();
-    context.strokeStyle = options.secondaryColor || "#c4c8d0";
-    context.lineWidth = 1.8;
-    context.setLineDash([5, 4]);
+    context.strokeStyle = options.secondaryColor || "rgba(23, 21, 26, 0.22)";
+    context.lineWidth = 1.6;
+    context.setLineDash([4, 4]);
     secondSeries.forEach((value, index) => {
       const x = paddingLeft + (index / Math.max(secondSeries.length - 1, 1)) * chartWidth;
       const ratio = (Number(value || 0) - min) / secondRange;
       const y = paddingTop + chartHeight - ratio * chartHeight;
-      if (index === 0) {
-        context.moveTo(x, y);
-      } else {
-        context.lineTo(x, y);
-      }
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
     });
     context.stroke();
     context.setLineDash([]);
   }
+
+  // end-point marker
+  const last = points[points.length - 1];
+  context.beginPath();
+  context.fillStyle = "#ffffff";
+  context.arc(last[0], last[1], 3.6, 0, Math.PI * 2);
+  context.fill();
+  context.beginPath();
+  context.fillStyle = lineColor;
+  context.arc(last[0], last[1], 2.4, 0, Math.PI * 2);
+  context.fill();
 }
 
 function actionToFeedText(action) {
@@ -756,13 +916,18 @@ function renderRevenueSources(summary = {}, memberships = {}, backendSources = [
     const customPlans = Math.max(0, Math.round(revenue * 0.07));
     const shop = Math.max(0, revenue - notificationOffers - customPlans);
     rows = [
-      { label: "Mitgliedschaften", value: mrr, color: "#16a34a" },
-      { label: "Rewards & Guthaben", value: rewardsCash, color: "#5b7cfa" },
-      { label: "Angebotskampagnen", value: notificationOffers, color: "#e91678" },
-      { label: "Sonderpläne", value: customPlans, color: "#b54708" },
-      { label: "Shop", value: shop, color: "#f59e0b" },
+      { label: "Mitgliedschaften", value: mrr, color: "#b56f80" },
+      { label: "Rewards & Guthaben", value: rewardsCash, color: "#cf9aa6" },
+      { label: "Angebotskampagnen", value: notificationOffers, color: "#8c6f9e" },
+      { label: "Sonderpläne", value: customPlans, color: "#c98a5e" },
+      { label: "Shop", value: shop, color: "#6b7280" },
     ];
   }
+
+  // Harmonized brand palette — applied regardless of source so the
+  // legend stays tonal (rose family + warm neutrals), not a rainbow.
+  const SOURCE_PALETTE = ["#b56f80", "#cf9aa6", "#8c6f9e", "#c98a5e", "#6b7280", "#a98a72"];
+  rows = rows.map((row, index) => ({ ...row, color: SOURCE_PALETTE[index % SOURCE_PALETTE.length] }));
 
   const total = Math.max(rows.reduce((sum, row) => sum + row.value, 0), 1);
 
@@ -923,9 +1088,11 @@ function renderMetricsDashboard() {
   const latestRevenue = Number(summary.dailyProcessingCents || revenueByDay[revenueByDay.length - 1] || 0);
   const previousRevenue = revenueByDay[revenueByDay.length - 2] || 0;
   const dailyDelta = previousRevenue > 0 ? ((latestRevenue - previousRevenue) / previousRevenue) * 100 : 0;
-  if (metricDailyProcessingValue) metricDailyProcessingValue.textContent = formatEuro(latestRevenue);
+  if (metricDailyProcessingValue) animateCount(metricDailyProcessingValue, latestRevenue, formatEuro);
   if (metricDailyProcessingDelta && compareMode !== "none" && deltas.dailyProcessingCents) {
     setDeltaBadge(metricDailyProcessingDelta, deltas.dailyProcessingCents, compareMode);
+  } else if (metricDailyProcessingDelta && latestRevenue <= 0 && previousRevenue <= 0) {
+    metricDailyProcessingDelta.classList.add("hidden");
   } else if (metricDailyProcessingDelta) {
     metricDailyProcessingDelta.classList.remove("hidden");
     metricDailyProcessingDelta.textContent = `${dailyDelta >= 0 ? "+" : ""}${dailyDelta.toFixed(1)}%`;
@@ -936,6 +1103,10 @@ function renderMetricsDashboard() {
 
   if (metricNetRevenueValue) metricNetRevenueValue.textContent = formatEuro(revenueTotal);
   if (metricMRRValue) metricMRRValue.textContent = formatEuro(mrrBase);
+  if (kpiRevenue) animateCount(kpiRevenue, revenueTotal, formatEuro);
+  if (kpiMrr) animateCount(kpiMrr, mrrBase, formatEuro);
+  if (kpiMembers) animateCount(kpiMembers, Number(summary.activeMemberships || 0));
+  if (kpiAppUsers) animateCount(kpiAppUsers, activeUsers);
   if (metricAppUserLTVValue) metricAppUserLTVValue.textContent = formatEuro(appUserLtvCents);
   if (metricClientLTVValue) metricClientLTVValue.textContent = formatEuro(clientLtvCents);
   if (metricAppUsersValue) metricAppUsersValue.textContent = String(activeUsers);
@@ -953,18 +1124,18 @@ function renderMetricsDashboard() {
 
   drawLineChart(chartDailyProcessing, normalizeForChart(purchasesByDay), {
     secondary: normalizeForChart(viewsByDay),
-    lineColor: "#5b7cfa",
+    lineColor: CHART_BRAND,
     secondaryColor: "#c4c8d0",
     stripeCount: 12,
   });
-  drawLineChart(chartNetRevenue, normalizeForChart(revenueByDay), { lineColor: "#5b7cfa", stripeCount: 18 });
-  drawLineChart(chartMRR, normalizeForChart(mrrSeries), { lineColor: "#5b7cfa", stripeCount: 12 });
-  drawLineChart(chartAppUserLTV, normalizeForChart(appUserLtvSeries), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartClientLTV, normalizeForChart(clientLtvSeries), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartAppUsers, normalizeForChart(cumulativeSeries(appOpenByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartReferrals, normalizeForChart(cumulativeSeries(referralByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartVisits, normalizeForChart(appOpenByDay), { lineColor: "#5b7cfa", stripeCount: 14 });
-  drawLineChart(chartReviews, normalizeForChart(cumulativeSeries(reviewByDay)), { lineColor: "#5b7cfa", stripeCount: 14 });
+  drawLineChart(chartNetRevenue, normalizeForChart(revenueByDay), { lineColor: CHART_BRAND, stripeCount: 18 });
+  drawLineChart(chartMRR, normalizeForChart(mrrSeries), { lineColor: CHART_BRAND, stripeCount: 12 });
+  drawLineChart(chartAppUserLTV, normalizeForChart(appUserLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartClientLTV, normalizeForChart(clientLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartAppUsers, normalizeForChart(cumulativeSeries(appOpenByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartReferrals, normalizeForChart(cumulativeSeries(referralByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartVisits, normalizeForChart(appOpenByDay), { lineColor: CHART_BRAND, stripeCount: 14 });
+  drawLineChart(chartReviews, normalizeForChart(cumulativeSeries(reviewByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
 
   renderLiveFeed(auditRows);
   const sourceRows = renderRevenueSources(summary, memberships, state.analytics.revenueSources || []);
@@ -1059,16 +1230,128 @@ function scheduleMetricsRender() {
   }, 120);
 }
 
-function scrollToDashboardTarget(targetId) {
-  if (!targetId) return;
-  const target = document.getElementById(targetId);
-  if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "start" });
+function showView(viewName, updateHash = true) {
+  const target = VIEW_META[viewName] ? viewName : "overview";
+  railNavItems.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-view") === target);
+  });
+  viewPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.getAttribute("data-view-panel") === target);
+  });
+  if (viewEyebrow && VIEW_META[target]) {
+    viewEyebrow.textContent = VIEW_META[target].eyebrow;
+  }
+  if (target === "analyse") {
+    scheduleMetricsRender();
+  }
+  if (updateHash && state.user) {
+    const nextHash = `#${target}`;
+    if (window.location.hash !== nextHash) {
+      window.history.replaceState(null, "", nextHash);
+    }
+  }
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function setActiveSidebarItem(activeButton) {
-  sideNavItems.forEach((button) => {
-    button.classList.toggle("active", button === activeButton);
+function viewFromHash() {
+  const raw = String(window.location.hash || "").replace(/^#/, "").trim();
+  return VIEW_META[raw] ? raw : "overview";
+}
+
+function setSubscriptionChip(status) {
+  if (!subscriptionChip) return;
+  const normalized = String(status || "inactive").toLowerCase();
+  const map = {
+    active: { label: "Abo aktiv", cls: "ok" },
+    trialing: { label: "Testphase", cls: "ok" },
+    past_due: { label: "Zahlung offen", cls: "warn" },
+    canceled: { label: "Abo gekündigt", cls: "warn" },
+    inactive: { label: "Abo inaktiv", cls: "muted" },
+  };
+  const info = map[normalized] || map.inactive;
+  subscriptionChip.textContent = info.label;
+  subscriptionChip.className = `sub-chip ${info.cls}`;
+}
+
+function renderOnboarding() {
+  if (!onboardingCard || !onboardSteps) return;
+  if (!state.user) {
+    onboardingCard.classList.add("hidden");
+    return;
+  }
+  const status = String(state.user.subscriptionStatus || "inactive").toLowerCase();
+  const settings = state.settingsSnapshot || {};
+  const hasTreatments = Boolean(treatmentsBody && treatmentsBody.querySelector("tr"));
+  const hasTeam = Boolean(membersBody && membersBody.querySelectorAll("tr").length > 1);
+  const hasProfile = Boolean(String(settings.website || "").trim() || String(settings.logoUrl || "").trim());
+
+  const steps = [
+    {
+      done: ["active", "trialing"].includes(status),
+      title: "Abo aktivieren",
+      hint: "Schalte App, Shop und Mitgliedschaften frei.",
+      view: "abo",
+    },
+    {
+      done: hasTreatments,
+      title: "Behandlungen anlegen",
+      hint: "Lege deinen Katalog an, damit Patienten buchen können.",
+      view: "katalog",
+    },
+    {
+      done: hasProfile,
+      title: "Klinik-Profil vervollständigen",
+      hint: "Website, Logo und Branding für deine Patienten-App.",
+      view: "einstellungen",
+    },
+    {
+      done: hasTeam,
+      title: "Team einladen",
+      hint: "Lege Staff-Accounts für dein Team an.",
+      view: "team",
+    },
+  ];
+
+  const doneCount = steps.filter((step) => step.done).length;
+  if (onboardProgressLabel) onboardProgressLabel.textContent = `${doneCount}/${steps.length}`;
+  if (onboardRingValue) {
+    const circumference = 157.08;
+    const ratio = steps.length ? doneCount / steps.length : 0;
+    onboardRingValue.style.strokeDashoffset = String(circumference * (1 - ratio));
+  }
+
+  if (doneCount >= steps.length) {
+    onboardingCard.classList.add("hidden");
+    return;
+  }
+  onboardingCard.classList.remove("hidden");
+
+  onboardSteps.innerHTML = "";
+  steps.forEach((step) => {
+    const li = document.createElement("li");
+    li.className = `onboard-step${step.done ? " done" : ""}`;
+    const mark = document.createElement("span");
+    mark.className = "onboard-mark";
+    mark.textContent = step.done ? "✓" : "";
+    const copy = document.createElement("div");
+    copy.className = "onboard-copy";
+    const title = document.createElement("p");
+    title.className = "onboard-title";
+    title.textContent = step.title;
+    const hint = document.createElement("p");
+    hint.className = "onboard-hint";
+    hint.textContent = step.hint;
+    copy.append(title, hint);
+    li.append(mark, copy);
+    if (!step.done) {
+      const action = document.createElement("button");
+      action.type = "button";
+      action.className = "btn ghost btn-sm";
+      action.textContent = "Los geht's";
+      action.addEventListener("click", () => showView(step.view));
+      li.append(action);
+    }
+    onboardSteps.append(li);
   });
 }
 
@@ -1100,196 +1383,208 @@ function normalizeCatalogPayload(payload = {}) {
   };
 }
 
+function centsToEuroInput(cents) {
+  const value = Number(cents || 0) / 100;
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function euroInputToCents(value) {
+  const numeric = parseFloat(String(value ?? "").replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric * 100)) : 0;
+}
+
+function renderCategoryOptions(selectedId, categories) {
+  const selected = storeCategoryId(selectedId || "");
+  const options = [`<option value=""${selected ? "" : " selected"} disabled>Kategorie wählen…</option>`];
+  let matched = false;
+  (categories || []).forEach((category) => {
+    const stored = storeCategoryId(category.id);
+    if (!stored) return;
+    const isSelected = stored === selected;
+    if (isSelected) matched = true;
+    options.push(
+      `<option value="${escapeAttr(displayCategoryId(stored))}"${isSelected ? " selected" : ""}>${escapeHtml(category.label || displayCategoryId(stored))}</option>`
+    );
+  });
+  if (selected && !matched) {
+    options.push(`<option value="${escapeAttr(displayCategoryId(selected))}" selected>${escapeHtml(displayCategoryId(selected))}</option>`);
+  }
+  return options.join("");
+}
+
+function catalogRemoveButton(listName, index) {
+  return `<button class="row-remove cat-remove" type="button" data-remove-list="${listName}" data-index="${index}" aria-label="Entfernen" title="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
+}
+
+function catalogEmptyState(message) {
+  return `<div class="cat-empty">${escapeHtml(message)}</div>`;
+}
+
 function renderCatalog() {
   const catalog = normalizeCatalogPayload(state.catalog);
   state.catalog = catalog;
 
-  categoriesBody.innerHTML = catalog.categories
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="categories" data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht"></td>
-          <td><input data-list="categories" data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht"></td>
-          <td><button class="row-remove" type="button" data-remove-list="categories" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.categories.length) {
-    categoriesBody.innerHTML = '<tr><td colspan="3">Noch keine Kategorien.</td></tr>';
-  }
+  categoriesBody.innerHTML = catalog.categories.length
+    ? catalog.categories
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="categories">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Bezeichnung<input data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("categories", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Kategorien. Lege z. B. Gesicht oder Körper an.");
 
-  treatmentsBody.innerHTML = catalog.treatments
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="treatments" data-field="id" value="${escapeAttr(item.id)}" placeholder="t-basic-glow"></td>
-          <td><input data-list="treatments" data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></td>
-          <td><input data-list="treatments" data-field="category" value="${escapeAttr(displayCategoryId(item.category))}" placeholder="gesicht"></td>
-          <td><input data-list="treatments" data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="11000"></td>
-          <td><input data-list="treatments" data-field="memberPriceCents" value="${escapeAttr(item.memberPriceCents)}" placeholder="9900"></td>
-          <td><input data-list="treatments" data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></td>
-          <td><input data-list="treatments" data-field="description" value="${escapeAttr(item.description)}" placeholder="Beschreibung"></td>
-          <td>
-            <div class="body-zone-picker" data-body-zone-picker>
-              ${renderBodyZoneChips(item.bodyZones)}
-            </div>
-          </td>
-          <td><button class="row-remove" type="button" data-remove-list="treatments" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.treatments.length) {
-    treatmentsBody.innerHTML = '<tr><td colspan="9">Noch keine Treatments.</td></tr>';
-  }
+  treatmentsBody.innerHTML = catalog.treatments.length
+    ? catalog.treatments
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="treatments">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow"></label>
+                <label class="cat-field">Kategorie<select data-field="category">${renderCategoryOptions(item.category, catalog.categories)}</select></label>
+                <label class="cat-field">Dauer (Min)<input data-field="durationMinutes" type="number" min="0" step="5" inputmode="numeric" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></label>
+                <label class="cat-field">Preis (€)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110"></label>
+                <label class="cat-field">Mitgliedspreis (€)<input data-field="memberPriceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="basic-glow" spellcheck="false"></label>
+                <label class="cat-field span-full">Beschreibung<input data-field="description" value="${escapeAttr(item.description)}" placeholder="Kurze Beschreibung für die App"></label>
+                <div class="cat-field span-full">Body-Zonen<div class="body-zone-picker" data-body-zone-picker>${renderBodyZoneChips(item.bodyZones)}</div></div>
+              </div>
+              ${catalogRemoveButton("treatments", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Behandlungen. Lege deine erste Behandlung an.");
 
-  membershipsBody.innerHTML = catalog.memberships
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="memberships" data-field="id" value="${escapeAttr(item.id)}" placeholder="silber"></td>
-          <td><input data-list="memberships" data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber"></td>
-          <td><input data-list="memberships" data-field="priceCents" value="${escapeAttr(item.priceCents)}" placeholder="7900"></td>
-          <td><input data-list="memberships" data-field="includedTreatmentIds" value="${escapeAttr(joinCommaList(item.includedTreatmentIds))}" placeholder="t-basic-glow, t-med-peeling"></td>
-          <td><input data-list="memberships" data-field="perks" value="${escapeAttr(joinCommaList(item.perks))}" placeholder="Perk 1, Perk 2"></td>
-          <td><button class="row-remove" type="button" data-remove-list="memberships" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.memberships.length) {
-    membershipsBody.innerHTML = '<tr><td colspan="6">Noch keine Mitgliedschaften.</td></tr>';
-  }
+  membershipsBody.innerHTML = catalog.memberships.length
+    ? catalog.memberships
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="memberships">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="Silber"></label>
+                <label class="cat-field">Preis (€ / Monat)<input data-field="priceCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="silber" spellcheck="false"></label>
+                <label class="cat-field span-full">Inkludierte Behandlungen<input data-field="includedTreatmentIds" value="${escapeAttr(joinCommaList(item.includedTreatmentIds))}" placeholder="basic-glow, med-peeling"><span class="cat-mini-hint">Kürzel der Behandlungen, mit Komma getrennt</span></label>
+                <label class="cat-field span-full">Vorteile<input data-field="perks" value="${escapeAttr(joinCommaList(item.perks))}" placeholder="1 Gratis-Behandlung, 10 % Rabatt"><span class="cat-mini-hint">Mit Komma getrennt</span></label>
+              </div>
+              ${catalogRemoveButton("memberships", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Mitgliedschaften.");
 
-  rewardActionsBody.innerHTML = catalog.rewardActions
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="rewardActions" data-field="id" value="${escapeAttr(item.id)}" placeholder="referral"></td>
-          <td><input data-list="rewardActions" data-field="label" value="${escapeAttr(item.label)}" placeholder="Freund:in werben"></td>
-          <td><input data-list="rewardActions" data-field="points" value="${escapeAttr(item.points)}" placeholder="150"></td>
-          <td><button class="row-remove" type="button" data-remove-list="rewardActions" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.rewardActions.length) {
-    rewardActionsBody.innerHTML = '<tr><td colspan="4">Noch keine Reward Aktionen.</td></tr>';
-  }
+  rewardActionsBody.innerHTML = catalog.rewardActions.length
+    ? catalog.rewardActions
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="rewardActions">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Aktion<input data-field="label" value="${escapeAttr(item.label)}" placeholder="Freund:in werben"></label>
+                <label class="cat-field cat-field-num">Punkte<input data-field="points" type="number" min="0" step="1" inputmode="numeric" value="${escapeAttr(item.points)}" placeholder="150"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="referral" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("rewardActions", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Reward-Aktionen.");
 
-  rewardRedeemsBody.innerHTML = catalog.rewardRedeems
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="rewardRedeems" data-field="id" value="${escapeAttr(item.id)}" placeholder="r15"></td>
-          <td><input data-list="rewardRedeems" data-field="label" value="${escapeAttr(item.label)}" placeholder="15 EUR Guthaben"></td>
-          <td><input data-list="rewardRedeems" data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></td>
-          <td><input data-list="rewardRedeems" data-field="valueCents" value="${escapeAttr(item.valueCents)}" placeholder="1500"></td>
-          <td><button class="row-remove" type="button" data-remove-list="rewardRedeems" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.rewardRedeems.length) {
-    rewardRedeemsBody.innerHTML = '<tr><td colspan="5">Noch keine Einlösungen.</td></tr>';
-  }
+  rewardRedeemsBody.innerHTML = catalog.rewardRedeems.length
+    ? catalog.rewardRedeems
+        .map(
+          (item, index) =>
+            `<div class="cat-item cat-item-compact" data-list="rewardRedeems">
+              <div class="cat-fields">
+                <label class="cat-field cat-field-grow">Bezeichnung<input data-field="label" value="${escapeAttr(item.label)}" placeholder="15 € Guthaben"></label>
+                <label class="cat-field cat-field-num">Benötigte Punkte<input data-field="requiredPoints" type="number" min="0" step="1" inputmode="numeric" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></label>
+                <label class="cat-field cat-field-num">Wert (€)<input data-field="valueCents" data-unit="euro" type="number" min="0" step="0.01" inputmode="decimal" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="r15" spellcheck="false"></label>
+              </div>
+              ${catalogRemoveButton("rewardRedeems", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Reward-Einlösungen.");
 
-  homeArticlesBody.innerHTML = catalog.homeArticles
-    .map(
-      (item, index) =>
-        `<tr>
-          <td><input data-list="homeArticles" data-field="id" value="${escapeAttr(item.id)}" placeholder="art-1"></td>
-          <td><input data-list="homeArticles" data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education"></td>
-          <td><input data-list="homeArticles" data-field="title" value="${escapeAttr(item.title)}" placeholder="Titel"></td>
-          <td><input data-list="homeArticles" data-field="body" value="${escapeAttr(item.body)}" placeholder="Kurztext"></td>
-          <td><button class="row-remove" type="button" data-remove-list="homeArticles" data-index="${index}">Entfernen</button></td>
-        </tr>`
-    )
-    .join("");
-  if (!catalog.homeArticles.length) {
-    homeArticlesBody.innerHTML = '<tr><td colspan="5">Noch keine Home Artikel.</td></tr>';
-  }
+  homeArticlesBody.innerHTML = catalog.homeArticles.length
+    ? catalog.homeArticles
+        .map(
+          (item, index) =>
+            `<div class="cat-item" data-list="homeArticles">
+              <div class="cat-fields">
+                <label class="cat-field span-2">Titel<input data-field="title" value="${escapeAttr(item.title)}" placeholder="Tipps nach der Behandlung"></label>
+                <label class="cat-field">Tag<input data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education"></label>
+                <label class="cat-field cat-field-code">Kürzel<input data-field="id" value="${escapeAttr(item.id)}" placeholder="art-1" spellcheck="false"></label>
+                <label class="cat-field span-full">Text<textarea data-field="body" rows="2" placeholder="Kurztext für die App">${escapeHtml(item.body || "")}</textarea></label>
+              </div>
+              ${catalogRemoveButton("homeArticles", index)}
+            </div>`
+        )
+        .join("")
+    : catalogEmptyState("Noch keine Home-Artikel.");
 
   setCatalogDisabled(!state.isOwner);
 }
 
 function syncCatalogStateFromDom() {
-  const categories = Array.from(categoriesBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = storeCategoryId(row.querySelector('input[data-field="id"]')?.value.trim() || "");
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return { id, label };
-    })
+  const readVal = (row, field) => row.querySelector(`[data-field="${field}"]`)?.value.trim() || "";
+  const readEuroCents = (row, field) => euroInputToCents(row.querySelector(`[data-field="${field}"]`)?.value);
+  const readInt = (row, field) => toInt(row.querySelector(`[data-field="${field}"]`)?.value, 0);
+
+  const categories = Array.from(categoriesBody.querySelectorAll(".cat-item"))
+    .map((row) => ({ id: storeCategoryId(readVal(row, "id")), label: readVal(row, "label") }))
     .filter((item) => item.id && item.label);
 
-  const treatments = Array.from(treatmentsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
-      const category = storeCategoryId(row.querySelector('input[data-field="category"]')?.value.trim() || "");
-      const description = row.querySelector('input[data-field="description"]')?.value.trim() || "";
-      const bodyZones = Array.from(row.querySelectorAll('input[data-body-zone-option]:checked'))
+  const treatments = Array.from(treatmentsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      name: readVal(row, "name"),
+      category: storeCategoryId(readVal(row, "category")),
+      priceCents: readEuroCents(row, "priceCents"),
+      memberPriceCents: readEuroCents(row, "memberPriceCents"),
+      durationMinutes: readInt(row, "durationMinutes"),
+      description: readVal(row, "description"),
+      bodyZones: Array.from(row.querySelectorAll("input[data-body-zone-option]:checked"))
         .map((input) => normalizeBodyZoneId(input.value))
-        .filter(Boolean);
-      return {
-        id,
-        name,
-        category,
-        priceCents: toInt(row.querySelector('input[data-field="priceCents"]')?.value, 0),
-        memberPriceCents: toInt(row.querySelector('input[data-field="memberPriceCents"]')?.value, 0),
-        durationMinutes: toInt(row.querySelector('input[data-field="durationMinutes"]')?.value, 0),
-        description,
-        bodyZones,
-      };
-    })
+        .filter(Boolean),
+    }))
     .filter((item) => item.id && item.name && item.category);
 
-  const memberships = Array.from(membershipsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const name = row.querySelector('input[data-field="name"]')?.value.trim() || "";
-      return {
-        id,
-        name,
-        priceCents: toInt(row.querySelector('input[data-field="priceCents"]')?.value, 0),
-        includedTreatmentIds: splitCommaList(row.querySelector('input[data-field="includedTreatmentIds"]')?.value),
-        perks: splitCommaList(row.querySelector('input[data-field="perks"]')?.value),
-      };
-    })
+  const memberships = Array.from(membershipsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      name: readVal(row, "name"),
+      priceCents: readEuroCents(row, "priceCents"),
+      includedTreatmentIds: splitCommaList(row.querySelector('[data-field="includedTreatmentIds"]')?.value),
+      perks: splitCommaList(row.querySelector('[data-field="perks"]')?.value),
+    }))
     .filter((item) => item.id && item.name);
 
-  const rewardActions = Array.from(rewardActionsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return {
-        id,
-        label,
-        points: toInt(row.querySelector('input[data-field="points"]')?.value, 0),
-      };
-    })
+  const rewardActions = Array.from(rewardActionsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({ id: readVal(row, "id"), label: readVal(row, "label"), points: readInt(row, "points") }))
     .filter((item) => item.id && item.label);
 
-  const rewardRedeems = Array.from(rewardRedeemsBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const label = row.querySelector('input[data-field="label"]')?.value.trim() || "";
-      return {
-        id,
-        label,
-        requiredPoints: toInt(row.querySelector('input[data-field="requiredPoints"]')?.value, 0),
-        valueCents: toInt(row.querySelector('input[data-field="valueCents"]')?.value, 0),
-      };
-    })
+  const rewardRedeems = Array.from(rewardRedeemsBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      label: readVal(row, "label"),
+      requiredPoints: readInt(row, "requiredPoints"),
+      valueCents: readEuroCents(row, "valueCents"),
+    }))
     .filter((item) => item.id && item.label);
 
-  const homeArticles = Array.from(homeArticlesBody.querySelectorAll("tr"))
-    .map((row) => {
-      const id = row.querySelector('input[data-field="id"]')?.value.trim() || "";
-      const title = row.querySelector('input[data-field="title"]')?.value.trim() || "";
-      return {
-        id,
-        tag: row.querySelector('input[data-field="tag"]')?.value.trim() || "",
-        title,
-        body: row.querySelector('input[data-field="body"]')?.value.trim() || "",
-      };
-    })
+  const homeArticles = Array.from(homeArticlesBody.querySelectorAll(".cat-item"))
+    .map((row) => ({
+      id: readVal(row, "id"),
+      tag: readVal(row, "tag"),
+      title: readVal(row, "title"),
+      body: readVal(row, "body"),
+    }))
     .filter((item) => item.id && item.title);
 
   state.catalog = { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles };
@@ -1364,6 +1659,20 @@ function renderTopTreatments(rows = []) {
   renderMetricsDashboard();
 }
 
+const CAMPAIGN_TRIGGER_LABELS = {
+  broadcast: "Rundnachricht (an alle)",
+  inactive_30d: "Inaktiv seit 30 Tagen",
+  abandoned_cart_24h: "Warenkorb abgebrochen (24 h)",
+  membership_past_due: "Mitgliedschaft überfällig",
+  membership_canceled_winback: "Gekündigt – Rückgewinnung",
+};
+const CAMPAIGN_CHANNEL_LABELS = { in_app: "In-App", push: "Push", email: "E-Mail", sms: "SMS" };
+const CAMPAIGN_STATUS_META = {
+  draft: { label: "Entwurf", cls: "muted" },
+  active: { label: "Aktiv", cls: "ok" },
+  paused: { label: "Pausiert", cls: "warn" },
+};
+
 function renderCampaigns(rows = []) {
   campaignsBody.innerHTML = "";
   if (!rows.length) {
@@ -1372,12 +1681,13 @@ function renderCampaigns(rows = []) {
   }
 
   campaignsBody.innerHTML = rows
-    .map(
-      (row) =>
-        `<tr>
-          <td>${row.name || "-"}</td>
-          <td>${row.triggerType || "-"}</td>
-          <td>${row.status || "-"}</td>
+    .map((row) => {
+      const trigger = CAMPAIGN_TRIGGER_LABELS[row.triggerType] || row.triggerType || "—";
+      const status = CAMPAIGN_STATUS_META[row.status] || { label: row.status || "—", cls: "muted" };
+      return `<tr>
+          <td><strong>${escapeHtml(row.name || "—")}</strong></td>
+          <td>${escapeHtml(trigger)}</td>
+          <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
           <td>${row.totalRuns || 0}</td>
           <td>${row.totalAudience || 0}</td>
           <td class="campaign-actions">${
@@ -1390,8 +1700,8 @@ function renderCampaigns(rows = []) {
               `
               : "-"
           }</td>
-        </tr>`
-    )
+        </tr>`;
+    })
     .join("");
 }
 
@@ -1484,6 +1794,69 @@ async function loadAnalyticsSummary() {
   renderMetricsDashboard();
 }
 
+const PATIENT_STATUS = {
+  active: { label: "Aktiv", cls: "ok" },
+  trialing: { label: "Test", cls: "ok" },
+  past_due: { label: "Zahlung offen", cls: "warn" },
+  paused: { label: "Pausiert", cls: "muted" },
+  canceled: { label: "Gekündigt", cls: "danger" },
+  inactive: { label: "Inaktiv", cls: "muted" },
+};
+
+function renderPatientStats() {
+  if (!patientStats) return;
+  const summary = state.membershipSummary || {};
+  const chips = [
+    { label: "Gesamt", value: String(Number(summary.total || 0)) },
+    { label: "Aktiv", value: String(Number(summary.active || 0)), cls: "ok" },
+    { label: "Zahlung offen", value: String(Number(summary.pastDue || 0)), cls: "warn" },
+    { label: "Pausiert", value: String(Number(summary.paused || 0)), cls: "muted" },
+    { label: "Gekündigt", value: String(Number(summary.canceled || 0)), cls: "danger" },
+    { label: "MRR", value: formatEuro(Number(summary.mrrCents || 0)), cls: "brand" },
+  ];
+  patientStats.innerHTML = chips
+    .map(
+      (chip) =>
+        `<div class="pstat ${chip.cls || ""}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></div>`
+    )
+    .join("");
+}
+
+function renderPatients() {
+  renderPatientStats();
+  if (!patientsBody) return;
+  const term = String(patientSearch?.value || "").trim().toLowerCase();
+  const rows = (state.patientMemberships || []).filter((row) => {
+    if (!term) return true;
+    return [row.patientName, row.patientEmail, row.membershipName].some((value) =>
+      String(value || "").toLowerCase().includes(term)
+    );
+  });
+
+  if (!rows.length) {
+    patientsBody.innerHTML = `<tr><td colspan="5">${term ? "Keine Treffer." : "Noch keine Patienten."}</td></tr>`;
+    return;
+  }
+
+  patientsBody.innerHTML = rows
+    .map((row) => {
+      const status = PATIENT_STATUS[String(row.status || "inactive").toLowerCase()] || PATIENT_STATUS.inactive;
+      const name = row.patientName || "—";
+      const email = row.patientEmail || "";
+      const plan = row.membershipName || "—";
+      const amount = formatEuro(Number(row.monthlyAmountCents || 0));
+      const next = row.nextChargeAt ? formatDateOnly(row.nextChargeAt) : "—";
+      return `<tr>
+        <td><strong>${escapeHtml(name)}</strong>${email ? `<small>${escapeHtml(email)}</small>` : ""}</td>
+        <td>${escapeHtml(plan)}</td>
+        <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
+        <td>${escapeHtml(amount)}</td>
+        <td>${escapeHtml(next)}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
 async function loadPatientMemberships() {
   const response = await apiRequest("/clinic/patient-memberships?limit=200");
   state.patientMemberships = Array.isArray(response.memberships) ? response.memberships : [];
@@ -1491,6 +1864,400 @@ async function loadPatientMemberships() {
     state.membershipSummary = response.summary;
   }
   renderMetricsDashboard();
+  renderPatients();
+}
+
+const APPOINTMENT_STATUS = {
+  confirmed: { label: "Bestätigt", cls: "ok" },
+  pending_confirmation: { label: "Offen", cls: "warn" },
+  reschedule_requested: { label: "Umbuchung", cls: "warn" },
+  rescheduled: { label: "Umgebucht", cls: "ok" },
+  completed: { label: "Abgeschlossen", cls: "muted" },
+  canceled: { label: "Storniert", cls: "danger" },
+};
+
+function renderAppointmentStats() {
+  if (!appointmentStats) return;
+  const summary = state.appointmentSummary || {};
+  const chips = [
+    { label: "Gesamt", value: String(Number(summary.total || 0)) },
+    { label: "Anstehend", value: String(Number(summary.upcoming || 0)), cls: "brand" },
+    { label: "Heute", value: String(Number(summary.today || 0)), cls: "ok" },
+    { label: "Bestätigt", value: String(Number(summary.confirmed || 0)), cls: "ok" },
+    { label: "Offen", value: String(Number(summary.pending || 0)), cls: "warn" },
+    { label: "Storniert", value: String(Number(summary.canceled || 0)), cls: "danger" },
+  ];
+  appointmentStats.innerHTML = chips
+    .map(
+      (chip) =>
+        `<div class="pstat ${chip.cls || ""}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></div>`
+    )
+    .join("");
+}
+
+function renderAppointments() {
+  renderAppointmentStats();
+  if (!appointmentsBody) return;
+  const term = String(appointmentSearch?.value || "").trim().toLowerCase();
+  const onlyUpcoming = state.appointmentFilter !== "all";
+  const rows = (state.appointments || []).filter((row) => {
+    if (onlyUpcoming && row.segment !== "upcoming") return false;
+    if (!term) return true;
+    return [row.patientName, row.patientEmail, row.treatmentName, row.practitionerName].some((value) =>
+      String(value || "").toLowerCase().includes(term)
+    );
+  });
+
+  if (!rows.length) {
+    const message = term
+      ? "Keine Treffer."
+      : onlyUpcoming
+        ? "Keine anstehenden Termine."
+        : "Noch keine Termine.";
+    appointmentsBody.innerHTML = `<tr><td colspan="5">${message}</td></tr>`;
+    return;
+  }
+
+  appointmentsBody.innerHTML = rows
+    .map((row) => {
+      const status = APPOINTMENT_STATUS[String(row.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation;
+      const when = row.startsAt ? formatDate(row.startsAt) : "—";
+      const duration = Number(row.treatmentDurationMinutes || 0);
+      const patient = row.patientName || row.patientEmail || "—";
+      const treatment = row.treatmentName || "—";
+      const practitioner = row.practitionerName || "—";
+      const durationLabel = duration > 0 ? `<small>${duration} Min</small>` : "";
+      return `<tr>
+        <td><strong>${escapeHtml(when)}</strong></td>
+        <td>${escapeHtml(patient)}</td>
+        <td>${escapeHtml(treatment)}${durationLabel}</td>
+        <td>${escapeHtml(practitioner)}</td>
+        <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function loadAppointments() {
+  const response = await apiRequest("/clinic/appointments?limit=200");
+  state.appointments = Array.isArray(response.appointments) ? response.appointments : [];
+  if (response.summary && typeof response.summary === "object") {
+    state.appointmentSummary = response.summary;
+  }
+  renderAppointmentStats();
+  renderCalendar();
+}
+
+/* ============================================================
+   Termine-Kalender (Monat / Woche / Tag)
+   ============================================================ */
+const CAL_WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const calTimeFmt = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" });
+
+function calStartOfDay(date) { const x = new Date(date); x.setHours(0, 0, 0, 0); return x; }
+function calAddDays(date, n) { const x = new Date(date); x.setDate(x.getDate() + n); return x; }
+function calSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function calStartOfWeek(date) { const x = calStartOfDay(date); return calAddDays(x, -((x.getDay() + 6) % 7)); }
+function calParseStart(appt) {
+  if (!appt || !appt.startsAt) return null;
+  const d = new Date(appt.startsAt);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function calApptMinutes(appt) {
+  const minutes = Number(appt.treatmentDurationMinutes || 0);
+  return minutes > 0 ? minutes : 30;
+}
+function ensureCalendarDate() {
+  if (!(state.calendarDate instanceof Date)) state.calendarDate = calStartOfDay(new Date());
+  return state.calendarDate;
+}
+function calEventsForDay(date) {
+  return (state.appointments || [])
+    .map((appt) => ({ appt, start: calParseStart(appt) }))
+    .filter((entry) => entry.start && calSameDay(entry.start, date))
+    .sort((a, b) => a.start - b.start)
+    .map((entry) => entry.appt);
+}
+function calStatusCls(appt) {
+  return (APPOINTMENT_STATUS[String(appt.status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation).cls;
+}
+
+function renderCalendar() {
+  if (!calBody) return;
+  const view = state.calendarView || "month";
+  if (calViewSwitch) {
+    calViewSwitch.querySelectorAll("[data-cal-view]").forEach((button) => {
+      button.classList.toggle("active", button.getAttribute("data-cal-view") === view);
+    });
+  }
+  if (view === "week") renderCalTimeGrid(calWeekDays());
+  else if (view === "day") renderCalTimeGrid([ensureCalendarDate()]);
+  else renderCalMonth();
+}
+
+function calWeekDays() {
+  const start = calStartOfWeek(ensureCalendarDate());
+  return Array.from({ length: 7 }, (_, i) => calAddDays(start, i));
+}
+
+function renderCalMonth() {
+  const anchor = ensureCalendarDate();
+  if (calTitle) calTitle.textContent = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(anchor);
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const gridStart = calStartOfWeek(first);
+  const today = calStartOfDay(new Date());
+
+  let cells = "";
+  for (let i = 0; i < 42; i += 1) {
+    const day = calAddDays(gridStart, i);
+    const inMonth = day.getMonth() === anchor.getMonth();
+    const events = calEventsForDay(day);
+    const shown = events.slice(0, 3);
+    const more = events.length - shown.length;
+    const createIso = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 10, 0).toISOString();
+    cells += `<div class="cal-cell${inMonth ? "" : " cal-out"}${calSameDay(day, today) ? " cal-today" : ""}" data-cal-create="${createIso}">
+      <div class="cal-cell-date">${day.getDate()}</div>
+      <div class="cal-cell-events">
+        ${shown.map((appt) => calMonthChip(appt)).join("")}
+        ${more > 0 ? `<button class="cal-more" type="button" data-cal-goto="${day.toISOString()}">+${more} weitere</button>` : ""}
+      </div>
+    </div>`;
+  }
+  calBody.innerHTML = `<div class="cal-weekhead">${CAL_WEEKDAYS.map((d) => `<div>${d}</div>`).join("")}</div><div class="cal-grid">${cells}</div>`;
+}
+
+function calMonthChip(appt) {
+  const start = calParseStart(appt);
+  const time = start ? calTimeFmt.format(start) : "";
+  const text = appt.patientName || appt.patientEmail || appt.treatmentName || "Termin";
+  const tip = `${time} · ${appt.patientName || "—"} · ${appt.treatmentName || ""}`.trim();
+  return `<button class="cal-chip ${calStatusCls(appt)}" type="button" data-appt-id="${appt.id}" title="${escapeAttr(tip)}"><span class="cal-chip-time">${escapeHtml(time)}</span><span class="cal-chip-text">${escapeHtml(text)}</span></button>`;
+}
+
+function renderCalTimeGrid(days) {
+  const today = calStartOfDay(new Date());
+  if (days.length === 1) {
+    if (calTitle) calTitle.textContent = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(days[0]);
+  } else if (calTitle) {
+    const fmtShort = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
+    const fmtLong = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short", year: "numeric" });
+    calTitle.textContent = `${fmtShort.format(days[0])} – ${fmtLong.format(days[6])}`;
+  }
+
+  let minHour = 8;
+  let maxHour = 18;
+  days.forEach((day) => {
+    calEventsForDay(day).forEach((appt) => {
+      const start = calParseStart(appt);
+      const endMin = start.getHours() * 60 + start.getMinutes() + calApptMinutes(appt);
+      minHour = Math.min(minHour, start.getHours());
+      maxHour = Math.max(maxHour, Math.ceil(endMin / 60));
+    });
+  });
+  minHour = Math.max(0, Math.min(minHour, 8));
+  maxHour = Math.min(24, Math.max(maxHour, 18));
+  const hourPx = 52;
+  const totalMin = (maxHour - minHour) * 60;
+
+  const dayHeads = days
+    .map((day) => `<div class="cal-tg-dayhead${calSameDay(day, today) ? " cal-today" : ""}"><span class="cal-tg-dow">${CAL_WEEKDAYS[(day.getDay() + 6) % 7]}</span><span class="cal-tg-date">${day.getDate()}</span></div>`)
+    .join("");
+
+  let axis = "";
+  for (let h = minHour; h < maxHour; h += 1) {
+    axis += `<div class="cal-tg-hour" style="height:${hourPx}px"><span>${String(h).padStart(2, "0")}:00</span></div>`;
+  }
+
+  const cols = days
+    .map((day) => {
+      const slots = Array.from({ length: maxHour - minHour }, (_, i) => {
+        const slotIso = new Date(day.getFullYear(), day.getMonth(), day.getDate(), minHour + i, 0).toISOString();
+        return `<div class="cal-tg-slot" data-cal-create="${slotIso}" style="height:${hourPx}px"></div>`;
+      }).join("");
+      const blocks = calEventsForDay(day)
+        .map((appt) => {
+          const start = calParseStart(appt);
+          const startMin = start.getHours() * 60 + start.getMinutes();
+          const top = ((startMin - minHour * 60) / totalMin) * 100;
+          const height = (calApptMinutes(appt) / totalMin) * 100;
+          const time = calTimeFmt.format(start);
+          return `<button class="cal-block ${calStatusCls(appt)}" type="button" data-appt-id="${appt.id}" style="top:${top}%;height:calc(${height}% - 3px)"><span class="cal-block-time">${escapeHtml(time)}</span><span class="cal-block-title">${escapeHtml(appt.patientName || appt.treatmentName || "Termin")}</span><span class="cal-block-sub">${escapeHtml(appt.treatmentName || "")}</span></button>`;
+        })
+        .join("");
+      return `<div class="cal-tg-col${calSameDay(day, today) ? " cal-today" : ""}">${slots}<div class="cal-tg-events">${blocks}</div></div>`;
+    })
+    .join("");
+
+  const colsTemplate = `56px repeat(${days.length}, minmax(0, 1fr))`;
+  calBody.innerHTML = `<div class="cal-tg">
+    <div class="cal-tg-head" style="grid-template-columns:${colsTemplate}"><div class="cal-tg-corner"></div>${dayHeads}</div>
+    <div class="cal-tg-scroll"><div class="cal-tg-body" style="grid-template-columns:${colsTemplate}"><div class="cal-tg-axis">${axis}</div>${cols}</div></div>
+  </div>`;
+}
+
+function calNavigate(direction) {
+  const view = state.calendarView || "month";
+  if (direction === "today") {
+    state.calendarDate = calStartOfDay(new Date());
+  } else {
+    const sign = direction === "next" ? 1 : -1;
+    const current = ensureCalendarDate();
+    if (view === "month") state.calendarDate = new Date(current.getFullYear(), current.getMonth() + sign, 1);
+    else if (view === "week") state.calendarDate = calAddDays(current, 7 * sign);
+    else state.calendarDate = calAddDays(current, sign);
+  }
+  renderCalendar();
+}
+
+/* ---- Termin-Drawer: anlegen / bearbeiten / Notizen ---- */
+function calPad2(value) { return String(value).padStart(2, "0"); }
+function calDateInputValue(date) { return `${date.getFullYear()}-${calPad2(date.getMonth() + 1)}-${calPad2(date.getDate())}`; }
+function calTimeInputValue(date) { return `${calPad2(date.getHours())}:${calPad2(date.getMinutes())}`; }
+
+function populateTreatmentDatalist() {
+  if (!apptTreatmentList) return;
+  const treatments = (state.catalog && state.catalog.treatments) || [];
+  apptTreatmentList.innerHTML = treatments
+    .filter((item) => item && item.name)
+    .map((item) => `<option value="${escapeAttr(item.name)}"></option>`)
+    .join("");
+}
+
+function openApptDrawer(mode, data = {}) {
+  if (!apptDrawer || !apptForm) return;
+  populateTreatmentDatalist();
+  if (apptFormError) apptFormError.textContent = "";
+  const fields = apptForm.elements;
+
+  if (mode === "edit" && data.id != null) {
+    state.editingApptId = Number(data.id);
+    const start = calParseStart(data) || new Date();
+    if (apptDrawerMode) apptDrawerMode.textContent = "Termin bearbeiten";
+    if (apptDrawerTitle) apptDrawerTitle.textContent = data.patientName || data.treatmentName || "Termin";
+    fields.patientName.value = data.patientName || "";
+    fields.patientEmail.value = data.patientEmail || "";
+    fields.treatmentName.value = data.treatmentName || "";
+    fields.date.value = calDateInputValue(start);
+    fields.time.value = calTimeInputValue(start);
+    fields.durationMinutes.value = data.treatmentDurationMinutes || 30;
+    fields.practitionerName.value = data.practitionerName || "";
+    fields.status.value = String(data.status || "confirmed").toLowerCase();
+    fields.notes.value = data.notes || "";
+    if (apptCancelAppt) apptCancelAppt.classList.toggle("hidden", String(data.status || "") === "canceled");
+  } else {
+    state.editingApptId = null;
+    let start = data.startsAt ? new Date(data.startsAt) : new Date();
+    if (Number.isNaN(start.getTime())) start = new Date();
+    if (apptDrawerMode) apptDrawerMode.textContent = "Neuer Termin";
+    if (apptDrawerTitle) apptDrawerTitle.textContent = "Neuer Termin";
+    apptForm.reset();
+    fields.date.value = calDateInputValue(start);
+    fields.time.value = calTimeInputValue(start);
+    fields.durationMinutes.value = 30;
+    fields.status.value = "confirmed";
+    if (apptCancelAppt) apptCancelAppt.classList.add("hidden");
+  }
+
+  loadCustomerNotes(fields.patientEmail.value);
+  apptDrawer.classList.remove("hidden");
+  apptDrawer.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => apptDrawer.classList.add("open"));
+  haptics("light");
+  window.setTimeout(() => { try { fields.patientName.focus(); } catch { /* noop */ } }, 60);
+}
+
+async function loadCustomerNotes(email) {
+  const field = apptForm && apptForm.elements.customerNotes;
+  if (!field) return;
+  const clean = String(email || "").trim();
+  state.customerNotesEmail = clean;
+  if (!clean) { field.value = ""; return; }
+  try {
+    const response = await apiRequest(`/clinic/patient-notes?email=${encodeURIComponent(clean)}`);
+    if (state.customerNotesEmail === clean) field.value = response.notes || "";
+  } catch {
+    /* notes optional — ignore */
+  }
+}
+
+function closeApptDrawer() {
+  if (!apptDrawer) return;
+  apptDrawer.classList.remove("open");
+  apptDrawer.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => apptDrawer.classList.add("hidden"), 220);
+}
+
+function apptStartIso() {
+  const fields = apptForm.elements;
+  const date = String(fields.date.value || "").trim();
+  const time = String(fields.time.value || "").trim() || "00:00";
+  if (!date) return null;
+  const parsed = new Date(`${date}T${time}`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+async function submitApptForm(event) {
+  event.preventDefault();
+  if (apptFormError) apptFormError.textContent = "";
+  const fields = apptForm.elements;
+  const startsAt = apptStartIso();
+  if (!String(fields.patientName.value || "").trim()) {
+    if (apptFormError) apptFormError.textContent = "Bitte Name der Patient:in eingeben.";
+    return;
+  }
+  if (!startsAt) {
+    if (apptFormError) apptFormError.textContent = "Bitte Datum und Uhrzeit wählen.";
+    return;
+  }
+  const payload = {
+    patientName: fields.patientName.value.trim(),
+    patientEmail: fields.patientEmail.value.trim(),
+    treatmentName: fields.treatmentName.value.trim(),
+    startsAt,
+    durationMinutes: Number(fields.durationMinutes.value) || 30,
+    practitionerName: fields.practitionerName.value.trim(),
+    status: fields.status.value,
+    notes: fields.notes.value.trim(),
+  };
+  const saveBtn = document.getElementById("apptSaveBtn");
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    if (state.editingApptId) {
+      await apiRequest(`/clinic/appointments/${state.editingApptId}`, { method: "PUT", body: payload });
+      showToast("Termin aktualisiert");
+    } else {
+      await apiRequest("/clinic/appointments", { method: "POST", body: payload });
+      showToast("Termin angelegt");
+    }
+    if (payload.patientEmail) {
+      const customerNotes = fields.customerNotes ? fields.customerNotes.value.trim() : "";
+      try {
+        await apiRequest("/clinic/patient-notes", { method: "PUT", body: { patientEmail: payload.patientEmail, notes: customerNotes } });
+      } catch {
+        /* customer notes are non-critical */
+      }
+    }
+    closeApptDrawer();
+    await loadAppointments();
+  } catch (error) {
+    if (apptFormError) apptFormError.textContent = error.message || "Speichern fehlgeschlagen.";
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+async function cancelCurrentAppt() {
+  if (!state.editingApptId) return;
+  try {
+    await apiRequest(`/clinic/appointments/${state.editingApptId}`, { method: "PUT", body: { status: "canceled" } });
+    showToast("Termin storniert");
+    closeApptDrawer();
+    await loadAppointments();
+  } catch (error) {
+    if (apptFormError) apptFormError.textContent = error.message;
+  }
 }
 
 async function loadCatalog() {
@@ -1826,10 +2593,12 @@ async function loadDashboardData() {
     loadBillingHistory(),
     loadAnalyticsSummary(),
     loadPatientMemberships(),
+    loadAppointments(),
     loadCatalog(),
     loadCampaigns(),
     loadAuditLogs(),
   ]);
+  renderOnboarding();
 }
 
 function parseAuthForm(form) {
@@ -2082,9 +2851,8 @@ function bindEvents() {
   addRewardRedeemBtn.addEventListener("click", () => addCatalogRow("rewardRedeems"));
   addHomeArticleBtn.addEventListener("click", () => addCatalogRow("homeArticles"));
   catalogForm.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (!target.matches("button[data-remove-list]")) return;
+    const target = event.target instanceof HTMLElement ? event.target.closest("button[data-remove-list]") : null;
+    if (!target) return;
     const listName = String(target.getAttribute("data-remove-list") || "");
     const index = Number(target.getAttribute("data-index"));
     if (!Number.isFinite(index)) return;
@@ -2119,12 +2887,141 @@ function bindEvents() {
       toggleCampaignStatus(campaignId, nextStatus);
     }
   });
-  sideNavItems.forEach((button) => {
+  railNavItems.forEach((button) => {
     button.addEventListener("click", () => {
-      setActiveSidebarItem(button);
-      const targetId = String(button.getAttribute("data-nav-target") || "").trim();
-      scrollToDashboardTarget(targetId);
+      showView(String(button.getAttribute("data-view") || "overview").trim());
     });
+  });
+  window.addEventListener("hashchange", () => {
+    if (state.user) showView(viewFromHash(), false);
+  });
+  document.querySelectorAll(".subtabs").forEach((bar) => {
+    bar.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button[data-subtab]") : null;
+      if (!button) return;
+      const name = button.getAttribute("data-subtab");
+      const scope = bar.parentElement;
+      if (!scope) return;
+      bar.querySelectorAll("button[data-subtab]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      Array.from(scope.children)
+        .filter((child) => child.matches?.(".subpanel[data-subpanel]"))
+        .forEach((panel) => {
+          const active = panel.getAttribute("data-subpanel") === name;
+          panel.classList.toggle("active", active);
+          if (active) {
+            const frame = panel.querySelector("iframe[data-src]");
+            if (frame && !frame.getAttribute("src")) {
+              frame.setAttribute("src", frame.getAttribute("data-src"));
+            }
+          }
+        });
+    });
+  });
+  if (refreshDashboardBtn) {
+    refreshDashboardBtn.addEventListener("click", async () => {
+      if (!state.user || refreshDashboardBtn.disabled) return;
+      refreshDashboardBtn.classList.add("spinning");
+      refreshDashboardBtn.disabled = true;
+      try {
+        await loadDashboardData();
+        showToast("Daten aktualisiert");
+      } catch (error) {
+        showToast(error.message);
+      } finally {
+        refreshDashboardBtn.classList.remove("spinning");
+        refreshDashboardBtn.disabled = false;
+      }
+    });
+  }
+  if (patientSearch) {
+    patientSearch.addEventListener("input", () => renderPatients());
+  }
+  if (appointmentSearch) {
+    appointmentSearch.addEventListener("input", () => renderAppointments());
+  }
+  if (appointmentFilter) {
+    appointmentFilter.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button[data-appt-filter]") : null;
+      if (!button) return;
+      state.appointmentFilter = String(button.getAttribute("data-appt-filter") || "upcoming");
+      appointmentFilter.querySelectorAll("button[data-appt-filter]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      renderAppointments();
+    });
+  }
+  const calToolbar = document.querySelector(".cal-toolbar");
+  if (calToolbar) {
+    calToolbar.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      const navBtn = event.target.closest("[data-cal-nav]");
+      if (navBtn) {
+        calNavigate(navBtn.getAttribute("data-cal-nav"));
+        return;
+      }
+      const viewBtn = event.target.closest("[data-cal-view]");
+      if (viewBtn) {
+        state.calendarView = viewBtn.getAttribute("data-cal-view");
+        renderCalendar();
+        return;
+      }
+      if (event.target.closest("[data-cal-new]")) {
+        const base = ensureCalendarDate();
+        const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), 10, 0);
+        openApptDrawer("create", { startsAt: start.toISOString() });
+      }
+    });
+  }
+  if (calBody) {
+    calBody.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      const evt = event.target.closest("[data-appt-id]");
+      if (evt) {
+        const id = Number(evt.getAttribute("data-appt-id"));
+        const appt = (state.appointments || []).find((item) => Number(item.id) === id);
+        if (appt) openApptDrawer("edit", appt);
+        return;
+      }
+      const goto = event.target.closest("[data-cal-goto]");
+      if (goto) {
+        state.calendarDate = calStartOfDay(new Date(goto.getAttribute("data-cal-goto")));
+        state.calendarView = "day";
+        renderCalendar();
+        return;
+      }
+      const createEl = event.target.closest("[data-cal-create]");
+      if (createEl) {
+        openApptDrawer("create", { startsAt: createEl.getAttribute("data-cal-create") });
+      }
+    });
+  }
+  if (apptForm) {
+    apptForm.addEventListener("submit", submitApptForm);
+    const emailField = apptForm.elements.patientEmail;
+    if (emailField) emailField.addEventListener("change", () => loadCustomerNotes(emailField.value));
+  }
+  if (apptCancelAppt) apptCancelAppt.addEventListener("click", cancelCurrentAppt);
+  if (apptDrawer) {
+    apptDrawer.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-drawer-close]")) closeApptDrawer();
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
+  });
+  // Central interaction feedback: haptic tap + ripple on prominent controls.
+  document.addEventListener("pointerdown", (event) => {
+    const control =
+      event.target instanceof Element
+        ? event.target.closest(".btn, .icon-btn, .chip-filter-btn, .tab, .subtab, .rail-nav-item")
+        : null;
+    if (!control || control.disabled) return;
+    haptics("light");
+    if (control.matches(".rail-nav-item, .btn.primary, .btn.accent")) {
+      createRipple(event, control);
+    }
   });
   window.addEventListener("resize", scheduleMetricsRender);
   dashboardSection.addEventListener("click", (event) => {
