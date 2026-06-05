@@ -305,6 +305,36 @@ input:focus, select:focus, textarea:focus {
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* Euro stepper (hold to accelerate) */
+.eur-stepper { position: relative; display: block; }
+.eur-stepper > input { padding-right: 36px; }
+.eur-stepper-btns {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 4px;
+  width: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.eur-step {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.eur-step:hover { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
+.eur-step:active { background: var(--brand); border-color: var(--brand); color: #fff; }
+.eur-step svg { width: 13px; height: 13px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

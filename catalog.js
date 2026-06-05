@@ -261,6 +261,35 @@ function centsToEuroInput(cents) {
   return (Number.isInteger(value) ? String(value) : value.toFixed(2)).replace(".", ",");
 }
 
+function euroStepperHtml(field, valueCents, placeholder) {
+  return `<span class="eur-stepper">
+    <input data-field="${field}" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(valueCents))}" placeholder="${placeholder}">
+    <span class="eur-stepper-btns">
+      <button type="button" class="eur-step" data-eur-step="1" tabindex="-1" aria-label="Erhöhen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
+      <button type="button" class="eur-step" data-eur-step="-1" tabindex="-1" aria-label="Verringern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    </span>
+  </span>`;
+}
+
+// Accelerated stepping: hold to grow the increment 0,10 € → 1 € → 10 €.
+function euroStepControl(button) {
+  const wrap = button.closest(".eur-stepper");
+  const input = wrap && wrap.querySelector("input[data-price-input]");
+  if (!input) return null;
+  const dir = Number(button.getAttribute("data-eur-step")) || 1;
+  const start = Date.now();
+  const tick = () => {
+    const held = Date.now() - start;
+    const stepCents = held > 2400 ? 1000 : held > 1100 ? 100 : 10;
+    const next = Math.max(0, euroToCents(input.value) + dir * stepCents);
+    input.value = centsToEuroInput(next);
+  };
+  tick();
+  let repeat = null;
+  const delay = window.setTimeout(() => { repeat = window.setInterval(tick, 110); }, 330);
+  return () => { window.clearTimeout(delay); if (repeat) window.clearInterval(repeat); };
+}
+
 // Keep euro inputs tidy: digits, one comma, max 2 decimals; dot becomes comma.
 function sanitizeEuroField(element) {
   if (!element) return;
@@ -297,10 +326,10 @@ function treatmentCard(item = {}) {
       </div>
       <div class="field-grid-2">
         <label>Preis (€)
-          <input data-field="priceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="110">
+          ${euroStepperHtml("priceCents", item.priceCents, "110")}
         </label>
         <label>Mitgliedspreis (€)
-          <input data-field="memberPriceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.memberPriceCents))}" placeholder="99">
+          ${euroStepperHtml("memberPriceCents", item.memberPriceCents, "99")}
         </label>
       </div>
       <label>Beschreibung
@@ -340,7 +369,7 @@ function membershipCard(item = {}) {
           <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
         </label>
         <label>Preis (€ / Monat)
-          <input data-field="priceCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.priceCents))}" placeholder="79">
+          ${euroStepperHtml("priceCents", item.priceCents, "79")}
         </label>
       </div>
       <label>Inkludierte Treatment IDs (Komma oder Zeile)
@@ -387,7 +416,7 @@ function rewardRedeemCard(item = {}) {
           <input data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250">
         </label>
         <label>Wert (€)
-          <input data-field="valueCents" data-unit="euro" data-price-input type="text" inputmode="decimal" autocomplete="off" value="${escapeAttr(centsToEuroInput(item.valueCents))}" placeholder="15">
+          ${euroStepperHtml("valueCents", item.valueCents, "15")}
         </label>
       </div>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
@@ -680,6 +709,22 @@ async function init() {
     if (event.target instanceof HTMLElement && event.target.matches("[data-price-input]")) {
       sanitizeEuroField(event.target);
     }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    const button = event.target instanceof HTMLElement ? event.target.closest(".eur-step") : null;
+    if (!button) return;
+    event.preventDefault();
+    const stop = euroStepControl(button);
+    if (!stop) return;
+    const end = () => {
+      stop();
+      document.removeEventListener("pointerup", end);
+      document.removeEventListener("pointercancel", end);
+      window.removeEventListener("blur", end);
+    };
+    document.addEventListener("pointerup", end);
+    document.addEventListener("pointercancel", end);
+    window.addEventListener("blur", end);
   });
   addCategoryBtn.addEventListener("click", () => appendCard(categoriesList, categoryCard({})));
   addTreatmentBtn.addEventListener("click", () => appendCard(treatmentsList, treatmentCard({})));
