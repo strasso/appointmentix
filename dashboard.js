@@ -786,53 +786,89 @@ function traceSmoothPath(context, pts) {
   }
 }
 
+function chartNiceMax(value) {
+  if (!(value > 0)) return 1;
+  const pow = Math.pow(10, Math.floor(Math.log10(value)));
+  const n = value / pow;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+  return step * pow;
+}
+const chartDayFmt = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
+function chartDateLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : chartDayFmt.format(d);
+}
+function compactEuroAxis(cents) {
+  const e = (Number(cents) || 0) / 100;
+  if (e >= 1000) return `${(e / 1000).toFixed(e >= 10000 ? 0 : 1).replace(".", ",")}k €`;
+  return `${Math.round(e)} €`;
+}
+function compactNumAxis(n) {
+  const v = Number(n) || 0;
+  if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(".", ",")}k`;
+  return String(Math.round(v));
+}
+
 function drawLineChart(canvas, values, options = {}) {
   const context = getCanvasContext(canvas);
   if (!context) return;
   const width = canvas.getBoundingClientRect().width;
   const height = canvas.getBoundingClientRect().height;
-  const paddingTop = Number(options.paddingTop ?? 14);
-  const paddingBottom = Number(options.paddingBottom ?? 16);
-  const paddingLeft = Number(options.paddingLeft ?? 6);
-  const paddingRight = Number(options.paddingRight ?? 8);
-  const chartWidth = Math.max(width - paddingLeft - paddingRight, 1);
-  const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
   const series = safeSeries(values, 2);
   const lineColor = options.lineColor || CHART_BRAND;
-  const baselineY = paddingTop + chartHeight;
+  const valueFormat = typeof options.valueFormat === "function" ? options.valueFormat : (v) => String(Math.round(v));
+  const dates = Array.isArray(options.dates) ? options.dates : [];
+  const hasData = Math.max(...series) > 0;
+  const niceMax = chartNiceMax(Math.max(...series, 0));
+  const yTicks = 4;
 
   context.clearRect(0, 0, width, height);
+  context.font = "500 10px Inter, sans-serif";
+  let maxLabelW = 0;
+  for (let i = 0; i <= yTicks; i += 1) {
+    maxLabelW = Math.max(maxLabelW, context.measureText(valueFormat((niceMax * i) / yTicks)).width);
+  }
+  const paddingTop = 12;
+  const paddingRight = 12;
+  const paddingBottom = dates.length ? 22 : 12;
+  const paddingLeft = Math.min(Math.max(maxLabelW + 12, 30), 74);
+  const chartWidth = Math.max(width - paddingLeft - paddingRight, 1);
+  const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
+  const baselineY = paddingTop + chartHeight;
 
-  // hairline baseline
-  context.beginPath();
-  context.strokeStyle = "rgba(23, 21, 26, 0.08)";
-  context.lineWidth = 1;
-  context.moveTo(paddingLeft, baselineY + 0.5);
-  context.lineTo(paddingLeft + chartWidth, baselineY + 0.5);
-  context.stroke();
+  // gridlines + Y value labels
+  context.textBaseline = "middle";
+  for (let i = 0; i <= yTicks; i += 1) {
+    const y = paddingTop + chartHeight - (i / yTicks) * chartHeight;
+    context.beginPath();
+    context.strokeStyle = i === 0 ? "rgba(23,21,26,0.14)" : "rgba(23,21,26,0.06)";
+    context.lineWidth = 1;
+    context.moveTo(paddingLeft, y + 0.5);
+    context.lineTo(paddingLeft + chartWidth, y + 0.5);
+    context.stroke();
+    context.fillStyle = "rgba(108,104,115,0.75)";
+    context.textAlign = "right";
+    context.fillText(valueFormat((niceMax * i) / yTicks), paddingLeft - 7, y);
+  }
 
-  // empty state — no data yet
-  if (!(Math.max(...series) > 0)) {
-    context.fillStyle = "rgba(108, 104, 115, 0.55)";
+  if (!hasData) {
+    context.fillStyle = "rgba(108,104,115,0.5)";
     context.font = "600 12px Inter, sans-serif";
     context.textAlign = "center";
-    context.textBaseline = "middle";
     context.fillText(options.emptyText || "Noch keine Daten", paddingLeft + chartWidth / 2, paddingTop + chartHeight / 2);
     return;
   }
 
-  const min = Number(options.minValue ?? 0);
-  const max = Math.max(...series, 1);
-  const range = Math.max(max - min, 1);
   const points = series.map((value, index) => {
     const x = paddingLeft + (index / Math.max(series.length - 1, 1)) * chartWidth;
-    const ratio = (Number(value || 0) - min) / range;
+    const ratio = (Number(value || 0)) / niceMax;
     return [x, paddingTop + chartHeight - ratio * chartHeight];
   });
 
-  // soft area fill (smooth curve)
+  // area fill (smooth)
   const gradient = context.createLinearGradient(0, paddingTop, 0, baselineY);
-  gradient.addColorStop(0, hexToRgba(lineColor, 0.24));
+  gradient.addColorStop(0, hexToRgba(lineColor, 0.22));
   gradient.addColorStop(1, hexToRgba(lineColor, 0));
   context.beginPath();
   context.moveTo(points[0][0], baselineY);
@@ -843,34 +879,30 @@ function drawLineChart(canvas, values, options = {}) {
   context.fillStyle = gradient;
   context.fill();
 
-  // primary line (smooth curve)
+  // primary line (smooth)
   context.beginPath();
   context.strokeStyle = lineColor;
-  context.lineWidth = Number(options.lineWidth ?? 2.25);
+  context.lineWidth = 2.25;
   context.lineJoin = "round";
   context.lineCap = "round";
   context.moveTo(points[0][0], points[0][1]);
   traceSmoothPath(context, points);
   context.stroke();
 
-  // optional comparison line (dashed, muted)
-  if (Array.isArray(options.secondary) && options.secondary.length) {
-    const secondSeries = safeSeries(options.secondary, series.length);
-    const secondMax = Math.max(...secondSeries, 1);
-    const secondRange = Math.max(secondMax - min, 1);
-    context.beginPath();
-    context.strokeStyle = options.secondaryColor || "rgba(23, 21, 26, 0.22)";
-    context.lineWidth = 1.6;
-    context.setLineDash([4, 4]);
-    secondSeries.forEach((value, index) => {
-      const x = paddingLeft + (index / Math.max(secondSeries.length - 1, 1)) * chartWidth;
-      const ratio = (Number(value || 0) - min) / secondRange;
-      const y = paddingTop + chartHeight - ratio * chartHeight;
-      if (index === 0) context.moveTo(x, y);
-      else context.lineTo(x, y);
-    });
-    context.stroke();
-    context.setLineDash([]);
+  // X date labels (start · middle · end)
+  if (dates.length) {
+    context.fillStyle = "rgba(108,104,115,0.75)";
+    context.font = "500 10px Inter, sans-serif";
+    context.textBaseline = "alphabetic";
+    const yX = baselineY + 14;
+    const lastIdx = dates.length - 1;
+    const midIdx = Math.floor(lastIdx / 2);
+    const start = chartDateLabel(dates[0]);
+    const mid = chartDateLabel(dates[midIdx]);
+    const end = chartDateLabel(dates[lastIdx]);
+    if (start) { context.textAlign = "left"; context.fillText(start, paddingLeft, yX); }
+    if (mid && lastIdx > 1) { context.textAlign = "center"; context.fillText(mid, paddingLeft + chartWidth / 2, yX); }
+    if (end) { context.textAlign = "right"; context.fillText(end, paddingLeft + chartWidth, yX); }
   }
 
   // end-point marker
@@ -1187,20 +1219,16 @@ function renderMetricsDashboard() {
   setDeltaBadge(metricReferralsDelta, deltas.rewardClaim, compareMode);
   setDeltaBadge(metricVisitsDelta, deltas.appOpen, compareMode);
 
-  drawLineChart(chartDailyProcessing, normalizeForChart(purchasesByDay), {
-    secondary: normalizeForChart(viewsByDay),
-    lineColor: CHART_BRAND,
-    secondaryColor: "#c4c8d0",
-    stripeCount: 12,
-  });
-  drawLineChart(chartNetRevenue, normalizeForChart(revenueByDay), { lineColor: CHART_BRAND, stripeCount: 18 });
-  drawLineChart(chartMRR, normalizeForChart(mrrSeries), { lineColor: CHART_BRAND, stripeCount: 12 });
-  drawLineChart(chartAppUserLTV, normalizeForChart(appUserLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
-  drawLineChart(chartClientLTV, normalizeForChart(clientLtvSeries), { lineColor: CHART_BRAND, stripeCount: 14 });
-  drawLineChart(chartAppUsers, normalizeForChart(cumulativeSeries(appOpenByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
-  drawLineChart(chartReferrals, normalizeForChart(cumulativeSeries(referralByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
-  drawLineChart(chartVisits, normalizeForChart(appOpenByDay), { lineColor: CHART_BRAND, stripeCount: 14 });
-  drawLineChart(chartReviews, normalizeForChart(cumulativeSeries(reviewByDay)), { lineColor: CHART_BRAND, stripeCount: 14 });
+  const chartDates = timeseries.map((point) => point.date || "");
+  drawLineChart(chartDailyProcessing, revenueByDay, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartNetRevenue, revenueByDay, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartMRR, mrrSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartAppUserLTV, appUserLtvSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartClientLTV, clientLtvSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartAppUsers, cumulativeSeries(appOpenByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartReferrals, cumulativeSeries(referralByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartVisits, appOpenByDay, { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartReviews, cumulativeSeries(reviewByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
 
   renderLiveFeed(auditRows);
   const sourceRows = renderRevenueSources(summary, memberships, state.analytics.revenueSources || []);
@@ -3089,15 +3117,42 @@ function bindEvents() {
     }
   });
   window.addEventListener("resize", scheduleMetricsRender);
+  const cardMenu = document.createElement("div");
+  cardMenu.className = "card-menu hidden";
+  cardMenu.innerHTML = `<button type="button" class="card-menu-item" data-card-download><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Als CSV herunterladen</button>`;
+  document.body.appendChild(cardMenu);
+  let cardMenuKind = "";
+  const closeCardMenu = () => cardMenu.classList.add("hidden");
+  const openCardMenu = (button, kind) => {
+    cardMenuKind = kind;
+    cardMenu.classList.remove("hidden");
+    const rect = button.getBoundingClientRect();
+    const menuW = cardMenu.offsetWidth || 200;
+    cardMenu.style.left = `${Math.max(8, rect.right - menuW)}px`;
+    cardMenu.style.top = `${rect.bottom + 6}px`;
+  };
+  cardMenu.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest("[data-card-download]")) {
+      if (cardMenuKind) exportDashboardCard(cardMenuKind);
+      closeCardMenu();
+    }
+  });
   dashboardSection.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const button = target.closest("button[data-export-kind]");
-    if (!(button instanceof HTMLElement)) return;
+    const button = event.target instanceof Element ? event.target.closest("button[data-export-kind]") : null;
+    if (!button) return;
     const kind = String(button.getAttribute("data-export-kind") || "").trim();
     if (!kind) return;
-    exportDashboardCard(kind);
+    if (!cardMenu.classList.contains("hidden") && cardMenuKind === kind) {
+      closeCardMenu();
+      return;
+    }
+    openCardMenu(button, kind);
   });
+  document.addEventListener("click", (event) => {
+    if (event.target instanceof Element && (event.target.closest("button[data-export-kind]") || event.target.closest(".card-menu"))) return;
+    closeCardMenu();
+  });
+  window.addEventListener("scroll", closeCardMenu, true);
 }
 
 async function init() {
