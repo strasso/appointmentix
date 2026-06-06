@@ -79,6 +79,9 @@ const kpiRevenue = document.getElementById("kpiRevenue");
 const kpiMrr = document.getElementById("kpiMrr");
 const kpiMembers = document.getElementById("kpiMembers");
 const kpiAppUsers = document.getElementById("kpiAppUsers");
+const kpiRevenueDelta = document.getElementById("kpiRevenueDelta");
+const kpiMrrDelta = document.getElementById("kpiMrrDelta");
+const kpiAppUsersDelta = document.getElementById("kpiAppUsersDelta");
 const railNavItems = Array.from(document.querySelectorAll(".rail-nav-item[data-view]"));
 const viewPanels = Array.from(document.querySelectorAll(".view-panel[data-view-panel]"));
 const VIEW_META = {
@@ -765,6 +768,24 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// Trace a smooth (Catmull-Rom → bezier) curve through points; caller sets start.
+function traceSmoothPath(context, pts) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    context.bezierCurveTo(
+      p1[0] + (p2[0] - p0[0]) / 6,
+      p1[1] + (p2[1] - p0[1]) / 6,
+      p2[0] - (p3[0] - p1[0]) / 6,
+      p2[1] - (p3[1] - p1[1]) / 6,
+      p2[0],
+      p2[1]
+    );
+  }
+}
+
 function drawLineChart(canvas, values, options = {}) {
   const context = getCanvasContext(canvas);
   if (!context) return;
@@ -809,28 +830,27 @@ function drawLineChart(canvas, values, options = {}) {
     return [x, paddingTop + chartHeight - ratio * chartHeight];
   });
 
-  // soft area fill
+  // soft area fill (smooth curve)
   const gradient = context.createLinearGradient(0, paddingTop, 0, baselineY);
-  gradient.addColorStop(0, hexToRgba(lineColor, 0.18));
+  gradient.addColorStop(0, hexToRgba(lineColor, 0.24));
   gradient.addColorStop(1, hexToRgba(lineColor, 0));
   context.beginPath();
   context.moveTo(points[0][0], baselineY);
-  points.forEach(([x, y]) => context.lineTo(x, y));
+  context.lineTo(points[0][0], points[0][1]);
+  traceSmoothPath(context, points);
   context.lineTo(points[points.length - 1][0], baselineY);
   context.closePath();
   context.fillStyle = gradient;
   context.fill();
 
-  // primary line
+  // primary line (smooth curve)
   context.beginPath();
   context.strokeStyle = lineColor;
   context.lineWidth = Number(options.lineWidth ?? 2.25);
   context.lineJoin = "round";
   context.lineCap = "round";
-  points.forEach(([x, y], index) => {
-    if (index === 0) context.moveTo(x, y);
-    else context.lineTo(x, y);
-  });
+  context.moveTo(points[0][0], points[0][1]);
+  traceSmoothPath(context, points);
   context.stroke();
 
   // optional comparison line (dashed, muted)
@@ -878,25 +898,67 @@ function actionToFeedText(action) {
   return mapping[action] || action || "Aktivität";
 }
 
+const ACTIVITY_COLORS = {
+  campaign: "#7b61e6",
+  catalog: "#1fb6a6",
+  clinic: "#6c8ab6",
+  billing: "#d98a2b",
+  appointment: "#b56f80",
+  default: "#b56f80",
+};
+function activityColor(action) {
+  const key = String(action || "").split(".")[0];
+  return ACTIVITY_COLORS[key] || ACTIVITY_COLORS.default;
+}
+
 function renderLiveFeed(rows = []) {
   if (!liveActivityBody) return;
   const items = rows.slice(0, 8);
   if (!items.length) {
-    liveActivityBody.innerHTML = "<li><span class='activity-title'>Noch keine Aktivitäten.</span></li>";
+    liveActivityBody.innerHTML = "<li class='activity-empty'>Noch keine Aktivitäten.</li>";
     return;
   }
 
   liveActivityBody.innerHTML = items
     .map((row) => {
-      const actor = escapeHtml(row.actorName || row.actorEmail || "System");
+      const actorRaw = String(row.actorName || row.actorEmail || "System").trim();
+      const actor = escapeHtml(actorRaw || "System");
       const action = escapeHtml(actionToFeedText(row.action));
       const when = escapeHtml(formatDate(row.createdAt));
-      return `<li>
-        <span class=\"activity-title\"><strong>${actor}</strong> • ${action}</span>
-        <span class=\"activity-meta\">${when}</span>
+      const initial = escapeHtml((actorRaw[0] || "•").toUpperCase());
+      const color = activityColor(row.action);
+      return `<li class="activity-item">
+        <span class="activity-avatar" style="background:${color}">${initial}</span>
+        <span class="activity-body">
+          <span class="activity-title"><strong>${actor}</strong> · ${action}</span>
+          <span class="activity-meta">${when}</span>
+        </span>
       </li>`;
     })
     .join("");
+}
+
+// Trend over the loaded window: sum of the later half vs the earlier half.
+function seriesTrendPercent(series) {
+  const arr = (series || []).map((n) => Number(n) || 0);
+  if (arr.length < 4) return null;
+  const half = Math.floor(arr.length / 2);
+  const earlier = arr.slice(0, half).reduce((s, x) => s + x, 0);
+  const later = arr.slice(half).reduce((s, x) => s + x, 0);
+  if (earlier <= 0) return null;
+  return ((later - earlier) / earlier) * 100;
+}
+function setKpiDelta(element, percent) {
+  if (!element) return;
+  if (percent === null || !Number.isFinite(percent) || Math.abs(percent) < 0.05) {
+    element.classList.add("hidden");
+    return;
+  }
+  const up = percent >= 0;
+  element.classList.remove("hidden");
+  element.classList.toggle("up", up);
+  element.classList.toggle("down", !up);
+  element.textContent = `${up ? "+" : "−"}${Math.abs(percent).toFixed(1)} %`;
 }
 
 function renderRevenueSources(summary = {}, memberships = {}, backendSources = []) {
@@ -1107,6 +1169,9 @@ function renderMetricsDashboard() {
   if (kpiMrr) animateCount(kpiMrr, mrrBase, formatEuro);
   if (kpiMembers) animateCount(kpiMembers, Number(summary.activeMemberships || 0));
   if (kpiAppUsers) animateCount(kpiAppUsers, activeUsers);
+  setKpiDelta(kpiRevenueDelta, seriesTrendPercent(revenueByDay));
+  setKpiDelta(kpiMrrDelta, seriesTrendPercent(mrrSeries));
+  setKpiDelta(kpiAppUsersDelta, seriesTrendPercent(appOpenByDay));
   if (metricAppUserLTVValue) metricAppUserLTVValue.textContent = formatEuro(appUserLtvCents);
   if (metricClientLTVValue) metricClientLTVValue.textContent = formatEuro(clientLtvCents);
   if (metricAppUsersValue) metricAppUsersValue.textContent = String(activeUsers);

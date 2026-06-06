@@ -1,11 +1,11 @@
 :root {
   /* Neutrals — warm graphite, MedSpa calm */
-  --bg: #f3f2f3;
-  --bg-soft: #faf9fa;
+  --bg: #faf9f5;
+  --bg-soft: #fffdf8;
   --surface: rgba(255, 255, 255, 0.92);
   --surface-strong: #ffffff;
-  --surface-muted: #f5f4f6;
-  --surface-sunken: #efedf0;
+  --surface-muted: #f4f2ec;
+  --surface-sunken: #ece9e0;
   /* Rail — deep warm graphite (not corporate navy) */
   --surface-dark: #1a1b21;
   --surface-dark-strong: #121217;
@@ -78,8 +78,8 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(1200px 600px at 100% -10%, rgba(181, 111, 128, 0.05), transparent 60%),
-    linear-gradient(180deg, #faf9fa 0%, #f3f2f3 32%, #efedf0 100%);
+    radial-gradient(1200px 600px at 100% -10%, rgba(181, 111, 128, 0.06), transparent 60%),
+    linear-gradient(180deg, #fdfcf8 0%, #faf9f5 34%, #f4f2ea 100%);
   color: var(--ink);
   font-family: Inter, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -2221,3 +2221,53 @@ td small {
   .drawer-panel { width: 100%; }
 }
 .drawer-section { padding-top: 14px; border-top: 1px dashed var(--border-strong); }
+
+/* ============================================================
+   Prototyp-Politur: Spacing, KPI-Delta, Aktivitäts-Avatare
+   ============================================================ */
+.app-content { gap: 24px; }
+.view-panel { gap: 22px; }
+.kpi-row { gap: 16px; }
+
+/* KPI delta chip */
+.kpi-delta {
+  align-self: flex-start;
+  margin-top: 7px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-delta.up { color: var(--positive); background: var(--positive-soft); }
+.kpi-delta.down { color: var(--danger); background: var(--danger-soft); }
+
+/* Live-Aktivität with avatars */
+.activity-list { gap: 2px; }
+.activity-list .activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 8px;
+  border: 0;
+  background: transparent;
+  border-radius: 10px;
+}
+.activity-list .activity-item:hover { background: var(--surface-muted); box-shadow: none; }
+.activity-avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.activity-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.activity-list .activity-title { font-size: 0.84rem; font-weight: 500; color: var(--ink-soft); line-height: 1.35; }
+.activity-list .activity-meta { font-size: 0.73rem; color: var(--muted-soft); }
+.activity-empty { padding: 14px 4px; color: var(--muted); font-size: 0.85rem; list-style: none; }
