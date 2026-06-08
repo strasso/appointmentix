@@ -82,6 +82,7 @@ const kpiAppUsers = document.getElementById("kpiAppUsers");
 const kpiRevenueDelta = document.getElementById("kpiRevenueDelta");
 const kpiMrrDelta = document.getElementById("kpiMrrDelta");
 const kpiAppUsersDelta = document.getElementById("kpiAppUsersDelta");
+const analyseStats = document.getElementById("analyseStats");
 const railNavItems = Array.from(document.querySelectorAll(".rail-nav-item[data-view]"));
 const viewPanels = Array.from(document.querySelectorAll(".view-panel[data-view-panel]"));
 const VIEW_META = {
@@ -1204,6 +1205,28 @@ function renderMetricsDashboard() {
   setKpiDelta(kpiRevenueDelta, seriesTrendPercent(revenueByDay));
   setKpiDelta(kpiMrrDelta, seriesTrendPercent(mrrSeries));
   setKpiDelta(kpiAppUsersDelta, seriesTrendPercent(appOpenByDay));
+
+  if (analyseStats) {
+    const purchases = purchasesByDay.reduce((sum, v) => sum + (Number(v) || 0), 0);
+    const views = viewsByDay.reduce((sum, v) => sum + (Number(v) || 0), 0);
+    const aps = state.appointmentSummary || {};
+    const apTotal = Number(aps.total || 0);
+    const ms = state.membershipSummary || {};
+    const mTotal = Number(ms.total || 0);
+    const pct = (v) => (v === null ? "—" : `${v.toFixed(1)} %`);
+    const conversion = views > 0 ? (purchases / views) * 100 : null;
+    const cancelRate = apTotal > 0 ? (Number(aps.canceled || 0) / apTotal) * 100 : null;
+    const churn = mTotal > 0 ? (Number(ms.canceled || 0) / mTotal) * 100 : null;
+    const chips = [
+      { label: "Ø Behandlungswert", value: purchases > 0 ? formatEuro(Math.round(revenueTotal / purchases)) : "—", cls: "brand" },
+      { label: "Conversion", value: pct(conversion), cls: "ok" },
+      { label: "Stornoquote", value: pct(cancelRate), cls: "warn" },
+      { label: "Mitglieder-Churn", value: pct(churn), cls: "danger" },
+    ];
+    analyseStats.innerHTML = chips
+      .map((c) => `<div class="pstat ${c.cls}"><span class="pstat-value">${escapeHtml(c.value)}</span><span class="pstat-label">${escapeHtml(c.label)}</span></div>`)
+      .join("");
+  }
   if (metricAppUserLTVValue) metricAppUserLTVValue.textContent = formatEuro(appUserLtvCents);
   if (metricClientLTVValue) metricClientLTVValue.textContent = formatEuro(clientLtvCents);
   if (metricAppUsersValue) metricAppUsersValue.textContent = String(activeUsers);
