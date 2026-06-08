@@ -1,15 +1,15 @@
 :root {
-  --bg: #f3f2f3;
-  --bg-soft: #faf9fa;
+  --bg: #f3f4f6;
+  --bg-soft: #fafbfc;
   --surface-strong: #ffffff;
-  --surface-muted: #f5f4f6;
-  --surface-sunken: #efedf0;
-  --ink: #17151a;
-  --ink-soft: #3b3942;
-  --muted: #6c6873;
-  --muted-soft: #9b97a3;
-  --border: rgba(23, 21, 26, 0.08);
-  --border-strong: rgba(23, 21, 26, 0.14);
+  --surface-muted: #eff1f4;
+  --surface-sunken: #e7e9ee;
+  --ink: #16181d;
+  --ink-soft: #3a3d44;
+  --muted: #697079;
+  --muted-soft: #99a0a9;
+  --border: rgba(18, 22, 30, 0.08);
+  --border-strong: rgba(18, 22, 30, 0.14);
   --brand: #b56f80;
   --brand-strong: #a15e72;
   --brand-700: #8c4f63;
@@ -35,9 +35,7 @@ body {
   min-height: 100vh;
   font-family: Inter, system-ui, sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(1100px 560px at 100% -10%, rgba(181, 111, 128, 0.05), transparent 60%),
-    linear-gradient(180deg, #faf9fa 0%, #f3f2f3 32%, #efedf0 100%);
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
 }
@@ -63,7 +61,7 @@ a, button, input, select, textarea {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 28px;
-  background: rgba(250, 249, 250, 0.82);
+  background: rgba(247, 248, 250, 0.82);
   backdrop-filter: saturate(1.4) blur(12px);
   border-bottom: 1px solid var(--border);
 }
