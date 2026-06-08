@@ -530,11 +530,14 @@ a.btn:visited {
   background: var(--surface-strong);
   padding: 20px;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 220ms var(--ease);
+  position: relative;
+  transition: box-shadow 220ms var(--ease), transform 220ms var(--ease-out);
 }
 
-.analytics-tile:hover {
-  box-shadow: var(--shadow-md);
+.analytics-tile:not(.analytics-metric-cluster):hover {
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.02);
+  z-index: 2;
 }
 
 .hero-chart {
@@ -735,6 +738,9 @@ a.btn:visited {
 .stats-grid > .analytics-tile {
   grid-column: span 2;
 }
+.stats-grid > .analytics-metric-cluster {
+  grid-column: 1 / -1;
+}
 
 .stats-grid .tile-value {
   font-size: clamp(22px, 2vw, 28px);
@@ -780,6 +786,13 @@ a.btn:visited {
   padding: 18px;
   background: var(--surface-strong);
   box-shadow: var(--shadow-sm);
+  position: relative;
+  transition: box-shadow 220ms var(--ease), transform 220ms var(--ease-out);
+}
+.analytics-mini-tile:hover {
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.03);
+  z-index: 2;
 }
 
 .analytics-mini-tile .tile-top {
