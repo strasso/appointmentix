@@ -80,8 +80,17 @@ a, button, input, select, textarea {
 .topbar-actions { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .session-label { color: var(--muted); font-size: 0.82rem; }
 
+html.embed,
+html.embed body {
+  min-height: 100%;
+  background: transparent;
+}
 html.embed .topbar { display: none; }
-html.embed .shell { padding-top: 22px; }
+html.embed .shell {
+  width: 100%;
+  padding: 0 0 24px;
+}
+html.embed .card { box-shadow: none; }
 
 /* ---------- Layout ---------- */
 .shell {

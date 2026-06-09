@@ -81,6 +81,44 @@ except ValueError:
 HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DESIGN_PRESETS = {"clean", "bold", "minimal"}
+THEME_MEMBERSHIP_PRESETS = {"classic", "metallic", "minimal", "dark-premium", "gradient"}
+THEME_APPROVED_FONTS = {
+  "Inter, system-ui, sans-serif",
+  "Gabarito, DM Sans, system-ui, sans-serif",
+  "Avenir Next, system-ui, sans-serif",
+  "Georgia, serif",
+  "Playfair Display, Georgia, serif",
+}
+DEFAULT_CLINIC_THEME = {
+  "colors": {
+    "primary": "#B56F80",
+    "secondary": "#A15E72",
+    "background": "#F3F4F6",
+    "surface": "#FFFFFF",
+    "textPrimary": "#16181D",
+    "textSecondary": "#697079",
+    "accent": "#B56F80",
+  },
+  "typography": {
+    "headingFont": "Inter, system-ui, sans-serif",
+    "bodyFont": "Inter, system-ui, sans-serif",
+  },
+  "radius": {
+    "button": 12,
+    "card": 16,
+    "input": 9,
+  },
+  "membershipCard": {
+    "preset": "classic",
+    "backgroundColor": "#FFFFFF",
+    "textColor": "#16181D",
+    "accentColor": "#B56F80",
+    "borderRadius": 22,
+    "gradientStrength": 34,
+    "textureOpacity": 10,
+    "cornerDecoration": True,
+  },
+}
 LEAD_DEVICE_OPTIONS = {
   "all_following_and_lasers",
   "micro_needling_hydrafacial",
@@ -887,6 +925,18 @@ def init_db() -> None:
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_clinic_catalogs_clinic_id ON clinic_catalogs(clinic_id);
 
+        CREATE TABLE IF NOT EXISTS clinic_themes (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL UNIQUE,
+          draft_theme_json TEXT NOT NULL DEFAULT '{}',
+          published_theme_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          published_at TEXT,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_clinic_themes_clinic_id ON clinic_themes(clinic_id);
+
         CREATE TABLE IF NOT EXISTS patient_memberships (
           id BIGSERIAL PRIMARY KEY,
           clinic_id BIGINT NOT NULL,
@@ -1205,6 +1255,18 @@ def init_db() -> None:
 
         CREATE UNIQUE INDEX IF NOT EXISTS idx_clinic_catalogs_clinic_id ON clinic_catalogs(clinic_id);
 
+        CREATE TABLE IF NOT EXISTS clinic_themes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL UNIQUE,
+          draft_theme_json TEXT NOT NULL DEFAULT '{}',
+          published_theme_json TEXT NOT NULL DEFAULT '{}',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          published_at TEXT,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_clinic_themes_clinic_id ON clinic_themes(clinic_id);
+
         CREATE TABLE IF NOT EXISTS patient_memberships (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           clinic_id INTEGER NOT NULL,
@@ -1423,6 +1485,17 @@ def init_db() -> None:
         "reward_actions_json": "TEXT NOT NULL DEFAULT '[]'",
         "reward_redeems_json": "TEXT NOT NULL DEFAULT '[]'",
         "home_articles_json": "TEXT NOT NULL DEFAULT '[]'",
+      },
+    )
+
+    ensure_columns(
+      conn,
+      "clinic_themes",
+      {
+        "draft_theme_json": "TEXT NOT NULL DEFAULT '{}'",
+        "published_theme_json": "TEXT NOT NULL DEFAULT '{}'",
+        "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "published_at": "TEXT",
       },
     )
 
@@ -3913,6 +3986,254 @@ def parse_event_metadata(raw_text: object) -> dict:
   if isinstance(parsed, dict):
     return parsed
   return {}
+
+
+def parse_json_dict(raw_value: object) -> dict:
+  if isinstance(raw_value, dict):
+    return raw_value
+  if raw_value is None:
+    return {}
+  try:
+    parsed = json.loads(str(raw_value))
+  except Exception:
+    return {}
+  if isinstance(parsed, dict):
+    return parsed
+  return {}
+
+
+def clone_default_clinic_theme() -> dict:
+  return json.loads(json.dumps(DEFAULT_CLINIC_THEME))
+
+
+def clamp_theme_number(value: object, fallback: int, min_value: int, max_value: int) -> int:
+  try:
+    numeric = int(round(float(value)))
+  except (TypeError, ValueError):
+    return fallback
+  return max(min_value, min(max_value, numeric))
+
+
+def normalize_theme_hex(value: object, fallback: str) -> str:
+  return to_hex_color(str(value or "").strip().upper(), fallback)
+
+
+def normalize_theme_font(value: object, fallback: str) -> str:
+  candidate = str(value or "").strip()
+  if candidate in THEME_APPROVED_FONTS:
+    return candidate
+  return fallback
+
+
+def normalize_clinic_theme(raw_theme: object) -> dict:
+  source = parse_json_dict(raw_theme)
+  theme = clone_default_clinic_theme()
+
+  colors = source.get("colors") if isinstance(source.get("colors"), dict) else {}
+  for key, fallback in DEFAULT_CLINIC_THEME["colors"].items():
+    theme["colors"][key] = normalize_theme_hex(colors.get(key), fallback)
+
+  typography = source.get("typography") if isinstance(source.get("typography"), dict) else {}
+  theme["typography"]["headingFont"] = normalize_theme_font(
+    typography.get("headingFont"),
+    DEFAULT_CLINIC_THEME["typography"]["headingFont"],
+  )
+  theme["typography"]["bodyFont"] = normalize_theme_font(
+    typography.get("bodyFont"),
+    DEFAULT_CLINIC_THEME["typography"]["bodyFont"],
+  )
+
+  radius = source.get("radius") if isinstance(source.get("radius"), dict) else {}
+  theme["radius"]["button"] = clamp_theme_number(radius.get("button"), DEFAULT_CLINIC_THEME["radius"]["button"], 0, 32)
+  theme["radius"]["card"] = clamp_theme_number(radius.get("card"), DEFAULT_CLINIC_THEME["radius"]["card"], 0, 40)
+  theme["radius"]["input"] = clamp_theme_number(radius.get("input"), DEFAULT_CLINIC_THEME["radius"]["input"], 0, 28)
+
+  membership_card = source.get("membershipCard") if isinstance(source.get("membershipCard"), dict) else {}
+  preset = str(membership_card.get("preset") or "").strip()
+  theme["membershipCard"]["preset"] = preset if preset in THEME_MEMBERSHIP_PRESETS else DEFAULT_CLINIC_THEME["membershipCard"]["preset"]
+  theme["membershipCard"]["backgroundColor"] = normalize_theme_hex(
+    membership_card.get("backgroundColor"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["backgroundColor"],
+  )
+  theme["membershipCard"]["textColor"] = normalize_theme_hex(
+    membership_card.get("textColor"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["textColor"],
+  )
+  theme["membershipCard"]["accentColor"] = normalize_theme_hex(
+    membership_card.get("accentColor"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["accentColor"],
+  )
+  theme["membershipCard"]["borderRadius"] = clamp_theme_number(
+    membership_card.get("borderRadius"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["borderRadius"],
+    0,
+    40,
+  )
+  theme["membershipCard"]["gradientStrength"] = clamp_theme_number(
+    membership_card.get("gradientStrength"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["gradientStrength"],
+    0,
+    100,
+  )
+  theme["membershipCard"]["textureOpacity"] = clamp_theme_number(
+    membership_card.get("textureOpacity"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["textureOpacity"],
+    0,
+    35,
+  )
+  theme["membershipCard"]["cornerDecoration"] = parse_bool_flag(
+    membership_card.get("cornerDecoration"),
+    DEFAULT_CLINIC_THEME["membershipCard"]["cornerDecoration"],
+  )
+  return theme
+
+
+def serialize_clinic_theme(theme: object) -> str:
+  return json.dumps(normalize_clinic_theme(theme), ensure_ascii=False, separators=(",", ":"))
+
+
+def theme_hex_to_rgb(value: str) -> tuple[int, int, int]:
+  hex_value = normalize_theme_hex(value, "#000000").replace("#", "")
+  return (
+    int(hex_value[0:2], 16),
+    int(hex_value[2:4], 16),
+    int(hex_value[4:6], 16),
+  )
+
+
+def theme_relative_luminance(value: str) -> float:
+  def channel_luminance(channel: int) -> float:
+    normalized = channel / 255
+    if normalized <= 0.03928:
+      return normalized / 12.92
+    return ((normalized + 0.055) / 1.055) ** 2.4
+
+  red, green, blue = theme_hex_to_rgb(value)
+  return (0.2126 * channel_luminance(red)) + (0.7152 * channel_luminance(green)) + (0.0722 * channel_luminance(blue))
+
+
+def theme_contrast_ratio(foreground: str, background: str) -> float:
+  fg_luminance = theme_relative_luminance(foreground)
+  bg_luminance = theme_relative_luminance(background)
+  light = max(fg_luminance, bg_luminance)
+  dark = min(fg_luminance, bg_luminance)
+  return round((light + 0.05) / (dark + 0.05), 2)
+
+
+def clinic_theme_contrast_warnings(theme: object) -> list[dict]:
+  normalized = normalize_clinic_theme(theme)
+  checks = [
+    ("Primärtext auf Hintergrund", normalized["colors"]["textPrimary"], normalized["colors"]["background"]),
+    ("Sekundärtext auf Hintergrund", normalized["colors"]["textSecondary"], normalized["colors"]["background"]),
+    ("Primärtext auf Fläche", normalized["colors"]["textPrimary"], normalized["colors"]["surface"]),
+    ("Membership-Text auf Karte", normalized["membershipCard"]["textColor"], normalized["membershipCard"]["backgroundColor"]),
+  ]
+  warnings = []
+  for label, foreground, background in checks:
+    ratio = theme_contrast_ratio(foreground, background)
+    if ratio < 4.5:
+      warnings.append(
+        {
+          "label": label,
+          "foreground": foreground,
+          "background": background,
+          "ratio": ratio,
+          "suggestion": "#16181D" if theme_contrast_ratio("#16181D", background) >= theme_contrast_ratio("#FFFFFF", background) else "#FFFFFF",
+        }
+      )
+  return warnings
+
+
+def fetch_clinic_theme_row(conn: DBConnectionAdapter, clinic_id: int):
+  return conn.execute(
+    """
+    SELECT
+      clinic_id,
+      draft_theme_json,
+      published_theme_json,
+      updated_at,
+      published_at
+    FROM clinic_themes
+    WHERE clinic_id = ?
+    LIMIT 1
+    """,
+    (clinic_id,),
+  ).fetchone()
+
+
+def build_clinic_theme_state_from_row(row) -> dict:
+  default_theme = clone_default_clinic_theme()
+  published_source = parse_json_dict(safe_row_value(row, "published_theme_json")) if row else {}
+  published_theme = normalize_clinic_theme(published_source or default_theme)
+  draft_source = parse_json_dict(safe_row_value(row, "draft_theme_json")) if row else {}
+  draft_theme = normalize_clinic_theme(draft_source or published_theme)
+  return {
+    "draftTheme": draft_theme,
+    "publishedTheme": published_theme,
+    "defaultTheme": default_theme,
+    "updatedAt": safe_public_text(safe_row_value(row, "updated_at")) if row else "",
+    "publishedAt": safe_public_text(safe_row_value(row, "published_at")) if row else "",
+    "hasDraftChanges": serialize_clinic_theme(draft_theme) != serialize_clinic_theme(published_theme),
+    "warnings": clinic_theme_contrast_warnings(draft_theme),
+  }
+
+
+def load_clinic_theme_state(clinic_id: int) -> dict:
+  with get_db() as conn:
+    row = fetch_clinic_theme_row(conn, clinic_id)
+  return build_clinic_theme_state_from_row(row)
+
+
+def load_published_clinic_theme(clinic_id: int) -> dict:
+  with get_db() as conn:
+    row = fetch_clinic_theme_row(conn, clinic_id)
+  if not row:
+    return clone_default_clinic_theme()
+  return normalize_clinic_theme(row["published_theme_json"])
+
+
+def upsert_clinic_theme_draft(conn: DBConnectionAdapter, clinic_id: int, theme: object) -> None:
+  now_iso = utc_now_iso()
+  draft_json = serialize_clinic_theme(theme)
+  default_json = serialize_clinic_theme(DEFAULT_CLINIC_THEME)
+  conn.execute(
+    """
+    INSERT INTO clinic_themes (
+      clinic_id,
+      draft_theme_json,
+      published_theme_json,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(clinic_id) DO UPDATE SET
+      draft_theme_json = excluded.draft_theme_json,
+      updated_at = excluded.updated_at
+    """,
+    (clinic_id, draft_json, default_json, now_iso),
+  )
+
+
+def publish_clinic_theme(conn: DBConnectionAdapter, clinic_id: int, theme: object) -> None:
+  now_iso = utc_now_iso()
+  theme_json = serialize_clinic_theme(theme)
+  conn.execute(
+    """
+    INSERT INTO clinic_themes (
+      clinic_id,
+      draft_theme_json,
+      published_theme_json,
+      updated_at,
+      published_at
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(clinic_id) DO UPDATE SET
+      draft_theme_json = excluded.draft_theme_json,
+      published_theme_json = excluded.published_theme_json,
+      updated_at = excluded.updated_at,
+      published_at = excluded.published_at
+    """,
+    (clinic_id, theme_json, theme_json, now_iso, now_iso),
+  )
 
 
 def normalize_campaign_trigger(value: object, fallback: str = "broadcast") -> str:
@@ -7964,11 +8285,14 @@ def mobile_clinic_bundle():
 
   catalog = load_clinic_catalog_bundle(clinic_row)
   public_clinic = serialize_public_clinic(clinic_row)
+  published_theme = load_published_clinic_theme(int(clinic_row["id"]))
+  public_clinic["theme"] = published_theme
 
   return jsonify(
     {
       "clinic": public_clinic,
       "catalog": catalog,
+      "theme": published_theme,
       "fetchedAt": utc_now_iso(),
     }
   )
@@ -10490,6 +10814,112 @@ def update_clinic_settings():
       "websiteSync": website_sync,
     }
   )
+
+
+@app.get("/api/clinic/theme")
+def clinic_theme():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  state_payload = load_clinic_theme_state(clinic_id)
+  return jsonify(
+    {
+      **state_payload,
+      "permissions": {
+        "role": user_row["role"],
+        "isOwner": str(user_row["role"]) == "owner",
+      },
+    }
+  )
+
+
+@app.put("/api/clinic/theme/draft")
+def save_clinic_theme_draft():
+  user_row, auth_error = require_owner_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  raw_theme = payload.get("theme") if isinstance(payload, dict) and "theme" in payload else payload
+  theme = normalize_clinic_theme(raw_theme)
+  with get_db() as conn:
+    upsert_clinic_theme_draft(conn, clinic_id, theme)
+    row = fetch_clinic_theme_row(conn, clinic_id)
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(user_row["id"]),
+    action="clinic.theme_draft_saved",
+    entity_type="clinic_theme",
+    entity_id=str(clinic_id),
+    metadata={"warnings": clinic_theme_contrast_warnings(theme)},
+  )
+  return jsonify(build_clinic_theme_state_from_row(row))
+
+
+@app.post("/api/clinic/theme/publish")
+def publish_clinic_theme_draft():
+  user_row, auth_error = require_owner_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  with get_db() as conn:
+    row = fetch_clinic_theme_row(conn, clinic_id)
+    current_state = build_clinic_theme_state_from_row(row)
+    raw_theme = payload.get("theme") if isinstance(payload, dict) and "theme" in payload else current_state["draftTheme"]
+    theme = normalize_clinic_theme(raw_theme)
+    publish_clinic_theme(conn, clinic_id, theme)
+    row = fetch_clinic_theme_row(conn, clinic_id)
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(user_row["id"]),
+    action="clinic.theme_published",
+    entity_type="clinic_theme",
+    entity_id=str(clinic_id),
+    metadata={"warnings": clinic_theme_contrast_warnings(theme)},
+  )
+  return jsonify(build_clinic_theme_state_from_row(row))
+
+
+@app.post("/api/clinic/theme/reset-draft")
+def reset_clinic_theme_draft():
+  user_row, auth_error = require_owner_row()
+  if not user_row:
+    return auth_error
+
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  with get_db() as conn:
+    row = fetch_clinic_theme_row(conn, clinic_id)
+    state_payload = build_clinic_theme_state_from_row(row)
+    upsert_clinic_theme_draft(conn, clinic_id, state_payload["publishedTheme"])
+    row = fetch_clinic_theme_row(conn, clinic_id)
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(user_row["id"]),
+    action="clinic.theme_draft_reset",
+    entity_type="clinic_theme",
+    entity_id=str(clinic_id),
+  )
+  return jsonify(build_clinic_theme_state_from_row(row))
 
 
 @app.get("/api/clinic/members")

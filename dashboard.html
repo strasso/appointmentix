@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="dashboard.css?v=20260609-home-preview">
 </head>
 <body>
   <div class="dashboard-ghost-session" aria-hidden="true">
@@ -73,6 +73,8 @@
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 14l3.5-3.5 3 3L21 7"/></svg></span>Analyse</button>
           <button class="rail-nav-item" type="button" data-view="katalog">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4a1.2 1.2 0 0 1 1.2-1.2h8a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg></span>Katalog &amp; App</button>
+          <button class="rail-nav-item" type="button" data-view="branding">
+            <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5h7.5"/><path d="m15.5 3.5 5 5-10.8 10.8-5.7 1 1-5.7L15.5 3.5Z"/><path d="m14 5 5 5"/></svg></span>Branding</button>
           <button class="rail-nav-item" type="button" data-view="kampagnen">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 13v-2Z"/><path d="M11.6 16.8A3 3 0 0 1 6 15.5"/></svg></span>Kampagnen</button>
           <button class="rail-nav-item" type="button" data-view="team">
@@ -511,9 +513,274 @@
           </article>
           </div>
 
-          <div class="subpanel" data-subpanel="visual">
-            <article class="card catalog-embed-card">
-              <iframe class="catalog-embed" data-src="/catalog?embed=1" title="Visueller Katalog-Editor" loading="lazy"></iframe>
+          <div class="subpanel catalog-embed-panel" data-subpanel="visual">
+            <iframe class="catalog-embed" data-src="/catalog?embed=1" title="Visueller Katalog-Editor" loading="lazy"></iframe>
+          </div>
+        </section>
+
+        <!-- BRANDING -->
+        <section class="view-panel" data-view-panel="branding">
+          <div class="appearance-layout">
+            <article class="card appearance-editor-card">
+              <div class="section-head">
+                <div>
+                  <h2>App-Branding</h2>
+                  <p id="appearanceStatus" class="subline">Lade Theme ...</p>
+                </div>
+                <div class="inline-actions">
+                  <button id="resetAppearanceBtn" class="btn ghost" type="button">Reset changes</button>
+                  <button id="resetDefaultAppearanceBtn" class="btn ghost" type="button">Reset to default</button>
+                  <button id="saveThemeDraftBtn" class="btn ghost" type="button">Save draft</button>
+                  <button id="publishThemeBtn" class="btn primary" type="button">Publish</button>
+                </div>
+              </div>
+
+              <form id="appearanceForm" class="form appearance-form">
+                <section class="appearance-group">
+                  <div class="catalog-head">
+                    <div>
+                      <h3>Brand colors</h3>
+                    </div>
+                  </div>
+                  <div class="appearance-color-grid">
+                    <label class="color-field" for="themeColorPrimary">
+                      <span>Primary color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorPrimary" name="colors.primary" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorPrimaryPicker" type="color" data-color-picker-for="themeColorPrimary" aria-label="Primary color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorSecondary">
+                      <span>Secondary color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorSecondary" name="colors.secondary" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorSecondaryPicker" type="color" data-color-picker-for="themeColorSecondary" aria-label="Secondary color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorBackground">
+                      <span>Background color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorBackground" name="colors.background" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorBackgroundPicker" type="color" data-color-picker-for="themeColorBackground" aria-label="Background color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorSurface">
+                      <span>Surface color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorSurface" name="colors.surface" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorSurfacePicker" type="color" data-color-picker-for="themeColorSurface" aria-label="Surface color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorTextPrimary">
+                      <span>Primary text color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorTextPrimary" name="colors.textPrimary" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorTextPrimaryPicker" type="color" data-color-picker-for="themeColorTextPrimary" aria-label="Primary text color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorTextSecondary">
+                      <span>Secondary text color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorTextSecondary" name="colors.textSecondary" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorTextSecondaryPicker" type="color" data-color-picker-for="themeColorTextSecondary" aria-label="Secondary text color auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeColorAccent">
+                      <span>Accent color</span>
+                      <div class="color-input-row">
+                        <input id="themeColorAccent" name="colors.accent" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeColorAccentPicker" type="color" data-color-picker-for="themeColorAccent" aria-label="Accent color auswählen">
+                      </div>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="appearance-group">
+                  <div class="catalog-head">
+                    <div>
+                      <h3>Typography</h3>
+                    </div>
+                  </div>
+                  <div class="row-2">
+                    <label>Heading font
+                      <select name="typography.headingFont">
+                        <option value="Inter, system-ui, sans-serif">Inter</option>
+                        <option value="Gabarito, DM Sans, system-ui, sans-serif">Gabarito</option>
+                        <option value="Avenir Next, system-ui, sans-serif">Avenir Next</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="Playfair Display, Georgia, serif">Playfair Display</option>
+                      </select>
+                    </label>
+                    <label>Body font
+                      <select name="typography.bodyFont">
+                        <option value="Inter, system-ui, sans-serif">Inter</option>
+                        <option value="Gabarito, DM Sans, system-ui, sans-serif">Gabarito</option>
+                        <option value="Avenir Next, system-ui, sans-serif">Avenir Next</option>
+                        <option value="Georgia, serif">Georgia</option>
+                        <option value="Playfair Display, Georgia, serif">Playfair Display</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="appearance-group">
+                  <div class="catalog-head">
+                    <div>
+                      <h3>Component appearance</h3>
+                    </div>
+                  </div>
+                  <div class="appearance-range-grid">
+                    <label class="range-field">Button radius
+                      <input name="radius.button" type="range" min="0" max="32" step="1">
+                      <span class="range-value" data-range-value="radius.button">0px</span>
+                    </label>
+                    <label class="range-field">Card radius
+                      <input name="radius.card" type="range" min="0" max="40" step="1">
+                      <span class="range-value" data-range-value="radius.card">0px</span>
+                    </label>
+                    <label class="range-field">Input radius
+                      <input name="radius.input" type="range" min="0" max="28" step="1">
+                      <span class="range-value" data-range-value="radius.input">0px</span>
+                    </label>
+                  </div>
+                </section>
+
+                <section class="appearance-group">
+                  <div class="catalog-head">
+                    <div>
+                      <h3>Membership card</h3>
+                    </div>
+                  </div>
+                  <div class="row-2">
+                    <label>Card preset
+                      <select name="membershipCard.preset">
+                        <option value="classic">Classic</option>
+                        <option value="metallic">Metallic</option>
+                        <option value="minimal">Minimal</option>
+                        <option value="dark-premium">Dark premium</option>
+                        <option value="gradient">Gradient</option>
+                      </select>
+                    </label>
+                    <label class="toggle-line">
+                      <input name="membershipCard.cornerDecoration" type="checkbox">
+                      <span>Corner decoration</span>
+                    </label>
+                  </div>
+                  <div class="appearance-color-grid">
+                    <label class="color-field" for="themeMembershipBackground">
+                      <span>Background color</span>
+                      <div class="color-input-row">
+                        <input id="themeMembershipBackground" name="membershipCard.backgroundColor" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeMembershipBackgroundPicker" type="color" data-color-picker-for="themeMembershipBackground" aria-label="Membership background auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeMembershipText">
+                      <span>Text color</span>
+                      <div class="color-input-row">
+                        <input id="themeMembershipText" name="membershipCard.textColor" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeMembershipTextPicker" type="color" data-color-picker-for="themeMembershipText" aria-label="Membership text auswählen">
+                      </div>
+                    </label>
+                    <label class="color-field" for="themeMembershipAccent">
+                      <span>Accent color</span>
+                      <div class="color-input-row">
+                        <input id="themeMembershipAccent" name="membershipCard.accentColor" type="text" spellcheck="false" autocomplete="off">
+                        <input id="themeMembershipAccentPicker" type="color" data-color-picker-for="themeMembershipAccent" aria-label="Membership accent auswählen">
+                      </div>
+                    </label>
+                  </div>
+                  <div class="appearance-range-grid">
+                    <label class="range-field">Border radius
+                      <input name="membershipCard.borderRadius" type="range" min="0" max="40" step="1">
+                      <span class="range-value" data-range-value="membershipCard.borderRadius">0px</span>
+                    </label>
+                    <label class="range-field">Gradient strength
+                      <input name="membershipCard.gradientStrength" type="range" min="0" max="100" step="1">
+                      <span class="range-value" data-range-value="membershipCard.gradientStrength">0%</span>
+                    </label>
+                    <label class="range-field">Texture opacity
+                      <input name="membershipCard.textureOpacity" type="range" min="0" max="35" step="1">
+                      <span class="range-value" data-range-value="membershipCard.textureOpacity">0%</span>
+                    </label>
+                  </div>
+                </section>
+              </form>
+
+              <div id="appearanceWarnings" class="appearance-warnings hidden"></div>
+            </article>
+
+            <article class="card appearance-preview-card">
+              <div class="section-head">
+                <div>
+                  <h2>Live preview</h2>
+                  <p class="subline">Patient app</p>
+                </div>
+                <span id="appearanceDirtyBadge" class="status-pill hidden">Ungespeichert</span>
+              </div>
+
+              <div id="appearancePreview" class="appearance-phone" aria-label="App Live Preview">
+                <div class="preview-home-scroll">
+                  <header class="preview-home-top">
+                    <div class="preview-mini-logo">curabo</div>
+                    <div class="preview-home-actions">
+                      <span class="preview-icon-btn" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.8" cy="10.8" r="6.6"/><path d="m16 16 4.2 4.2"/></svg>
+                      </span>
+                      <span class="preview-icon-btn preview-bag" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8.5h11l1 11h-13l1-11Z"/><path d="M9 8.5a3 3 0 0 1 6 0"/><circle cx="18.8" cy="4.8" r="2.1" fill="currentColor" stroke="none"/></svg>
+                      </span>
+                    </div>
+                  </header>
+
+                  <section class="preview-hero-card">
+                    <img src="/mobile/_mowgli_export/screens/images/hero-spa-relax.jpg" alt="">
+                    <div class="preview-hero-copy">
+                      <h3>Willkommen zurück Hannah!</h3>
+                      <p>Dein letzter Besuch war vor 7 Wochen.<br>Zeit für deine nächste Behandlung?</p>
+                    </div>
+                  </section>
+
+                  <section class="preview-points-card">
+                    <span class="preview-coins" aria-hidden="true">
+                      <svg viewBox="0 0 32 32" fill="none"><ellipse cx="13" cy="11" rx="7.5" ry="4.2" fill="#FFD56A" stroke="#F4A90B" stroke-width="1.5"/><path d="M5.5 11v6.4c0 2.3 3.4 4.2 7.5 4.2s7.5-1.9 7.5-4.2V11" fill="#FFCA43"/><path d="M5.5 11v6.4c0 2.3 3.4 4.2 7.5 4.2s7.5-1.9 7.5-4.2V11" stroke="#F4A90B" stroke-width="1.5"/><ellipse cx="20" cy="15" rx="7.5" ry="4.2" fill="#FFE08A" stroke="#F4A90B" stroke-width="1.5"/><path d="M12.5 15v5.8c0 2.3 3.4 4.2 7.5 4.2s7.5-1.9 7.5-4.2V15" fill="#FFD35A"/><path d="M12.5 15v5.8c0 2.3 3.4 4.2 7.5 4.2s7.5-1.9 7.5-4.2V15" stroke="#F4A90B" stroke-width="1.5"/></svg>
+                    </span>
+                    <strong>2450</strong>
+                    <span>PUNKTE</span>
+                    <em>Mitglied werden</em>
+                    <svg class="preview-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  </section>
+
+                  <section class="preview-member-card" data-membership-preview>
+                    <div class="membership-layer membership-gradient" aria-hidden="true"></div>
+                    <div class="membership-layer membership-texture" aria-hidden="true"></div>
+                    <div class="membership-layer membership-highlight" aria-hidden="true"></div>
+                    <div class="membership-corner membership-corner-a" aria-hidden="true"></div>
+                    <div class="membership-corner membership-corner-b" aria-hidden="true"></div>
+                    <div class="membership-content">
+                      <h4>Werde heute noch Curabo Mitglied</h4>
+                      <p>Sichere dir 15% Rabatt auf alle Treatments und exklusive Vorteile.</p>
+                      <button class="preview-primary-btn" type="button">Jetzt Mitglied werden</button>
+                    </div>
+                  </section>
+
+                  <section class="preview-pay-card">
+                    <span>Klarna</span>
+                    <strong>Heute behandeln.<br>Später zahlen. Prämien sichern.</strong>
+                    <svg class="preview-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  </section>
+                </div>
+
+                <nav class="preview-bottom-nav" aria-label="Preview navigation">
+                  <span class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9h13v-9"/><path d="M9 19v-5h6v5"/></svg>Erkunden</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5h11l1 11h-13l1-11Z"/><path d="M9 8.5a3 3 0 0 1 6 0"/></svg>Shop</span>
+                  <button class="preview-scan-btn" type="button" aria-label="Scan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4H5a1 1 0 0 0-1 1v2"/><path d="M17 4h2a1 1 0 0 1 1 1v2"/><path d="M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M17 20h2a1 1 0 0 0 1-1v-2"/><path d="M8 12h8"/></svg>
+                  </button>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12v8H4v-8"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H8.5a2.5 2.5 0 1 1 2.5-2.5C11 6 12 7 12 7Z"/><path d="M12 7h3.5A2.5 2.5 0 1 0 13 4.5C13 6 12 7 12 7Z"/></svg>Prämien</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>Profil</span>
+                </nav>
+                <span id="previewClinicName" class="hidden">Demo Aesthetics</span>
+                </div>
             </article>
           </div>
         </section>
@@ -797,7 +1064,8 @@
     <div id="toast" class="toast"></div>
   </main>
 
-  <script src="dashboard.js"></script>
+  <script src="theme-utils.js?v=20260609-home-preview"></script>
+  <script src="dashboard.js?v=20260609-home-preview"></script>
   <script>
     (() => {
       const pairs = [

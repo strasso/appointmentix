@@ -33,6 +33,13 @@ const state = {
   editingApptId: null,
   customerNotesEmail: "",
   settingsSnapshot: null,
+  themeDraft: null,
+  themeSavedDraft: null,
+  themePublished: null,
+  themeDefault: null,
+  themeDirty: false,
+  themeHasDraftChanges: false,
+  themeLoading: false,
   catalog: {
     categories: [],
     treatments: [],
@@ -91,6 +98,7 @@ const VIEW_META = {
   termine: { eyebrow: "Termine" },
   analyse: { eyebrow: "Analyse" },
   katalog: { eyebrow: "Katalog & App" },
+  branding: { eyebrow: "App-Design" },
   kampagnen: { eyebrow: "Kampagnen" },
   team: { eyebrow: "Team" },
   einstellungen: { eyebrow: "Einstellungen" },
@@ -107,6 +115,16 @@ const settingsForm = document.getElementById("settingsForm");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const brandColorPicker = document.getElementById("brandColorPicker");
 const accentColorPicker = document.getElementById("accentColorPicker");
+const appearanceForm = document.getElementById("appearanceForm");
+const appearanceStatus = document.getElementById("appearanceStatus");
+const appearanceWarnings = document.getElementById("appearanceWarnings");
+const appearancePreview = document.getElementById("appearancePreview");
+const appearanceDirtyBadge = document.getElementById("appearanceDirtyBadge");
+const previewClinicName = document.getElementById("previewClinicName");
+const saveThemeDraftBtn = document.getElementById("saveThemeDraftBtn");
+const publishThemeBtn = document.getElementById("publishThemeBtn");
+const resetAppearanceBtn = document.getElementById("resetAppearanceBtn");
+const resetDefaultAppearanceBtn = document.getElementById("resetDefaultAppearanceBtn");
 const membersBody = document.getElementById("membersBody");
 const memberForm = document.getElementById("memberForm");
 const billingStatus = document.getElementById("billingStatus");
@@ -235,6 +253,32 @@ const BODY_ZONE_ALIAS_BY_TOKEN = {
   fuesse: "feet",
   fusse: "feet",
 };
+const THEME_FIELD_PATHS = [
+  "colors.primary",
+  "colors.secondary",
+  "colors.background",
+  "colors.surface",
+  "colors.textPrimary",
+  "colors.textSecondary",
+  "colors.accent",
+  "typography.headingFont",
+  "typography.bodyFont",
+  "radius.button",
+  "radius.card",
+  "radius.input",
+  "membershipCard.preset",
+  "membershipCard.backgroundColor",
+  "membershipCard.textColor",
+  "membershipCard.accentColor",
+  "membershipCard.borderRadius",
+  "membershipCard.gradientStrength",
+  "membershipCard.textureOpacity",
+  "membershipCard.cornerDecoration",
+];
+const THEME_PERCENT_FIELDS = new Set([
+  "membershipCard.gradientStrength",
+  "membershipCard.textureOpacity",
+]);
 
 function csvEscape(value) {
   const text = String(value ?? "");
@@ -276,6 +320,33 @@ function showToast(message) {
     toast.classList.remove("show");
     state.toastTimer = null;
   }, 2600);
+}
+
+function ensureLazyFrameSource(frame) {
+  if (!(frame instanceof HTMLIFrameElement)) return;
+  const source = frame.getAttribute("data-src");
+  if (!source) return;
+
+  let expectedUrl;
+  try {
+    expectedUrl = new URL(source, window.location.href);
+  } catch {
+    return;
+  }
+
+  let currentUrl = null;
+  const currentSource = frame.getAttribute("src");
+  if (currentSource) {
+    try {
+      currentUrl = new URL(currentSource, window.location.href);
+    } catch {
+      currentUrl = null;
+    }
+  }
+
+  if (!currentUrl || currentUrl.href !== expectedUrl.href) {
+    frame.setAttribute("src", source);
+  }
 }
 
 /* ---- Interaction layer: haptics, ripple, count-up (reduced-motion aware) ---- */
@@ -441,6 +512,299 @@ function buildSettingsPayload(extra = {}) {
   return { ...payload, ...extra };
 }
 
+function themeTools() {
+  return window.CuraboTheme;
+}
+
+function normalizeTheme(theme) {
+  return themeTools().normalizeTheme(theme);
+}
+
+function cloneTheme(theme) {
+  return themeTools().clone(theme);
+}
+
+function readThemePath(source, path) {
+  return String(path)
+    .split(".")
+    .reduce((value, key) => (value && Object.prototype.hasOwnProperty.call(value, key) ? value[key] : undefined), source);
+}
+
+function writeThemePath(target, path, value) {
+  const parts = String(path).split(".");
+  let cursor = target;
+  parts.slice(0, -1).forEach((part) => {
+    if (!cursor[part] || typeof cursor[part] !== "object") cursor[part] = {};
+    cursor = cursor[part];
+  });
+  cursor[parts[parts.length - 1]] = value;
+}
+
+function appearanceElement(path) {
+  if (!appearanceForm) return null;
+  return appearanceForm.elements.namedItem(path);
+}
+
+function updateAppearanceRangeLabels(theme) {
+  if (!appearanceForm) return;
+  appearanceForm.querySelectorAll("[data-range-value]").forEach((node) => {
+    const path = node.getAttribute("data-range-value");
+    const value = Number(readThemePath(theme, path) || 0);
+    node.textContent = `${value}${THEME_PERCENT_FIELDS.has(path) ? "%" : "px"}`;
+  });
+}
+
+function setAppearanceColorPickerValue(textInput) {
+  if (!(textInput instanceof HTMLInputElement)) return;
+  const picker = document.querySelector(`[data-color-picker-for="${textInput.id}"]`);
+  if (!(picker instanceof HTMLInputElement)) return;
+  picker.value = themeTools().normalizeHex(textInput.value, picker.value || "#000000");
+}
+
+function getInvalidAppearanceColorFields() {
+  if (!appearanceForm) return [];
+  return Array.from(appearanceForm.querySelectorAll('.color-field input[type="text"]'))
+    .filter((input) => input instanceof HTMLInputElement)
+    .map((input) => {
+      const label = input.closest("label");
+      const labelText = label?.querySelector("span")?.textContent || input.name || input.id;
+      const value = String(input.value || "").trim();
+      const invalid = !/^#[0-9a-fA-F]{6}$/.test(value);
+      input.setAttribute("aria-invalid", String(invalid));
+      return invalid ? labelText : "";
+    })
+    .filter(Boolean);
+}
+
+function collectAppearanceThemeFromForm() {
+  const draft = {};
+  if (!appearanceForm) return normalizeTheme(draft);
+  THEME_FIELD_PATHS.forEach((path) => {
+    const element = appearanceElement(path);
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) return;
+    let value;
+    if (element instanceof HTMLInputElement && element.type === "checkbox") {
+      value = element.checked;
+    } else if (element instanceof HTMLInputElement && element.type === "range") {
+      value = Number(element.value);
+    } else {
+      value = element.value;
+    }
+    writeThemePath(draft, path, value);
+  });
+  return normalizeTheme(draft);
+}
+
+function updateAppearanceWorkflowState() {
+  if (!appearanceForm) return;
+  const tools = themeTools();
+  const current = state.themeDraft ? normalizeTheme(state.themeDraft) : normalizeTheme({});
+  const savedDraft = state.themeSavedDraft ? normalizeTheme(state.themeSavedDraft) : current;
+  const published = state.themePublished ? normalizeTheme(state.themePublished) : normalizeTheme({});
+  const hasInvalidColors = getInvalidAppearanceColorFields().length > 0;
+  state.themeDirty = !tools.isThemeEqual(current, savedDraft);
+  state.themeHasDraftChanges = !tools.isThemeEqual(current, published);
+
+  if (appearanceDirtyBadge) {
+    appearanceDirtyBadge.classList.toggle("hidden", !state.themeDirty);
+  }
+  if (appearanceStatus) {
+    const publishedAt = state.themePublishedAt ? `Published ${formatDate(state.themePublishedAt)}` : "Noch nicht veröffentlicht";
+    const draftLabel = state.themeDirty
+      ? "Lokale Änderungen"
+      : state.themeHasDraftChanges
+        ? "Draft gespeichert"
+        : "Live";
+    appearanceStatus.textContent = `${draftLabel} • ${publishedAt}`;
+  }
+
+  const disabled = !state.isOwner || state.themeLoading || hasInvalidColors;
+  if (saveThemeDraftBtn) saveThemeDraftBtn.disabled = disabled || !state.themeDirty;
+  if (publishThemeBtn) publishThemeBtn.disabled = disabled || !state.themeHasDraftChanges;
+  if (resetAppearanceBtn) resetAppearanceBtn.disabled = !state.isOwner || state.themeLoading || (!state.themeDirty && !state.themeHasDraftChanges);
+  if (resetDefaultAppearanceBtn) resetDefaultAppearanceBtn.disabled = !state.isOwner || state.themeLoading;
+}
+
+function renderAppearanceWarnings(theme) {
+  if (!appearanceWarnings) return;
+  const warnings = themeTools().contrastWarnings(theme);
+  const invalidFields = getInvalidAppearanceColorFields();
+  appearanceWarnings.classList.toggle("hidden", warnings.length === 0 && invalidFields.length === 0);
+  const invalidHtml = invalidFields
+    .map((label) => `<p><strong>${escapeAttr(label)}</strong>: Bitte einen gültigen HEX-Wert im Format #AABBCC eintragen.</p>`)
+    .join("");
+  const contrastHtml = warnings
+    .map(
+      (warning) => `
+        <p>
+          <strong>${escapeAttr(warning.label)}</strong>: Kontrast ${escapeAttr(warning.ratio)}:1.
+          Vorschlag: ${escapeAttr(warning.suggestion)}.
+        </p>
+      `
+    )
+    .join("");
+  appearanceWarnings.innerHTML = `${invalidHtml}${contrastHtml}`;
+}
+
+function applyAppearancePreview(themeInput) {
+  if (!appearancePreview) return;
+  const theme = normalizeTheme(themeInput);
+  const card = theme.membershipCard;
+  const setVar = (name, value) => appearancePreview.style.setProperty(name, value);
+  setVar("--preview-bg", theme.colors.background);
+  setVar("--preview-surface", theme.colors.surface);
+  setVar("--preview-primary", theme.colors.primary);
+  setVar("--preview-secondary", theme.colors.secondary);
+  setVar("--preview-accent", theme.colors.accent);
+  setVar("--preview-text", theme.colors.textPrimary);
+  setVar("--preview-muted", theme.colors.textSecondary);
+  setVar("--preview-button-radius", `${theme.radius.button}px`);
+  setVar("--preview-card-radius", `${theme.radius.card}px`);
+  setVar("--preview-input-radius", `${theme.radius.input}px`);
+  setVar("--preview-heading-font", theme.typography.headingFont);
+  setVar("--preview-body-font", theme.typography.bodyFont);
+  setVar("--membership-bg", card.backgroundColor);
+  setVar("--membership-text", card.textColor);
+  setVar("--membership-accent", card.accentColor);
+  setVar("--membership-radius", `${card.borderRadius}px`);
+  setVar("--membership-gradient-opacity", String(card.gradientStrength / 100));
+  setVar("--membership-texture-opacity", String(card.textureOpacity / 100));
+
+  const membershipPreview = appearancePreview.querySelector("[data-membership-preview]");
+  if (membershipPreview instanceof HTMLElement) {
+    membershipPreview.dataset.preset = card.preset;
+    membershipPreview.dataset.cornerDecoration = String(Boolean(card.cornerDecoration));
+  }
+  appearancePreview.querySelectorAll(".preview-primary-btn").forEach((button) => {
+    if (!(button instanceof HTMLElement)) return;
+    const isInverted = card.preset === "dark-premium";
+    button.style.backgroundColor = isInverted ? "#FFFFFF" : theme.colors.primary;
+    button.style.color = isInverted ? "#111318" : "#FFFFFF";
+  });
+  const scanButton = appearancePreview.querySelector(".preview-scan-btn");
+  if (scanButton instanceof HTMLElement) {
+    scanButton.style.backgroundColor = theme.colors.primary;
+  }
+  if (previewClinicName) {
+    previewClinicName.textContent = state.settingsSnapshot?.clinicName || state.user?.clinicName || "Demo Aesthetics";
+  }
+  renderAppearanceWarnings(theme);
+}
+
+function fillAppearanceForm(themeInput) {
+  if (!appearanceForm) return;
+  const theme = normalizeTheme(themeInput);
+  THEME_FIELD_PATHS.forEach((path) => {
+    const element = appearanceElement(path);
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) return;
+    const value = readThemePath(theme, path);
+    if (element instanceof HTMLInputElement && element.type === "checkbox") {
+      element.checked = Boolean(value);
+    } else {
+      element.value = String(value);
+    }
+    if (element instanceof HTMLInputElement && element.type === "text") {
+      setAppearanceColorPickerValue(element);
+    }
+  });
+  updateAppearanceRangeLabels(theme);
+  state.themeDraft = cloneTheme(theme);
+  applyAppearancePreview(theme);
+  updateAppearanceWorkflowState();
+}
+
+function setAppearanceDisabled(disabled) {
+  if (!appearanceForm) return;
+  Array.from(appearanceForm.elements).forEach((element) => {
+    element.disabled = disabled;
+  });
+  [saveThemeDraftBtn, publishThemeBtn, resetAppearanceBtn, resetDefaultAppearanceBtn].forEach((button) => {
+    if (button) button.disabled = disabled;
+  });
+}
+
+function applyThemeStatePayload(payload) {
+  const draftTheme = normalizeTheme(payload?.draftTheme || {});
+  const publishedTheme = normalizeTheme(payload?.publishedTheme || {});
+  state.themeDefault = normalizeTheme(payload?.defaultTheme || {});
+  state.themePublished = cloneTheme(publishedTheme);
+  state.themeSavedDraft = cloneTheme(draftTheme);
+  state.themePublishedAt = payload?.publishedAt || "";
+  state.themeUpdatedAt = payload?.updatedAt || "";
+  state.themeDirty = false;
+  state.themeHasDraftChanges = Boolean(payload?.hasDraftChanges);
+  fillAppearanceForm(draftTheme);
+}
+
+async function loadClinicTheme() {
+  if (!appearanceForm) return;
+  const response = await apiRequest("/clinic/theme");
+  applyThemeStatePayload(response);
+  setAppearanceDisabled(!state.isOwner);
+  updateAppearanceWorkflowState();
+}
+
+async function saveThemeDraft() {
+  if (!state.isOwner || state.themeLoading) return;
+  const theme = collectAppearanceThemeFromForm();
+  state.themeLoading = true;
+  updateAppearanceWorkflowState();
+  try {
+    const response = await apiRequest("/clinic/theme/draft", { method: "PUT", body: { theme } });
+    applyThemeStatePayload(response);
+    showToast("Theme-Draft gespeichert");
+    await loadAuditLogs();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    state.themeLoading = false;
+    updateAppearanceWorkflowState();
+  }
+}
+
+async function publishThemeDraft() {
+  if (!state.isOwner || state.themeLoading) return;
+  const theme = collectAppearanceThemeFromForm();
+  state.themeLoading = true;
+  updateAppearanceWorkflowState();
+  try {
+    const response = await apiRequest("/clinic/theme/publish", { method: "POST", body: { theme } });
+    applyThemeStatePayload(response);
+    showToast("Theme veröffentlicht");
+    await loadAuditLogs();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    state.themeLoading = false;
+    updateAppearanceWorkflowState();
+  }
+}
+
+async function resetThemeDraftToPublished() {
+  if (!state.isOwner || state.themeLoading) return;
+  state.themeLoading = true;
+  updateAppearanceWorkflowState();
+  try {
+    const response = await apiRequest("/clinic/theme/reset-draft", { method: "POST", body: {} });
+    applyThemeStatePayload(response);
+    showToast("Theme auf Published zurückgesetzt");
+    await loadAuditLogs();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    state.themeLoading = false;
+    updateAppearanceWorkflowState();
+  }
+}
+
+function resetThemeToDefault() {
+  if (!state.isOwner || state.themeLoading) return;
+  const fallback = state.themeDefault || themeTools().DEFAULT_THEME;
+  fillAppearanceForm(fallback);
+  state.themeDraft = normalizeTheme(fallback);
+  updateAppearanceWorkflowState();
+}
+
 function setAuthMessage(text, success = false) {
   authMessage.textContent = text;
   authMessage.classList.toggle("success", success);
@@ -469,6 +833,7 @@ function setSession(user) {
     if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = true;
     if (onboardingCard) onboardingCard.classList.add("hidden");
     setCatalogDisabled(true);
+    setAppearanceDisabled(true);
     return;
   }
 
@@ -494,6 +859,8 @@ function setSession(user) {
   if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = !state.isOwner;
   if (campaignForm) campaignForm.classList.toggle("hidden", !state.isOwner);
   setCatalogDisabled(!state.isOwner);
+  setAppearanceDisabled(!state.isOwner);
+  updateAppearanceWorkflowState();
 }
 
 function setCatalogDisabled(disabled) {
@@ -565,6 +932,9 @@ function fillSettingsForm(settings) {
   }
   if (accentColorPicker instanceof HTMLInputElement) {
     accentColorPicker.value = normalizeHexColorForUi(settings.accentColor, "#EB6C13");
+  }
+  if (previewClinicName) {
+    previewClinicName.textContent = settings.clinicName || state.user?.clinicName || "Demo Aesthetics";
   }
 
   const disabled = !state.isOwner;
@@ -924,6 +1294,9 @@ function actionToFeedText(action) {
     "campaign.created": "Kampagne erstellt",
     "campaign.updated": "Kampagne geändert",
     "clinic.settings_updated": "Klinikdaten aktualisiert",
+    "clinic.theme_draft_saved": "Theme-Draft gespeichert",
+    "clinic.theme_published": "Theme veröffentlicht",
+    "clinic.theme_draft_reset": "Theme-Draft zurückgesetzt",
     "catalog.updated": "Katalog gespeichert",
     "catalog.imported": "Katalog importiert",
     "billing.checkout_started": "Checkout gestartet",
@@ -2499,14 +2872,25 @@ function handleImportCatalogButton() {
 }
 
 async function importCatalogFromWebsite() {
-  const website = String(settingsForm.elements.website?.value || "").trim();
-  if (!website) {
-    showToast("Bitte zuerst eine Website in den Klinik-Einstellungen speichern.");
+  const formWebsite = String(settingsForm.elements.website?.value || "").trim();
+  const savedWebsite = String(state.settingsSnapshot?.website || "").trim();
+
+  if (!savedWebsite) {
+    showToast("Bitte zuerst eine Website in den Einstellungen speichern.");
+    showView("einstellungen");
     return;
   }
 
+  if (formWebsite && formWebsite !== savedWebsite) {
+    showToast("Website wurde geändert. Bitte zuerst Einstellungen speichern.");
+    showView("einstellungen");
+    return;
+  }
+
+  const previousLabel = importCatalogBtn.textContent;
   try {
     importCatalogBtn.disabled = true;
+    importCatalogBtn.textContent = "Website wird übernommen ...";
     const response = await apiRequest("/clinic/catalog/import-from-website", {
       method: "POST",
       body: {},
@@ -2520,6 +2904,7 @@ async function importCatalogFromWebsite() {
     showToast(humanizeImportError(error.message || "Website-Import fehlgeschlagen"));
   } finally {
     importCatalogBtn.disabled = false;
+    importCatalogBtn.textContent = previousLabel || "Von Website übernehmen";
   }
 }
 
@@ -2711,6 +3096,7 @@ async function loadDashboardData() {
     loadPatientMemberships(),
     loadAppointments(),
     loadCatalog(),
+    loadClinicTheme(),
     loadCampaigns(),
     loadAuditLogs(),
   ]);
@@ -2915,6 +3301,33 @@ function bindEvents() {
   settingsForm.addEventListener("submit", handleSettingsSave);
   syncColorFieldPair(settingsForm.elements.brandColor, brandColorPicker, "#16A34A");
   syncColorFieldPair(settingsForm.elements.accentColor, accentColorPicker, "#EB6C13");
+  if (appearanceForm) {
+    appearanceForm.addEventListener("input", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.matches('input[type="color"][data-color-picker-for]')) {
+        const textInput = document.getElementById(String(target.getAttribute("data-color-picker-for") || ""));
+        if (textInput instanceof HTMLInputElement) {
+          textInput.value = target.value.toUpperCase();
+        }
+      } else if (target instanceof HTMLInputElement && target.type === "text") {
+        setAppearanceColorPickerValue(target);
+      }
+      state.themeDraft = collectAppearanceThemeFromForm();
+      applyAppearancePreview(state.themeDraft);
+      updateAppearanceRangeLabels(state.themeDraft);
+      updateAppearanceWorkflowState();
+    });
+    appearanceForm.addEventListener("change", () => {
+      state.themeDraft = collectAppearanceThemeFromForm();
+      applyAppearancePreview(state.themeDraft);
+      updateAppearanceRangeLabels(state.themeDraft);
+      updateAppearanceWorkflowState();
+    });
+  }
+  if (saveThemeDraftBtn) saveThemeDraftBtn.addEventListener("click", saveThemeDraft);
+  if (publishThemeBtn) publishThemeBtn.addEventListener("click", publishThemeDraft);
+  if (resetAppearanceBtn) resetAppearanceBtn.addEventListener("click", resetThemeDraftToPublished);
+  if (resetDefaultAppearanceBtn) resetDefaultAppearanceBtn.addEventListener("click", resetThemeToDefault);
   memberForm.addEventListener("submit", handleCreateMember);
   startCheckoutBtn.addEventListener("click", handleCheckoutStart);
   refreshMetricsBtn.addEventListener("click", () => {
@@ -3027,12 +3440,32 @@ function bindEvents() {
           const active = panel.getAttribute("data-subpanel") === name;
           panel.classList.toggle("active", active);
           if (active) {
-            const frame = panel.querySelector("iframe[data-src]");
-            if (frame && !frame.getAttribute("src")) {
-              frame.setAttribute("src", frame.getAttribute("data-src"));
-            }
+            ensureLazyFrameSource(panel.querySelector("iframe[data-src]"));
           }
         });
+    });
+  });
+  document.querySelectorAll("iframe[data-src]").forEach((frame) => {
+    frame.addEventListener("load", () => {
+      const source = frame.getAttribute("data-src");
+      if (!source) return;
+      let expectedUrl;
+      try {
+        expectedUrl = new URL(source, window.location.href);
+      } catch {
+        return;
+      }
+      try {
+        const loadedUrl = new URL(frame.contentWindow.location.href);
+        if (
+          loadedUrl.origin === expectedUrl.origin &&
+          (loadedUrl.pathname !== expectedUrl.pathname || loadedUrl.search !== expectedUrl.search)
+        ) {
+          frame.setAttribute("src", source);
+        }
+      } catch {
+        // Ignore cross-origin frames. The catalog editor is same-origin.
+      }
     });
   });
   if (refreshDashboardBtn) {
