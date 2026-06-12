@@ -1109,12 +1109,6 @@ function cumulativeSeries(values) {
   });
 }
 
-function normalizeForChart(values, scaleTo = 100) {
-  const series = safeSeries(values);
-  const max = Math.max(...series, 1);
-  return series.map((value) => (Number(value || 0) / max) * scaleTo);
-}
-
 function getCanvasContext(canvas) {
   if (!(canvas instanceof HTMLCanvasElement)) return null;
   const rect = canvas.getBoundingClientRect();
@@ -1288,20 +1282,45 @@ function drawLineChart(canvas, values, options = {}) {
   context.fill();
 }
 
+const ACTION_LABELS = {
+  "campaign.run": "Kampagne ausgeführt",
+  "campaign.created": "Kampagne erstellt",
+  "campaign.updated": "Kampagne geändert",
+  "clinic.settings_updated": "Klinikdaten aktualisiert",
+  "clinic.theme_draft_saved": "Theme-Entwurf gespeichert",
+  "clinic.theme_published": "Theme veröffentlicht",
+  "clinic.theme_draft_reset": "Theme-Entwurf zurückgesetzt",
+  "catalog.updated": "Katalog gespeichert",
+  "catalog.imported": "Katalog importiert",
+  "catalog.imported_from_website": "Katalog von Website übernommen",
+  "catalog.auto_gallery": "Galerie automatisch erstellt",
+  "media.uploaded": "Bild hochgeladen",
+  "media.deleted": "Bild gelöscht",
+  "member.created": "Teammitglied hinzugefügt",
+  "membership.activated": "Mitgliedschaft aktiviert",
+  "membership.canceled": "Mitgliedschaft gekündigt",
+  "membership.marked_past_due": "Zahlung überfällig markiert",
+  "billing.checkout_started": "Checkout gestartet",
+  "billing.checkout_completed": "Zahlung abgeschlossen",
+  "billing.subscription_updated": "Abo aktualisiert",
+  "billing.invoice_status_updated": "Rechnungsstatus aktualisiert",
+  "mobile.checkout_session_created": "Kauf gestartet (App)",
+  "mobile.checkout_completed": "Kauf abgeschlossen (App)",
+  "mobile.checkout_failed": "Kauf fehlgeschlagen (App)",
+  "mobile.appointment_canceled": "Termin storniert (App)",
+  "mobile.appointment_rescheduled": "Termin umgebucht (App)",
+  "mobile.appointment_reschedule_requested": "Umbuchung angefragt (App)",
+};
+
 function actionToFeedText(action) {
-  const mapping = {
-    "campaign.run": "Kampagne ausgeführt",
-    "campaign.created": "Kampagne erstellt",
-    "campaign.updated": "Kampagne geändert",
-    "clinic.settings_updated": "Klinikdaten aktualisiert",
-    "clinic.theme_draft_saved": "Theme-Draft gespeichert",
-    "clinic.theme_published": "Theme veröffentlicht",
-    "clinic.theme_draft_reset": "Theme-Draft zurückgesetzt",
-    "catalog.updated": "Katalog gespeichert",
-    "catalog.imported": "Katalog importiert",
-    "billing.checkout_started": "Checkout gestartet",
-  };
-  return mapping[action] || action || "Aktivität";
+  const key = String(action || "");
+  if (ACTION_LABELS[key]) return ACTION_LABELS[key];
+  if (!key) return "Aktivität";
+  // Fallback: turn "catalog.some_action" into "Some action" so unmapped
+  // codes still read like prose instead of raw machine strings.
+  const tail = key.includes(".") ? key.slice(key.indexOf(".") + 1) : key;
+  const words = tail.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Aktivität";
 }
 
 const ACTIVITY_COLORS = {
@@ -1553,8 +1572,13 @@ function renderMetricsDashboard() {
     return Math.round(value / divisor);
   });
 
-  const latestRevenue = Number(summary.dailyProcessingCents || revenueByDay[revenueByDay.length - 1] || 0);
-  const previousRevenue = revenueByDay[revenueByDay.length - 2] || 0;
+  // The final bucket is "today", which is usually still 0 early in the day.
+  // Fall back to the most recent day that actually has revenue so the headline
+  // stays meaningful instead of flashing 0,00 € on every morning login.
+  let latestIdx = revenueByDay.length - 1;
+  while (latestIdx > 0 && !(revenueByDay[latestIdx] > 0)) latestIdx -= 1;
+  const latestRevenue = Number(summary.dailyProcessingCents || revenueByDay[latestIdx] || 0);
+  const previousRevenue = revenueByDay[latestIdx - 1] || 0;
   const dailyDelta = previousRevenue > 0 ? ((latestRevenue - previousRevenue) / previousRevenue) * 100 : 0;
   if (metricDailyProcessingValue) animateCount(metricDailyProcessingValue, latestRevenue, formatEuro);
   if (metricDailyProcessingDelta && compareMode !== "none" && deltas.dailyProcessingCents) {
@@ -2092,24 +2116,55 @@ function renderMembers(members) {
     return;
   }
 
+  const ROLE_META = {
+    owner: { label: "Inhaber", cls: "ok" },
+    staff: { label: "Mitarbeiter", cls: "muted" },
+  };
   const rows = members
-    .map(
-      (member) =>
-        `<tr><td>${member.fullName}</td><td>${member.email}</td><td>${member.role}</td></tr>`
-    )
+    .map((member) => {
+      const role = ROLE_META[String(member.role || "").toLowerCase()] || {
+        label: member.role || "—",
+        cls: "muted",
+      };
+      return `<tr>
+        <td>${escapeHtml(member.fullName || "—")}</td>
+        <td>${escapeHtml(member.email || "—")}</td>
+        <td><span class="status-pill ${role.cls}">${escapeHtml(role.label)}</span></td>
+      </tr>`;
+    })
     .join("");
   membersBody.innerHTML = rows;
   renderMetricsDashboard();
 }
 
+const SUBSCRIPTION_STATUS_LABELS = {
+  active: "Aktiv",
+  trialing: "Testphase",
+  past_due: "Überfällig",
+  canceled: "Gekündigt",
+  cancelled: "Gekündigt",
+  unpaid: "Unbezahlt",
+  incomplete: "Unvollständig",
+  incomplete_expired: "Abgelaufen",
+  paused: "Pausiert",
+  inactive: "Inaktiv",
+};
+
+function subscriptionStatusLabel(status) {
+  const key = String(status || "").toLowerCase();
+  if (SUBSCRIPTION_STATUS_LABELS[key]) return SUBSCRIPTION_STATUS_LABELS[key];
+  if (!key) return "—";
+  const words = key.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function renderBillingStatus(subscription, canUsePlatform) {
-  const statusLabel = canUsePlatform ? "Aktiv" : "Inaktiv";
   billingStatus.innerHTML = [
-    ["Plan", subscription.planName || "-"],
-    ["Status", `${subscription.status || "-"} (${statusLabel})`],
-    ["Monatlicher Betrag", formatEuro(subscription.amountCents, subscription.currency)],
-    ["Nächstes Periodenende", formatDate(subscription.currentPeriodEnd)],
-    ["Stripe Subscription ID", subscription.stripeSubscriptionId || "-"],
+    ["Plan", escapeHtml(subscription.planName || "-")],
+    ["Status", escapeHtml(subscriptionStatusLabel(subscription.status))],
+    ["Monatlicher Betrag", escapeHtml(formatEuro(subscription.amountCents, subscription.currency))],
+    ["Nächstes Periodenende", escapeHtml(formatDate(subscription.currentPeriodEnd))],
+    ["Stripe Subscription ID", escapeHtml(subscription.stripeSubscriptionId || "-")],
   ]
     .map(
       ([key, value]) =>
@@ -2129,10 +2184,10 @@ function renderHistory(rows) {
     .map(
       (row) =>
         `<tr>
-          <td>${row.planName || "-"}</td>
-          <td>${row.status || "-"}</td>
-          <td>${formatEuro(row.amountCents, row.currency)}</td>
-          <td>${formatDate(row.updatedAt || row.createdAt)}</td>
+          <td>${escapeHtml(row.planName || "-")}</td>
+          <td>${escapeHtml(subscriptionStatusLabel(row.status))}</td>
+          <td>${escapeHtml(formatEuro(row.amountCents, row.currency))}</td>
+          <td>${escapeHtml(formatDate(row.updatedAt || row.createdAt))}</td>
         </tr>`
     )
     .join("");
@@ -2211,10 +2266,10 @@ function renderAuditLogs(rows = []) {
     .map(
       (row) =>
         `<tr>
-          <td>${formatDate(row.createdAt)}</td>
-          <td>${row.action || "-"}</td>
-          <td>${row.entityType || "-"}${row.entityId ? ` • ${row.entityId}` : ""}</td>
-          <td>${row.actorName || row.actorEmail || "System"}</td>
+          <td>${escapeHtml(formatDate(row.createdAt))}</td>
+          <td>${escapeHtml(actionToFeedText(row.action))}</td>
+          <td>${escapeHtml(row.entityType || "-")}${row.entityId ? ` • ${escapeHtml(String(row.entityId))}` : ""}</td>
+          <td>${escapeHtml(row.actorName || row.actorEmail || "System")}</td>
         </tr>`
     )
     .join("");
@@ -3350,10 +3405,8 @@ function bindEvents() {
   });
   if (metricsChipRow) {
     metricsChipRow.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      const button = target.closest("button[data-days]");
-      if (!(button instanceof HTMLElement)) return;
+      const button = event.target instanceof Element ? event.target.closest("button[data-days]") : null;
+      if (!button) return;
       const days = String(button.getAttribute("data-days") || "30");
       setMetricsDays(days);
       loadAnalyticsSummary().catch((error) => showToast(error.message));
@@ -3380,7 +3433,7 @@ function bindEvents() {
   addRewardRedeemBtn.addEventListener("click", () => addCatalogRow("rewardRedeems"));
   addHomeArticleBtn.addEventListener("click", () => addCatalogRow("homeArticles"));
   catalogForm.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement ? event.target.closest("button[data-remove-list]") : null;
+    const target = event.target instanceof Element ? event.target.closest("button[data-remove-list]") : null;
     if (!target) return;
     const listName = String(target.getAttribute("data-remove-list") || "");
     const index = Number(target.getAttribute("data-index"));
@@ -3400,17 +3453,18 @@ function bindEvents() {
     loadAuditLogs().catch((error) => showToast(error.message));
   });
   campaignsBody.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.matches("button[data-run-campaign]")) {
-      const campaignId = Number(target.getAttribute("data-run-campaign"));
+    if (!(event.target instanceof Element)) return;
+    const runBtn = event.target.closest("button[data-run-campaign]");
+    if (runBtn) {
+      const campaignId = Number(runBtn.getAttribute("data-run-campaign"));
       if (!Number.isFinite(campaignId) || campaignId <= 0) return;
       runCampaign(campaignId);
       return;
     }
-    if (target.matches("button[data-toggle-campaign]")) {
-      const campaignId = Number(target.getAttribute("data-toggle-campaign"));
-      const nextStatus = String(target.getAttribute("data-next-status") || "").trim();
+    const toggleBtn = event.target.closest("button[data-toggle-campaign]");
+    if (toggleBtn) {
+      const campaignId = Number(toggleBtn.getAttribute("data-toggle-campaign"));
+      const nextStatus = String(toggleBtn.getAttribute("data-next-status") || "").trim();
       if (!Number.isFinite(campaignId) || campaignId <= 0) return;
       if (!nextStatus) return;
       toggleCampaignStatus(campaignId, nextStatus);
