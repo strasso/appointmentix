@@ -157,6 +157,8 @@ html.embed .card { box-shadow: none; }
 .btn.ghost:hover { background: var(--surface-muted); color: var(--ink); }
 .btn.danger { background: transparent; border-color: transparent; color: var(--danger); min-height: 36px; padding: 7px 12px; border-radius: var(--radius-sm); font-size: 0.85rem; }
 .btn.danger:hover { background: var(--danger-soft); }
+.btn.btn-sm { min-height: 34px; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 0.83rem; gap: 6px; }
+.btn.btn-sm svg { width: 15px; height: 15px; }
 a.btn { text-decoration: none; }
 
 /* ---------- Inputs ---------- */
@@ -197,16 +199,19 @@ input:focus, select:focus, textarea:focus {
 .item-card {
   display: grid;
   gap: 14px;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--surface-muted);
+  background: var(--surface-strong);
   transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 .item-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .item-card input,
 .item-card select,
-.item-card textarea { background: var(--surface-strong); }
+.item-card textarea { background: var(--bg-soft); }
+.item-card input:focus,
+.item-card select:focus,
+.item-card textarea:focus { background: var(--surface-strong); }
 
 .field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .field-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -269,6 +274,7 @@ input:focus, select:focus, textarea:focus {
 .media-name { font-size: 0.78rem; color: var(--muted); word-break: break-all; line-height: 1.4; }
 .media-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.upload-filename { font-size: 0.78rem; color: var(--muted); word-break: break-all; }
 .treatment-preview {
   display: block;
   width: 100%;
@@ -317,30 +323,30 @@ input:focus, select:focus, textarea:focus {
 .eur-stepper > input { padding-right: 36px; }
 .eur-stepper-btns {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  right: 4px;
-  width: 28px;
+  top: 5px;
+  bottom: 5px;
+  right: 6px;
+  width: 22px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .eur-step {
   flex: 1;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface-strong);
-  color: var(--muted);
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-soft);
   cursor: pointer;
   touch-action: manipulation;
-  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+  transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.eur-step:hover { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
-.eur-step:active { background: var(--brand); border-color: var(--brand); color: #fff; }
-.eur-step svg { width: 13px; height: 13px; pointer-events: none; }
+.eur-step:hover { color: var(--brand); background: var(--brand-wash); }
+.eur-step:active { color: var(--brand-strong); background: var(--brand-tint); }
+.eur-step svg { width: 12px; height: 12px; pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

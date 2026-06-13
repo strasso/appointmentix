@@ -367,8 +367,9 @@ function treatmentCard(item = {}) {
         <div>
           <img class="treatment-preview ${item.imageUrl ? "" : "hidden"}" src="${escapeAttr(item.imageUrl || "")}" alt="Treatment Vorschau">
           <div class="upload-row">
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-upload-file>
-            <button type="button" class="btn ghost" data-upload-image>Bild hochladen</button>
+            <input type="file" class="hidden" accept="image/png,image/jpeg,image/webp,image/gif" data-upload-file>
+            <button type="button" class="btn ghost btn-sm" data-upload-image><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Bild hochladen</button>
+            <span class="upload-filename" data-upload-name></span>
           </div>
         </div>
       </div>
@@ -794,34 +795,45 @@ async function init() {
     if (!card) return;
     setTreatmentPreview(card, target.value);
   });
-  treatmentsList.addEventListener("click", async (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (!target.matches("button[data-upload-image]")) return;
-    const card = target.closest('.item-card[data-kind="treatment"]');
-    if (!card) return;
-    const fileInput = card.querySelector('input[data-upload-file]');
+  // Clicking the styled button just opens the (hidden) file dialog …
+  treatmentsList.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button[data-upload-image]") : null;
+    if (!button) return;
+    const card = button.closest('.item-card[data-kind="treatment"]');
+    const fileInput = card?.querySelector("input[data-upload-file]");
+    if (fileInput instanceof HTMLInputElement) fileInput.click();
+  });
+  // … and picking a file uploads it straight away (no second click).
+  treatmentsList.addEventListener("change", async (event) => {
+    const fileInput = event.target instanceof Element ? event.target.closest("input[data-upload-file]") : null;
     if (!(fileInput instanceof HTMLInputElement)) return;
+    const card = fileInput.closest('.item-card[data-kind="treatment"]');
     const file = fileInput.files?.[0];
-    if (!file) {
-      showToast("Bitte zuerst eine Bilddatei auswählen.");
-      return;
+    if (!card || !file) return;
+    const button = card.querySelector("button[data-upload-image]");
+    const nameEl = card.querySelector("[data-upload-name]");
+    const previousLabel = button?.innerHTML;
+    if (nameEl) nameEl.textContent = file.name;
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Lädt …";
     }
-    target.disabled = true;
     try {
       const url = await uploadSelectedMedia(file);
       const urlInput = card.querySelector('input[data-field="imageUrl"]');
-      if (urlInput instanceof HTMLInputElement) {
-        urlInput.value = url;
-      }
+      if (urlInput instanceof HTMLInputElement) urlInput.value = url;
       setTreatmentPreview(card, url);
-      fileInput.value = "";
       await loadMediaLibrary();
       showToast("Treatment-Bild hochgeladen");
     } catch (error) {
+      if (nameEl) nameEl.textContent = "";
       showToast(error.message);
     } finally {
-      target.disabled = false;
+      fileInput.value = "";
+      if (button) {
+        button.disabled = false;
+        if (previousLabel) button.innerHTML = previousLabel;
+      }
     }
   });
 
