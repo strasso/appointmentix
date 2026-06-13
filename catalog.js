@@ -4,7 +4,6 @@ const state = {
   user: null,
   toastTimer: null,
   mediaItems: [],
-  activeCategory: "all",
 };
 
 const editorSection = document.getElementById("editorSection");
@@ -33,10 +32,6 @@ const mediaGrid = document.getElementById("mediaGrid");
 const mediaUploadInput = document.getElementById("mediaUploadInput");
 const mediaUploadBtn = document.getElementById("mediaUploadBtn");
 const refreshMediaBtn = document.getElementById("refreshMediaBtn");
-const editorTabs = document.getElementById("editorTabs");
-const categoryChips = document.getElementById("categoryChips");
-const manageCategoriesBtn = document.getElementById("manageCategoriesBtn");
-const categoryManage = document.getElementById("categoryManage");
 const CATEGORY_ID_UI_ALIASES = {
   koerper: "korper",
 };
@@ -245,64 +240,18 @@ function renderBodyZoneChips(selected = []) {
     .join("");
 }
 
-// Slug/ID helpers — IDs are generated automatically and never shown to the
-// user. They stay stable once created so memberships keep referencing the
-// right treatments.
-function slugify(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replaceAll("ä", "ae").replaceAll("ö", "oe").replaceAll("ü", "ue").replaceAll("ß", "ss")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40);
-}
-function genId(prefix, name) {
-  const base = slugify(name);
-  const tail = Math.random().toString(36).slice(2, 7);
-  return base ? `${prefix}-${base}-${tail}` : `${prefix}-${tail}`;
-}
-
-function getCategories() {
-  return Array.from(categoriesList.querySelectorAll('[data-kind="category"]'))
-    .map((row) => ({
-      id: row.querySelector('[data-field="id"]')?.value.trim() || "",
-      label: row.querySelector('[data-field="label"]')?.value.trim() || "",
-    }))
-    .filter((cat) => cat.id);
-}
-
-function categoryOptionsHtml(selectedId) {
-  const target = displayCategoryId(selectedId);
-  let matched = false;
-  const options = getCategories()
-    .map((cat) => {
-      const isSel = displayCategoryId(cat.id) === target;
-      if (isSel) matched = true;
-      return `<option value="${escapeAttr(cat.id)}" ${isSel ? "selected" : ""}>${escapeAttr(cat.label || cat.id)}</option>`;
-    })
-    .join("");
-  const placeholder = `<option value="" ${target ? "" : "selected"} disabled>Kategorie wählen …</option>`;
-  // Preserve a set-but-unlisted category so saving never silently drops the item.
-  const fallback = target && !matched
-    ? `<option value="${escapeAttr(selectedId)}" selected>${escapeAttr(selectedId)}</option>`
-    : "";
-  return placeholder + fallback + options;
-}
-
-function renderCategoryChips() {
-  if (!categoryChips) return;
-  const cats = getCategories();
-  const chip = (id, label) =>
-    `<button type="button" class="cat-chip ${state.activeCategory === id ? "active" : ""}" data-cat="${escapeAttr(id)}">${escapeAttr(label)}</button>`;
-  categoryChips.innerHTML = chip("all", "Alle") + cats.map((cat) => chip(cat.id, cat.label || cat.id)).join("");
-}
-
 function categoryCard(item = {}) {
   return `
-    <div class="cat-manage-row" data-kind="category">
-      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-      <input class="cat-manage-label" data-field="label" value="${escapeAttr(item.label)}" placeholder="z. B. Gesicht">
-      <button type="button" class="row-x" data-remove aria-label="Kategorie entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="item-card" data-kind="category">
+      <div class="field-grid-2">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(displayCategoryId(item.id))}" placeholder="gesicht">
+        </label>
+        <label>Label
+          <input data-field="label" value="${escapeAttr(item.label)}" placeholder="Gesicht">
+        </label>
+      </div>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
@@ -377,135 +326,142 @@ function euroToCents(value) {
   return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric * 100)) : 0;
 }
 
-function treatmentPriceLabel(priceCents) {
-  const cents = Number(priceCents || 0);
-  if (cents <= 0) return "Preis offen";
-  return `${centsToEuroInput(cents)} €`;
-}
-
-function treatmentCard(item = {}, opts = {}) {
-  const name = String(item.name || "").trim();
-  const desc = String(item.description || "").trim();
-  const hasImg = Boolean(item.imageUrl);
+function treatmentCard(item = {}) {
   return `
-    <div class="treat-row ${opts.open ? "open" : ""}" data-kind="treatment" data-cat="${escapeAttr(displayCategoryId(item.category))}">
-      <div class="row-summary" data-row-toggle role="button" tabindex="0">
-        <span class="row-thumb ${hasImg ? "" : "row-thumb-empty"}">${hasImg ? `<img src="${escapeAttr(item.imageUrl)}" alt="">` : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg>`}</span>
-        <span class="row-main">
-          <span class="row-title" data-row-title>${escapeAttr(name) || "Neue Behandlung"}</span>
-          <span class="row-sub" data-row-sub>${escapeAttr(desc)}</span>
-        </span>
-        <span class="row-price" data-row-price>${escapeAttr(treatmentPriceLabel(item.priceCents))}</span>
-        <svg class="row-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    <div class="item-card" data-kind="treatment">
+      <div class="field-grid">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="t-basic-glow">
+        </label>
+        <label>Name
+          <input data-field="name" value="${escapeAttr(item.name)}" placeholder="Basic Glow">
+        </label>
+        <label>Kategorie-ID
+          <input data-field="category" value="${escapeAttr(displayCategoryId(item.category))}" placeholder="gesicht">
+        </label>
+        <label>Dauer (Min)
+          <input data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60">
+        </label>
       </div>
-      <div class="row-detail">
-        <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-        <input type="hidden" data-field="imageUrl" value="${escapeAttr(item.imageUrl || "")}">
-        <div class="detail-grid">
-          <label class="fld fld-wide">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="z. B. Basic Glow"></label>
-          <label class="fld">Kategorie<select data-field="category">${categoryOptionsHtml(item.category)}</select></label>
-          <label class="fld">Dauer (Min)<input data-field="durationMinutes" inputmode="numeric" value="${escapeAttr(item.durationMinutes)}" placeholder="60"></label>
-          <label class="fld">Preis (€)${euroStepperHtml("priceCents", item.priceCents, "110")}</label>
-          <label class="fld">Mitgliedspreis (€)${euroStepperHtml("memberPriceCents", item.memberPriceCents, "99")}</label>
+      <div class="field-grid-2">
+        <label>Preis (€)
+          ${euroStepperHtml("priceCents", item.priceCents, "110")}
+        </label>
+        <label>Mitgliedspreis (€)
+          ${euroStepperHtml("memberPriceCents", item.memberPriceCents, "99")}
+        </label>
+      </div>
+      <label>Beschreibung
+        <textarea data-field="description" placeholder="Kurzbeschreibung">${escapeAttr(item.description)}</textarea>
+      </label>
+      <div>
+        <label>Body-Zonen</label>
+        <div class="body-zone-picker">
+          ${renderBodyZoneChips(item.bodyZones)}
         </div>
-        <label class="fld">Beschreibung<textarea data-field="description" placeholder="Kurzbeschreibung für die App">${escapeAttr(item.description)}</textarea></label>
-        <div class="fld">
-          <span class="fld-label">Körperzonen</span>
-          <div class="body-zone-picker">${renderBodyZoneChips(item.bodyZones)}</div>
-        </div>
-        <div class="fld">
-          <span class="fld-label">Bild</span>
-          <div class="img-row">
-            <img class="treatment-preview ${item.imageUrl ? "" : "hidden"}" src="${escapeAttr(item.imageUrl || "")}" alt="Vorschau">
+      </div>
+      <div class="field-grid-2">
+        <label>Bild URL
+          <input data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="/uploads/clinic_x/beispiel.jpg">
+        </label>
+        <div>
+          <img class="treatment-preview ${item.imageUrl ? "" : "hidden"}" src="${escapeAttr(item.imageUrl || "")}" alt="Treatment Vorschau">
+          <div class="upload-row">
             <input type="file" class="hidden" accept="image/png,image/jpeg,image/webp,image/gif" data-upload-file>
             <button type="button" class="btn ghost btn-sm" data-upload-image><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Bild hochladen</button>
             <span class="upload-filename" data-upload-name></span>
           </div>
         </div>
-        <div class="row-detail-foot"><button type="button" class="row-delete" data-remove><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>Behandlung löschen</button></div>
       </div>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
 
-function getTreatments() {
-  return Array.from(treatmentsList.querySelectorAll('[data-kind="treatment"]'))
-    .map((row) => ({
-      id: row.querySelector('[data-field="id"]')?.value.trim() || "",
-      name: row.querySelector('[data-field="name"]')?.value.trim() || "",
-    }))
-    .filter((t) => t.id);
-}
-
-function memberTreatmentChecksHtml(selectedIds = []) {
-  const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((id) => String(id).trim()).filter(Boolean));
-  const treatments = getTreatments();
-  const known = new Set(treatments.map((t) => t.id));
-  // Keep any referenced treatment that isn't in the current list (e.g. not yet
-  // re-rendered) so saving doesn't silently drop it.
-  const orphans = [...selected].filter((id) => !known.has(id)).map((id) => ({ id, name: id }));
-  const all = [...treatments, ...orphans];
-  if (!all.length) {
-    return `<p class="check-empty">Noch keine Behandlungen angelegt.</p>`;
-  }
-  return all
-    .map(
-      (t) => `<label class="check"><input type="checkbox" data-member-treatment value="${escapeAttr(t.id)}" ${selected.has(t.id) ? "checked" : ""}><span>${escapeAttr(t.name || t.id)}</span></label>`
-    )
-    .join("");
-}
-
 function membershipCard(item = {}) {
   return `
-    <div class="edit-row" data-kind="membership">
-      <button type="button" class="row-x" data-remove aria-label="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-      <div class="detail-grid">
-        <label class="fld fld-wide">Name<input data-field="name" value="${escapeAttr(item.name)}" placeholder="z. B. Silber"></label>
-        <label class="fld">Preis (€ / Monat)${euroStepperHtml("priceCents", item.priceCents, "79")}</label>
+    <div class="item-card" data-kind="membership">
+      <div class="field-grid-3">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="silber">
+        </label>
+        <label>Name
+          <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
+        </label>
+        <label>Preis (€ / Monat)
+          ${euroStepperHtml("priceCents", item.priceCents, "79")}
+        </label>
       </div>
-      <div class="fld">
-        <span class="fld-label">Inkludierte Behandlungen</span>
-        <div class="check-grid">${memberTreatmentChecksHtml(item.includedTreatmentIds)}</div>
-      </div>
-      <label class="fld">Vorteile (mit Komma trennen)<textarea data-field="perks" placeholder="z. B. 10 % Rabatt, Gratis-Beratung">${escapeAttr(joinList(item.perks))}</textarea></label>
+      <label>Inkludierte Treatment IDs (Komma oder Zeile)
+        <textarea data-field="includedTreatmentIds" placeholder="t-basic-glow, t-med-peeling">${escapeAttr(joinList(item.includedTreatmentIds))}</textarea>
+      </label>
+      <label>Perks (Komma oder Zeile)
+        <textarea data-field="perks" placeholder="Perk 1, Perk 2">${escapeAttr(joinList(item.perks))}</textarea>
+      </label>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
 
 function rewardActionCard(item = {}) {
   return `
-    <div class="edit-row edit-row-inline" data-kind="reward-action">
-      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-      <label class="fld fld-wide">Aktion<input data-field="label" value="${escapeAttr(item.label)}" placeholder="z. B. Freundin werben"></label>
-      <label class="fld fld-narrow">Punkte<input data-field="points" inputmode="numeric" value="${escapeAttr(item.points)}" placeholder="150"></label>
-      <button type="button" class="row-x" data-remove aria-label="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="item-card" data-kind="reward-action">
+      <div class="field-grid-3">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="referral">
+        </label>
+        <label>Label
+          <input data-field="label" value="${escapeAttr(item.label)}" placeholder="Freund:in werben">
+        </label>
+        <label>Punkte
+          <input data-field="points" value="${escapeAttr(item.points)}" placeholder="150">
+        </label>
+      </div>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
 
 function rewardRedeemCard(item = {}) {
   return `
-    <div class="edit-row edit-row-inline" data-kind="reward-redeem">
-      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-      <label class="fld fld-wide">Prämie<input data-field="label" value="${escapeAttr(item.label)}" placeholder="z. B. 15 € Guthaben"></label>
-      <label class="fld fld-narrow">Benötigte Punkte<input data-field="requiredPoints" inputmode="numeric" value="${escapeAttr(item.requiredPoints)}" placeholder="250"></label>
-      <label class="fld fld-narrow">Wert (€)${euroStepperHtml("valueCents", item.valueCents, "15")}</label>
-      <button type="button" class="row-x" data-remove aria-label="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="item-card" data-kind="reward-redeem">
+      <div class="field-grid">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="r15">
+        </label>
+        <label>Label
+          <input data-field="label" value="${escapeAttr(item.label)}" placeholder="15 EUR Guthaben">
+        </label>
+        <label>Benötigte Punkte
+          <input data-field="requiredPoints" value="${escapeAttr(item.requiredPoints)}" placeholder="250">
+        </label>
+        <label>Wert (€)
+          ${euroStepperHtml("valueCents", item.valueCents, "15")}
+        </label>
+      </div>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
 
 function homeArticleCard(item = {}) {
   return `
-    <div class="edit-row" data-kind="home-article">
-      <button type="button" class="row-x" data-remove aria-label="Entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
-      <div class="detail-grid">
-        <label class="fld fld-wide">Titel<input data-field="title" value="${escapeAttr(item.title)}" placeholder="z. B. Skin Refresh für jede Saison"></label>
-        <label class="fld">Schlagwort<input data-field="tag" value="${escapeAttr(item.tag)}" placeholder="z. B. Tipps"></label>
+    <div class="item-card" data-kind="home-article">
+      <div class="field-grid-3">
+        <label>ID
+          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="art-1">
+        </label>
+        <label>Tag
+          <input data-field="tag" value="${escapeAttr(item.tag)}" placeholder="Education">
+        </label>
+        <label>Titel
+          <input data-field="title" value="${escapeAttr(item.title)}" placeholder="Titel">
+        </label>
       </div>
-      <label class="fld">Text<textarea data-field="body" placeholder="Kurztext für die Startseite">${escapeAttr(item.body)}</textarea></label>
+      <label>Text
+        <textarea data-field="body" placeholder="Kurztext">${escapeAttr(item.body)}</textarea>
+      </label>
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
 }
@@ -519,26 +475,13 @@ function renderList(container, items, renderer, emptyText) {
   container.innerHTML = items.map((item) => renderer(item)).join("");
 }
 
-function applyCategoryFilter() {
-  const active = state.activeCategory;
-  treatmentsList.querySelectorAll('[data-kind="treatment"]').forEach((row) => {
-    const cat = row.getAttribute("data-cat") || "";
-    const show = active === "all" || displayCategoryId(cat) === displayCategoryId(active);
-    row.classList.toggle("filtered-out", !show);
-  });
-}
-
 function renderCatalog(catalog) {
-  // Order matters: categories first (treatment selects read them), then
-  // treatments (membership checkboxes read them).
-  renderList(categoriesList, catalog.categories, categoryCard, "Noch keine Kategorien — lege deine erste an.");
-  renderList(treatmentsList, catalog.treatments, treatmentCard, "Noch keine Behandlungen. Tippe oben rechts auf + Behandlung, um zu starten.");
-  renderList(membershipsList, catalog.memberships, membershipCard, "Noch keine Mitgliedschaften angelegt.");
-  renderList(rewardActionsList, catalog.rewardActions, rewardActionCard, "Noch keine Aktionen angelegt.");
-  renderList(rewardRedeemsList, catalog.rewardRedeems, rewardRedeemCard, "Noch keine Prämien angelegt.");
-  renderList(homeArticlesList, catalog.homeArticles, homeArticleCard, "Noch keine Beiträge angelegt.");
-  renderCategoryChips();
-  applyCategoryFilter();
+  renderList(categoriesList, catalog.categories, categoryCard, "Noch keine Kategorien.");
+  renderList(treatmentsList, catalog.treatments, treatmentCard, "Noch keine Treatments.");
+  renderList(membershipsList, catalog.memberships, membershipCard, "Noch keine Memberships.");
+  renderList(rewardActionsList, catalog.rewardActions, rewardActionCard, "Noch keine Reward Aktionen.");
+  renderList(rewardRedeemsList, catalog.rewardRedeems, rewardRedeemCard, "Noch keine Reward Einlösungen.");
+  renderList(homeArticlesList, catalog.homeArticles, homeArticleCard, "Noch keine Home Artikel.");
 }
 
 function renderMediaLibrary(items) {
@@ -586,14 +529,14 @@ async function loadMediaLibrary() {
 }
 
 function collectCatalogFromDom() {
-  const categories = Array.from(categoriesList.querySelectorAll('[data-kind="category"]'))
+  const categories = Array.from(categoriesList.querySelectorAll('.item-card[data-kind="category"]'))
     .map((card) => ({
       id: storeCategoryId(card.querySelector('[data-field="id"]')?.value.trim() || ""),
       label: card.querySelector('[data-field="label"]')?.value.trim() || "",
     }))
     .filter((item) => item.id && item.label);
 
-  const treatments = Array.from(treatmentsList.querySelectorAll('[data-kind="treatment"]'))
+  const treatments = Array.from(treatmentsList.querySelectorAll('.item-card[data-kind="treatment"]'))
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
@@ -609,19 +552,17 @@ function collectCatalogFromDom() {
     }))
     .filter((item) => item.id && item.name && item.category);
 
-  const memberships = Array.from(membershipsList.querySelectorAll('[data-kind="membership"]'))
+  const memberships = Array.from(membershipsList.querySelectorAll('.item-card[data-kind="membership"]'))
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
       priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
-      includedTreatmentIds: Array.from(card.querySelectorAll('input[data-member-treatment]:checked'))
-        .map((input) => String(input.value || "").trim())
-        .filter(Boolean),
+      includedTreatmentIds: splitList(card.querySelector('[data-field="includedTreatmentIds"]')?.value),
       perks: splitList(card.querySelector('[data-field="perks"]')?.value),
     }))
     .filter((item) => item.id && item.name);
 
-  const rewardActions = Array.from(rewardActionsList.querySelectorAll('[data-kind="reward-action"]'))
+  const rewardActions = Array.from(rewardActionsList.querySelectorAll('.item-card[data-kind="reward-action"]'))
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       label: card.querySelector('[data-field="label"]')?.value.trim() || "",
@@ -629,7 +570,7 @@ function collectCatalogFromDom() {
     }))
     .filter((item) => item.id && item.label);
 
-  const rewardRedeems = Array.from(rewardRedeemsList.querySelectorAll('[data-kind="reward-redeem"]'))
+  const rewardRedeems = Array.from(rewardRedeemsList.querySelectorAll('.item-card[data-kind="reward-redeem"]'))
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       label: card.querySelector('[data-field="label"]')?.value.trim() || "",
@@ -638,7 +579,7 @@ function collectCatalogFromDom() {
     }))
     .filter((item) => item.id && item.label);
 
-  const homeArticles = Array.from(homeArticlesList.querySelectorAll('[data-kind="home-article"]'))
+  const homeArticles = Array.from(homeArticlesList.querySelectorAll('.item-card[data-kind="home-article"]'))
     .map((card) => ({
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       tag: card.querySelector('[data-field="tag"]')?.value.trim() || "",
@@ -650,31 +591,15 @@ function collectCatalogFromDom() {
   return { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles };
 }
 
-function refreshTreatmentCategorySelects() {
-  treatmentsList.querySelectorAll('select[data-field="category"]').forEach((sel) => {
-    const current = sel.value;
-    sel.innerHTML = categoryOptionsHtml(current);
-  });
-}
-
-// Keep chips + treatment selects in sync whenever categories change.
-function syncCategoryDependents() {
-  const stillExists = getCategories().some((cat) => displayCategoryId(cat.id) === displayCategoryId(state.activeCategory));
-  if (state.activeCategory !== "all" && !stillExists) state.activeCategory = "all";
-  renderCategoryChips();
-  refreshTreatmentCategorySelects();
-  applyCategoryFilter();
-}
-
 function bindRemoveHandlers(container) {
   container.addEventListener("click", (event) => {
-    const btn = event.target instanceof Element ? event.target.closest("[data-remove]") : null;
-    if (!btn || !container.contains(btn)) return;
-    const row = btn.closest("[data-kind]");
-    if (!row) return;
-    const wasCategory = row.getAttribute("data-kind") === "category";
-    row.remove();
-    if (wasCategory) syncCategoryDependents();
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.matches("button[data-remove]")) return;
+    const card = target.closest(".item-card");
+    if (card) {
+      card.remove();
+    }
   });
 }
 
@@ -693,26 +618,6 @@ function appendCard(container, html) {
     emptyNode.remove();
   }
   container.insertAdjacentHTML("beforeend", html);
-  return container.lastElementChild;
-}
-
-// Reflect a treatment row's fields back into its collapsed summary line.
-function refreshTreatmentSummary(row) {
-  if (!row) return;
-  const get = (field) => row.querySelector(`[data-field="${field}"]`)?.value || "";
-  const titleEl = row.querySelector("[data-row-title]");
-  const subEl = row.querySelector("[data-row-sub]");
-  const priceEl = row.querySelector("[data-row-price]");
-  if (titleEl) titleEl.textContent = get("name").trim() || "Neue Behandlung";
-  if (subEl) subEl.textContent = get("description").trim();
-  if (priceEl) priceEl.textContent = treatmentPriceLabel(euroToCents(get("priceCents")));
-  row.setAttribute("data-cat", displayCategoryId(get("category")));
-  const thumb = row.querySelector(".row-thumb");
-  const url = get("imageUrl").trim();
-  if (thumb && url) {
-    thumb.classList.remove("row-thumb-empty");
-    thumb.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
-  }
 }
 
 async function handleSave() {
@@ -831,10 +736,8 @@ async function init() {
     event.preventDefault();
     const stop = euroStepControl(button);
     if (!stop) return;
-    const treatRow = button.closest(".treat-row");
     const end = () => {
       stop();
-      if (treatRow) refreshTreatmentSummary(treatRow);
       document.removeEventListener("pointerup", end);
       document.removeEventListener("pointercancel", end);
       window.removeEventListener("blur", end);
@@ -843,98 +746,12 @@ async function init() {
     document.addEventListener("pointercancel", end);
     window.addEventListener("blur", end);
   });
-  addCategoryBtn.addEventListener("click", () => {
-    const node = appendCard(categoriesList, categoryCard({ id: genId("cat") }));
-    syncCategoryDependents();
-    node?.querySelector('[data-field="label"]')?.focus();
-  });
-  addTreatmentBtn.addEventListener("click", () => {
-    const preCat = state.activeCategory !== "all" ? state.activeCategory : "";
-    const node = appendCard(treatmentsList, treatmentCard({ id: genId("t"), category: preCat }, { open: true }));
-    applyCategoryFilter();
-    if (node) {
-      node.scrollIntoView({ behavior: "smooth", block: "center" });
-      node.querySelector('input[data-field="name"]')?.focus();
-    }
-  });
-  addMembershipBtn.addEventListener("click", () => {
-    const node = appendCard(membershipsList, membershipCard({ id: genId("m") }));
-    node?.querySelector('input[data-field="name"]')?.focus();
-  });
-  addRewardActionBtn.addEventListener("click", () => {
-    const node = appendCard(rewardActionsList, rewardActionCard({ id: genId("ra") }));
-    node?.querySelector('input[data-field="label"]')?.focus();
-  });
-  addRewardRedeemBtn.addEventListener("click", () => {
-    const node = appendCard(rewardRedeemsList, rewardRedeemCard({ id: genId("rr") }));
-    node?.querySelector('input[data-field="label"]')?.focus();
-  });
-  addHomeArticleBtn.addEventListener("click", () => {
-    const node = appendCard(homeArticlesList, homeArticleCard({ id: genId("art") }));
-    node?.querySelector('input[data-field="title"]')?.focus();
-  });
-
-  // Section tabs (Behandlungen / Mitgliedschaften / …)
-  editorTabs.addEventListener("click", (event) => {
-    const btn = event.target instanceof Element ? event.target.closest(".editor-tab") : null;
-    if (!btn) return;
-    const tab = btn.getAttribute("data-tab");
-    editorTabs.querySelectorAll(".editor-tab").forEach((t) => t.classList.toggle("active", t === btn));
-    document.querySelectorAll(".editor-panel").forEach((p) => p.classList.toggle("hidden", p.getAttribute("data-panel") !== tab));
-  });
-
-  // Category filter chips
-  categoryChips.addEventListener("click", (event) => {
-    const chip = event.target instanceof Element ? event.target.closest(".cat-chip") : null;
-    if (!chip) return;
-    state.activeCategory = chip.getAttribute("data-cat") || "all";
-    renderCategoryChips();
-    applyCategoryFilter();
-  });
-
-  // Toggle the inline category editor
-  manageCategoriesBtn.addEventListener("click", () => {
-    const open = categoryManage.classList.toggle("hidden") === false;
-    manageCategoriesBtn.classList.toggle("active", open);
-  });
-
-  // Renaming a category updates chips + treatment selects live
-  categoriesList.addEventListener("input", (event) => {
-    if (event.target instanceof Element && event.target.matches('[data-field="label"]')) {
-      syncCategoryDependents();
-    }
-  });
-
-  // Expand / collapse a treatment row
-  treatmentsList.addEventListener("click", (event) => {
-    const summary = event.target instanceof Element ? event.target.closest("[data-row-toggle]") : null;
-    if (!summary) return;
-    const row = summary.closest(".treat-row");
-    if (!row) return;
-    const willClose = row.classList.contains("open");
-    row.classList.toggle("open");
-    if (willClose) refreshTreatmentSummary(row);
-  });
-  treatmentsList.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    const summary = event.target instanceof Element ? event.target.closest("[data-row-toggle]") : null;
-    if (!summary) return;
-    event.preventDefault();
-    summary.closest(".treat-row")?.classList.toggle("open");
-  });
-
-  // Keep summary + category filter in sync while editing a treatment
-  treatmentsList.addEventListener("input", (event) => {
-    const row = event.target instanceof Element ? event.target.closest(".treat-row") : null;
-    if (row) refreshTreatmentSummary(row);
-  });
-  treatmentsList.addEventListener("change", (event) => {
-    const target = event.target;
-    if (target instanceof Element && target.matches('select[data-field="category"]')) {
-      const row = target.closest(".treat-row");
-      if (row) { refreshTreatmentSummary(row); applyCategoryFilter(); }
-    }
-  });
+  addCategoryBtn.addEventListener("click", () => appendCard(categoriesList, categoryCard({})));
+  addTreatmentBtn.addEventListener("click", () => appendCard(treatmentsList, treatmentCard({})));
+  addMembershipBtn.addEventListener("click", () => appendCard(membershipsList, membershipCard({})));
+  addRewardActionBtn.addEventListener("click", () => appendCard(rewardActionsList, rewardActionCard({})));
+  addRewardRedeemBtn.addEventListener("click", () => appendCard(rewardRedeemsList, rewardRedeemCard({})));
+  addHomeArticleBtn.addEventListener("click", () => appendCard(homeArticlesList, homeArticleCard({})));
   saveCatalogBtn.addEventListener("click", handleSave);
   autoGalleryBtn.addEventListener("click", handleAutoGallery);
   logoutBtn.addEventListener("click", handleLogout);
@@ -970,11 +787,19 @@ async function init() {
       handleDeleteMedia(filename);
     }
   });
+  treatmentsList.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.matches('input[data-field="imageUrl"]')) return;
+    const card = target.closest('.item-card[data-kind="treatment"]');
+    if (!card) return;
+    setTreatmentPreview(card, target.value);
+  });
   // Clicking the styled button just opens the (hidden) file dialog …
   treatmentsList.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest("button[data-upload-image]") : null;
     if (!button) return;
-    const card = button.closest(".treat-row");
+    const card = button.closest('.item-card[data-kind="treatment"]');
     const fileInput = card?.querySelector("input[data-upload-file]");
     if (fileInput instanceof HTMLInputElement) fileInput.click();
   });
@@ -982,7 +807,7 @@ async function init() {
   treatmentsList.addEventListener("change", async (event) => {
     const fileInput = event.target instanceof Element ? event.target.closest("input[data-upload-file]") : null;
     if (!(fileInput instanceof HTMLInputElement)) return;
-    const card = fileInput.closest(".treat-row");
+    const card = fileInput.closest('.item-card[data-kind="treatment"]');
     const file = fileInput.files?.[0];
     if (!card || !file) return;
     const button = card.querySelector("button[data-upload-image]");
@@ -998,9 +823,8 @@ async function init() {
       const urlInput = card.querySelector('input[data-field="imageUrl"]');
       if (urlInput instanceof HTMLInputElement) urlInput.value = url;
       setTreatmentPreview(card, url);
-      refreshTreatmentSummary(card);
       await loadMediaLibrary();
-      showToast("Behandlungsbild hochgeladen");
+      showToast("Treatment-Bild hochgeladen");
     } catch (error) {
       if (nameEl) nameEl.textContent = "";
       showToast(error.message);

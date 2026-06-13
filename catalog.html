@@ -33,80 +33,77 @@
     </section>
 
     <section id="editorSection" class="hidden">
-      <div class="editor-head">
+      <article class="card hero-card">
         <div>
-          <h1>Mein Angebot</h1>
-          <p class="editor-sub">Behandlungen, Preise und Bilder für deine App pflegen.</p>
+          <h1>Katalog-Editor</h1>
         </div>
-        <div class="editor-head-actions">
-          <button id="autoGalleryBtn" class="btn ghost btn-sm" type="button">Auto-Galerie</button>
-          <button id="saveCatalogBtn" class="btn primary" type="button">Speichern</button>
+        <div class="topbar-actions">
+          <button id="autoGalleryBtn" class="btn ghost" type="button">Auto-Galerie</button>
+          <button id="saveCatalogBtn" class="btn primary" type="button">Alle Änderungen speichern</button>
         </div>
-      </div>
+      </article>
 
-      <nav class="editor-tabs" id="editorTabs" aria-label="Bereiche">
-        <button class="editor-tab active" data-tab="behandlungen" type="button">Behandlungen</button>
-        <button class="editor-tab" data-tab="mitgliedschaften" type="button">Mitgliedschaften</button>
-        <button class="editor-tab" data-tab="praemien" type="button">Prämien</button>
-        <button class="editor-tab" data-tab="startseite" type="button">Startseite</button>
-        <button class="editor-tab" data-tab="bilder" type="button">Bilder</button>
-      </nav>
-
-      <section class="editor-panel" data-panel="behandlungen">
-        <div class="cat-bar">
-          <div class="cat-chips" id="categoryChips"></div>
-          <div class="cat-bar-actions">
-            <button id="manageCategoriesBtn" class="link-btn" type="button">Kategorien bearbeiten</button>
-            <button id="addTreatmentBtn" class="btn primary btn-sm" type="button">+ Behandlung</button>
-          </div>
-        </div>
-        <div id="categoryManage" class="cat-manage hidden">
-          <div id="categoriesList" class="cat-manage-list"></div>
-          <button id="addCategoryBtn" class="link-btn" type="button">+ Kategorie hinzufügen</button>
-        </div>
-        <div id="treatmentsList" class="rows"></div>
-      </section>
-
-      <section class="editor-panel hidden" data-panel="mitgliedschaften">
-        <div class="panel-head">
-          <p class="panel-hint">Pakete mit fixem Monatspreis und inkludierten Behandlungen.</p>
-          <button id="addMembershipBtn" class="btn primary btn-sm" type="button">+ Mitgliedschaft</button>
-        </div>
-        <div id="membershipsList" class="rows"></div>
-      </section>
-
-      <section class="editor-panel hidden" data-panel="praemien">
-        <div class="panel-head">
-          <div><h3 class="panel-sub-h">Punkte sammeln</h3><p class="panel-hint">Aktionen, für die Kundinnen Punkte erhalten.</p></div>
-          <button id="addRewardActionBtn" class="btn primary btn-sm" type="button">+ Aktion</button>
-        </div>
-        <div id="rewardActionsList" class="rows"></div>
-        <div class="panel-head panel-head-spaced">
-          <div><h3 class="panel-sub-h">Punkte einlösen</h3><p class="panel-hint">Prämien, die mit Punkten eingelöst werden.</p></div>
-          <button id="addRewardRedeemBtn" class="btn primary btn-sm" type="button">+ Prämie</button>
-        </div>
-        <div id="rewardRedeemsList" class="rows"></div>
-      </section>
-
-      <section class="editor-panel hidden" data-panel="startseite">
-        <div class="panel-head">
-          <p class="panel-hint">Beiträge, die in der App auf der Startseite erscheinen.</p>
-          <button id="addHomeArticleBtn" class="btn primary btn-sm" type="button">+ Beitrag</button>
-        </div>
-        <div id="homeArticlesList" class="rows"></div>
-      </section>
-
-      <section class="editor-panel hidden" data-panel="bilder">
-        <div class="panel-head">
-          <p class="panel-hint">Hochgeladene Bilder für deine Behandlungen.</p>
-          <div class="inline-actions">
+      <article class="card editor-block">
+        <div class="section-head">
+          <h2>Medienbibliothek</h2>
+          <div class="topbar-actions">
             <input id="mediaUploadInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-            <button id="mediaUploadBtn" class="btn ghost btn-sm" type="button">Bild hochladen</button>
-            <button id="refreshMediaBtn" class="link-btn" type="button">Aktualisieren</button>
+            <button id="mediaUploadBtn" class="btn ghost" type="button">Bild hochladen</button>
+            <button id="refreshMediaBtn" class="btn ghost" type="button">Aktualisieren</button>
           </div>
         </div>
         <div id="mediaGrid" class="media-grid"></div>
-      </section>
+      </article>
+
+      <div class="editor-grid">
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Kategorien</h2>
+            <button id="addCategoryBtn" class="btn ghost" type="button">+ Kategorie</button>
+          </div>
+          <div id="categoriesList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Treatments</h2>
+            <button id="addTreatmentBtn" class="btn ghost" type="button">+ Treatment</button>
+          </div>
+          <div id="treatmentsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Memberships</h2>
+            <button id="addMembershipBtn" class="btn ghost" type="button">+ Membership</button>
+          </div>
+          <div id="membershipsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Reward Aktionen</h2>
+            <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
+          </div>
+          <div id="rewardActionsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Reward Einlösungen</h2>
+            <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Einlösung</button>
+          </div>
+          <div id="rewardRedeemsList" class="cards"></div>
+        </article>
+
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Home Artikel</h2>
+            <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Artikel</button>
+          </div>
+          <div id="homeArticlesList" class="cards"></div>
+        </article>
+      </div>
     </section>
 
     <div id="toast" class="toast"></div>
