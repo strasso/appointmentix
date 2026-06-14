@@ -384,8 +384,8 @@ input:focus, select:focus, textarea:focus {
   transform: translateY(-2px);
 }
 .shop-nav-item.active {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--ring), var(--shadow-md);
+  border-color: var(--ink);
+  box-shadow: var(--shadow-md);
   color: var(--ink);
 }
 @media (max-width: 720px) { .shop-nav { grid-template-columns: repeat(2, 1fr); } }
