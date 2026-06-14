@@ -43,6 +43,67 @@
         </div>
       </article>
 
+      <p class="shop-intro">Das sind die vier Bereiche aus deinem App-Shop. Wähle einen aus, um seine Inhalte zu pflegen.</p>
+      <nav class="shop-nav" id="shopNav" aria-label="Shop-Bereiche">
+        <button class="shop-nav-item active" data-shop="treatments" type="button">
+          <img src="/assets/app-icons/treatments.png" alt=""><span>Treatments</span>
+        </button>
+        <button class="shop-nav-item" data-shop="pakete" type="button">
+          <img src="/assets/app-icons/pakete.png" alt=""><span>Pakete</span>
+        </button>
+        <button class="shop-nav-item" data-shop="mitgliedschaften" type="button">
+          <img src="/assets/app-icons/mitgliedschaften.png" alt=""><span>Mitgliedschaften</span>
+        </button>
+        <button class="shop-nav-item" data-shop="produkte" type="button">
+          <img src="/assets/app-icons/produkte.png" alt=""><span>Produkte</span>
+        </button>
+      </nav>
+
+      <div class="shop-panel" data-shop-panel="treatments">
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Kategorien</h2>
+            <button id="addCategoryBtn" class="btn ghost" type="button">+ Kategorie</button>
+          </div>
+          <div id="categoriesList" class="cards"></div>
+        </article>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Behandlungen</h2>
+            <button id="addTreatmentBtn" class="btn ghost" type="button">+ Behandlung</button>
+          </div>
+          <div id="treatmentsList" class="cards"></div>
+        </article>
+      </div>
+
+      <div class="shop-panel hidden" data-shop-panel="pakete">
+        <article class="card scaffold-card">
+          <img class="scaffold-icon" src="/assets/app-icons/pakete.png" alt="">
+          <h2>Pakete</h2>
+          <p>Behandlungs-Bundles zum Fixpreis — z. B. „3× Microneedling für 250 €". Mehrere Behandlungen zu einem Paket zusammenfassen.</p>
+          <p class="scaffold-note">Struktur-Vorschau · das Bearbeiten/Speichern bauen wir im nächsten Schritt.</p>
+        </article>
+      </div>
+
+      <div class="shop-panel hidden" data-shop-panel="mitgliedschaften">
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Mitgliedschaften</h2>
+            <button id="addMembershipBtn" class="btn ghost" type="button">+ Mitgliedschaft</button>
+          </div>
+          <div id="membershipsList" class="cards"></div>
+        </article>
+      </div>
+
+      <div class="shop-panel hidden" data-shop-panel="produkte">
+        <article class="card scaffold-card">
+          <img class="scaffold-icon" src="/assets/app-icons/produkte.png" alt="">
+          <h2>Produkte</h2>
+          <p>Physische Produkte zum Verkauf — Name, Beschreibung, Preis und Bild (z. B. Cremes & Seren).</p>
+          <p class="scaffold-note">Struktur-Vorschau · das Bearbeiten/Speichern bauen wir im nächsten Schritt.</p>
+        </article>
+      </div>
+
       <article class="card editor-block">
         <div class="section-head">
           <h2>Medienbibliothek</h2>
@@ -55,54 +116,15 @@
         <div id="mediaGrid" class="media-grid"></div>
       </article>
 
-      <div class="editor-grid">
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Kategorien</h2>
-            <button id="addCategoryBtn" class="btn ghost" type="button">+ Kategorie</button>
-          </div>
-          <div id="categoriesList" class="cards"></div>
-        </article>
-
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Treatments</h2>
-            <button id="addTreatmentBtn" class="btn ghost" type="button">+ Treatment</button>
-          </div>
-          <div id="treatmentsList" class="cards"></div>
-        </article>
-
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Memberships</h2>
-            <button id="addMembershipBtn" class="btn ghost" type="button">+ Membership</button>
-          </div>
-          <div id="membershipsList" class="cards"></div>
-        </article>
-
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Reward Aktionen</h2>
-            <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
-          </div>
-          <div id="rewardActionsList" class="cards"></div>
-        </article>
-
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Reward Einlösungen</h2>
-            <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Einlösung</button>
-          </div>
-          <div id="rewardRedeemsList" class="cards"></div>
-        </article>
-
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Home Artikel</h2>
-            <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Artikel</button>
-          </div>
-          <div id="homeArticlesList" class="cards"></div>
-        </article>
+      <!-- Nicht Teil des Shops (Prämien & Startseite werden im Schnell-Editor gepflegt).
+           Hier nur versteckt gehalten, damit die Daten beim Speichern erhalten bleiben. -->
+      <div class="hidden" aria-hidden="true">
+        <button id="addRewardActionBtn" type="button"></button>
+        <div id="rewardActionsList" class="cards"></div>
+        <button id="addRewardRedeemBtn" type="button"></button>
+        <div id="rewardRedeemsList" class="cards"></div>
+        <button id="addHomeArticleBtn" type="button"></button>
+        <div id="homeArticlesList" class="cards"></div>
       </div>
     </section>
 

@@ -752,6 +752,21 @@ async function init() {
   addRewardActionBtn.addEventListener("click", () => appendCard(rewardActionsList, rewardActionCard({})));
   addRewardRedeemBtn.addEventListener("click", () => appendCard(rewardRedeemsList, rewardRedeemCard({})));
   addHomeArticleBtn.addEventListener("click", () => appendCard(homeArticlesList, homeArticleCard({})));
+
+  // Shop-Bereich-Umschalter (Treatments / Pakete / Mitgliedschaften / Produkte)
+  const shopNav = document.getElementById("shopNav");
+  if (shopNav) {
+    shopNav.addEventListener("click", (event) => {
+      const btn = event.target instanceof Element ? event.target.closest(".shop-nav-item") : null;
+      if (!btn) return;
+      const shop = btn.getAttribute("data-shop");
+      shopNav.querySelectorAll(".shop-nav-item").forEach((b) => b.classList.toggle("active", b === btn));
+      document
+        .querySelectorAll("[data-shop-panel]")
+        .forEach((p) => p.classList.toggle("hidden", p.getAttribute("data-shop-panel") !== shop));
+    });
+  }
+
   saveCatalogBtn.addEventListener("click", handleSave);
   autoGalleryBtn.addEventListener("click", handleAutoGallery);
   logoutBtn.addEventListener("click", handleLogout);
