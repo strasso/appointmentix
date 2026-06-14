@@ -22,6 +22,11 @@ const rewardActionsList = document.getElementById("rewardActionsList");
 const rewardRedeemsList = document.getElementById("rewardRedeemsList");
 const homeArticlesList = document.getElementById("homeArticlesList");
 
+const packagesList = document.getElementById("packagesList");
+const productsList = document.getElementById("productsList");
+const addPackageBtn = document.getElementById("addPackageBtn");
+const addProductBtn = document.getElementById("addProductBtn");
+
 const addCategoryBtn = document.getElementById("addCategoryBtn");
 const addTreatmentBtn = document.getElementById("addTreatmentBtn");
 const addMembershipBtn = document.getElementById("addMembershipBtn");
@@ -475,6 +480,92 @@ function renderList(container, items, renderer, emptyText) {
   container.innerHTML = items.map((item) => renderer(item)).join("");
 }
 
+// IDs for packages/products are generated automatically and never shown.
+function genId(prefix) {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function packageTreatmentChecksHtml(selectedIds = []) {
+  const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((id) => String(id).trim()).filter(Boolean));
+  const treatments = Array.from(treatmentsList.querySelectorAll('.item-card[data-kind="treatment"]'))
+    .map((card) => ({
+      id: card.querySelector('[data-field="id"]')?.value.trim() || "",
+      name: card.querySelector('[data-field="name"]')?.value.trim() || "",
+    }))
+    .filter((t) => t.id);
+  const known = new Set(treatments.map((t) => t.id));
+  const orphans = [...selected].filter((id) => !known.has(id)).map((id) => ({ id, name: id }));
+  const all = [...treatments, ...orphans];
+  if (!all.length) return '<p class="empty">Erst Behandlungen anlegen, dann hier auswählen.</p>';
+  return all
+    .map(
+      (t) => `<label class="pack-check"><input type="checkbox" data-package-treatment value="${escapeAttr(t.id)}" ${selected.has(t.id) ? "checked" : ""}><span>${escapeAttr(t.name || t.id)}</span></label>`
+    )
+    .join("");
+}
+
+function imageFieldHtml(item = {}) {
+  return `
+    <div class="field-grid-2">
+      <label>Bild URL
+        <input data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="/uploads/clinic_x/beispiel.jpg">
+      </label>
+      <div>
+        <img class="treatment-preview ${item.imageUrl ? "" : "hidden"}" src="${escapeAttr(item.imageUrl || "")}" alt="Vorschau">
+        <div class="upload-row">
+          <input type="file" class="hidden" accept="image/png,image/jpeg,image/webp,image/gif" data-upload-file>
+          <button type="button" class="btn ghost btn-sm" data-upload-image><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Bild hochladen</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function packageCard(item = {}) {
+  return `
+    <div class="item-card" data-kind="package">
+      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
+      <div class="field-grid-2">
+        <label>Name
+          <input data-field="name" value="${escapeAttr(item.name)}" placeholder="z. B. Glow-Paket">
+        </label>
+        <label>Preis (€)
+          ${euroStepperHtml("priceCents", item.priceCents, "250")}
+        </label>
+      </div>
+      <label>Beschreibung
+        <textarea data-field="description" placeholder="Kurzbeschreibung">${escapeAttr(item.description)}</textarea>
+      </label>
+      <div>
+        <label>Inkludierte Behandlungen</label>
+        <div class="pack-checks">${packageTreatmentChecksHtml(item.includedTreatmentIds)}</div>
+      </div>
+      ${imageFieldHtml(item)}
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
+    </div>
+  `;
+}
+
+function productCard(item = {}) {
+  return `
+    <div class="item-card" data-kind="product">
+      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
+      <div class="field-grid-2">
+        <label>Name
+          <input data-field="name" value="${escapeAttr(item.name)}" placeholder="z. B. Vitamin-C-Serum">
+        </label>
+        <label>Preis (€)
+          ${euroStepperHtml("priceCents", item.priceCents, "49")}
+        </label>
+      </div>
+      <label>Beschreibung
+        <textarea data-field="description" placeholder="Kurzbeschreibung">${escapeAttr(item.description)}</textarea>
+      </label>
+      ${imageFieldHtml(item)}
+      <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
+    </div>
+  `;
+}
+
 function renderCatalog(catalog) {
   renderList(categoriesList, catalog.categories, categoryCard, "Noch keine Kategorien.");
   renderList(treatmentsList, catalog.treatments, treatmentCard, "Noch keine Treatments.");
@@ -482,6 +573,9 @@ function renderCatalog(catalog) {
   renderList(rewardActionsList, catalog.rewardActions, rewardActionCard, "Noch keine Reward Aktionen.");
   renderList(rewardRedeemsList, catalog.rewardRedeems, rewardRedeemCard, "Noch keine Reward Einlösungen.");
   renderList(homeArticlesList, catalog.homeArticles, homeArticleCard, "Noch keine Home Artikel.");
+  // Packages read the current treatments for their checkboxes, so render after treatments.
+  if (packagesList) renderList(packagesList, catalog.packages, packageCard, "Noch keine Pakete. Tippe oben rechts auf + Paket.");
+  if (productsList) renderList(productsList, catalog.products, productCard, "Noch keine Produkte. Tippe oben rechts auf + Produkt.");
 }
 
 function renderMediaLibrary(items) {
@@ -588,7 +682,34 @@ function collectCatalogFromDom() {
     }))
     .filter((item) => item.id && item.title);
 
-  return { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles };
+  const packages = packagesList
+    ? Array.from(packagesList.querySelectorAll('.item-card[data-kind="package"]'))
+        .map((card) => ({
+          id: card.querySelector('[data-field="id"]')?.value.trim() || "",
+          name: card.querySelector('[data-field="name"]')?.value.trim() || "",
+          priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
+          description: card.querySelector('[data-field="description"]')?.value.trim() || "",
+          imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+          includedTreatmentIds: Array.from(card.querySelectorAll('input[data-package-treatment]:checked'))
+            .map((input) => String(input.value || "").trim())
+            .filter(Boolean),
+        }))
+        .filter((item) => item.id && item.name)
+    : [];
+
+  const products = productsList
+    ? Array.from(productsList.querySelectorAll('.item-card[data-kind="product"]'))
+        .map((card) => ({
+          id: card.querySelector('[data-field="id"]')?.value.trim() || "",
+          name: card.querySelector('[data-field="name"]')?.value.trim() || "",
+          priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
+          description: card.querySelector('[data-field="description"]')?.value.trim() || "",
+          imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+        }))
+        .filter((item) => item.id && item.name)
+    : [];
+
+  return { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles, packages, products };
 }
 
 function bindRemoveHandlers(container) {
@@ -599,6 +720,41 @@ function bindRemoveHandlers(container) {
     const card = target.closest(".item-card");
     if (card) {
       card.remove();
+    }
+  });
+}
+
+// Reusable image upload for any .item-card with [data-upload-image]/[data-upload-file].
+function bindImageUpload(container) {
+  if (!container) return;
+  container.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("button[data-upload-image]") : null;
+    if (!button) return;
+    const fileInput = button.closest(".item-card")?.querySelector("input[data-upload-file]");
+    if (fileInput instanceof HTMLInputElement) fileInput.click();
+  });
+  container.addEventListener("change", async (event) => {
+    const fileInput = event.target instanceof Element ? event.target.closest("input[data-upload-file]") : null;
+    if (!(fileInput instanceof HTMLInputElement)) return;
+    const card = fileInput.closest(".item-card");
+    const file = fileInput.files?.[0];
+    if (!card || !file) return;
+    const button = card.querySelector("button[data-upload-image]");
+    const previousLabel = button?.innerHTML;
+    if (button) { button.disabled = true; button.textContent = "Lädt …"; }
+    try {
+      const url = await uploadSelectedMedia(file);
+      const urlInput = card.querySelector('input[data-field="imageUrl"]');
+      if (urlInput instanceof HTMLInputElement) urlInput.value = url;
+      const preview = card.querySelector(".treatment-preview");
+      if (preview) { preview.src = url; preview.classList.remove("hidden"); }
+      await loadMediaLibrary();
+      showToast("Bild hochgeladen");
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      fileInput.value = "";
+      if (button) { button.disabled = false; if (previousLabel) button.innerHTML = previousLabel; }
     }
   });
 }
@@ -724,6 +880,10 @@ async function init() {
   bindRemoveHandlers(rewardActionsList);
   bindRemoveHandlers(rewardRedeemsList);
   bindRemoveHandlers(homeArticlesList);
+  if (packagesList) bindRemoveHandlers(packagesList);
+  if (productsList) bindRemoveHandlers(productsList);
+  bindImageUpload(packagesList);
+  bindImageUpload(productsList);
 
   document.addEventListener("input", (event) => {
     if (event.target instanceof HTMLElement && event.target.matches("[data-price-input]")) {
@@ -752,6 +912,8 @@ async function init() {
   addRewardActionBtn.addEventListener("click", () => appendCard(rewardActionsList, rewardActionCard({})));
   addRewardRedeemBtn.addEventListener("click", () => appendCard(rewardRedeemsList, rewardRedeemCard({})));
   addHomeArticleBtn.addEventListener("click", () => appendCard(homeArticlesList, homeArticleCard({})));
+  if (addPackageBtn) addPackageBtn.addEventListener("click", () => appendCard(packagesList, packageCard({ id: genId("pkg") })));
+  if (addProductBtn) addProductBtn.addEventListener("click", () => appendCard(productsList, productCard({ id: genId("prod") })));
 
   // Shop-Bereich-Umschalter (Treatments / Pakete / Mitgliedschaften / Produkte)
   const shopNav = document.getElementById("shopNav");

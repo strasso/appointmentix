@@ -918,6 +918,8 @@ def init_db() -> None:
           reward_actions_json TEXT NOT NULL DEFAULT '[]',
           reward_redeems_json TEXT NOT NULL DEFAULT '[]',
           home_articles_json TEXT NOT NULL DEFAULT '[]',
+          packages_json TEXT NOT NULL DEFAULT '[]',
+          products_json TEXT NOT NULL DEFAULT '[]',
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (clinic_id) REFERENCES clinics(id)
@@ -1248,6 +1250,8 @@ def init_db() -> None:
           reward_actions_json TEXT NOT NULL DEFAULT '[]',
           reward_redeems_json TEXT NOT NULL DEFAULT '[]',
           home_articles_json TEXT NOT NULL DEFAULT '[]',
+          packages_json TEXT NOT NULL DEFAULT '[]',
+          products_json TEXT NOT NULL DEFAULT '[]',
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (clinic_id) REFERENCES clinics(id)
@@ -1485,6 +1489,8 @@ def init_db() -> None:
         "reward_actions_json": "TEXT NOT NULL DEFAULT '[]'",
         "reward_redeems_json": "TEXT NOT NULL DEFAULT '[]'",
         "home_articles_json": "TEXT NOT NULL DEFAULT '[]'",
+        "packages_json": "TEXT NOT NULL DEFAULT '[]'",
+        "products_json": "TEXT NOT NULL DEFAULT '[]'",
       },
     )
 
@@ -2578,6 +2584,8 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
         "rewardActions": default_catalog["rewardActions"],
         "rewardRedeems": default_catalog["rewardRedeems"],
         "homeArticles": default_catalog["homeArticles"],
+        "packages": [],
+        "products": [],
       },
       overwrite_existing=False,
     )
@@ -2593,7 +2601,9 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
           memberships_json,
           reward_actions_json,
           reward_redeems_json,
-          home_articles_json
+          home_articles_json,
+          packages_json,
+          products_json
         FROM clinic_catalogs
         WHERE clinic_id = ?
         LIMIT 1
@@ -2611,6 +2621,8 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
     reward_actions = parse_json_list(catalog_row["reward_actions_json"])
     reward_redeems = parse_json_list(catalog_row["reward_redeems_json"])
     home_articles = parse_json_list(catalog_row["home_articles_json"])
+    packages = parse_json_list(catalog_row["packages_json"])
+    products = parse_json_list(catalog_row["products_json"])
 
     return apply_auto_gallery_to_catalog(
       {
@@ -2620,6 +2632,8 @@ def load_clinic_catalog_bundle(clinic_row) -> dict:
         "rewardActions": reward_actions or default_catalog["rewardActions"],
         "rewardRedeems": reward_redeems or default_catalog["rewardRedeems"],
         "homeArticles": home_articles or default_catalog["homeArticles"],
+        "packages": packages,
+        "products": products,
       },
       overwrite_existing=False,
     )
@@ -6797,7 +6811,9 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
       memberships_json,
       reward_actions_json,
       reward_redeems_json,
-      home_articles_json
+      home_articles_json,
+      packages_json,
+      products_json
     FROM clinic_catalogs
     WHERE clinic_id = ?
     LIMIT 1
@@ -6814,6 +6830,8 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
       "rewardActions": default_catalog["rewardActions"],
       "rewardRedeems": default_catalog["rewardRedeems"],
       "homeArticles": default_catalog["homeArticles"],
+      "packages": [],
+      "products": [],
     }
 
   return {
@@ -6823,6 +6841,8 @@ def load_raw_clinic_catalog_for_update(conn: DBConnectionAdapter, clinic_id: int
     "rewardActions": parse_json_list(catalog_row["reward_actions_json"]) or default_catalog["rewardActions"],
     "rewardRedeems": parse_json_list(catalog_row["reward_redeems_json"]) or default_catalog["rewardRedeems"],
     "homeArticles": parse_json_list(catalog_row["home_articles_json"]) or default_catalog["homeArticles"],
+    "packages": parse_json_list(catalog_row["packages_json"]),
+    "products": parse_json_list(catalog_row["products_json"]),
   }
 
 
@@ -6839,6 +6859,8 @@ def write_clinic_catalog_bundle(conn: DBConnectionAdapter, clinic_id: int, clini
       reward_actions_json = ?,
       reward_redeems_json = ?,
       home_articles_json = ?,
+      packages_json = ?,
+      products_json = ?,
       updated_at = CURRENT_TIMESTAMP
     WHERE clinic_id = ?
     """,
@@ -6849,6 +6871,8 @@ def write_clinic_catalog_bundle(conn: DBConnectionAdapter, clinic_id: int, clini
       serialize_json_list(catalog.get("rewardActions", [])),
       serialize_json_list(catalog.get("rewardRedeems", [])),
       serialize_json_list(catalog.get("homeArticles", [])),
+      serialize_json_list(catalog.get("packages", [])),
+      serialize_json_list(catalog.get("products", [])),
       clinic_id,
     ),
   )
@@ -6959,6 +6983,8 @@ def apply_imported_services_to_clinic_catalog(conn: DBConnectionAdapter, clinic_
     "rewardActions": current_catalog.get("rewardActions", []),
     "rewardRedeems": current_catalog.get("rewardRedeems", []),
     "homeArticles": current_catalog.get("homeArticles", []),
+    "packages": current_catalog.get("packages", []),
+    "products": current_catalog.get("products", []),
   }
   write_clinic_catalog_bundle(conn, clinic_id, clinic_name, updated_catalog)
   return updated_catalog
@@ -9614,6 +9640,8 @@ def update_clinic_catalog():
     reward_actions = resolved_list("rewardActions", 80)
     reward_redeems = resolved_list("rewardRedeems", 80)
     home_articles = resolved_list("homeArticles", 60)
+    packages = resolved_list("packages", 80)
+    products = resolved_list("products", 200)
   except ValueError as exc:
     return jsonify({"error": str(exc)}), 400
 
@@ -9629,6 +9657,8 @@ def update_clinic_catalog():
         reward_actions_json = ?,
         reward_redeems_json = ?,
         home_articles_json = ?,
+        packages_json = ?,
+        products_json = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE clinic_id = ?
       """,
@@ -9639,6 +9669,8 @@ def update_clinic_catalog():
         serialize_json_list(reward_actions),
         serialize_json_list(reward_redeems),
         serialize_json_list(home_articles),
+        serialize_json_list(packages),
+        serialize_json_list(products),
         clinic_id,
       ),
     )
@@ -9656,6 +9688,8 @@ def update_clinic_catalog():
       "rewardActions": len(reward_actions),
       "rewardRedeems": len(reward_redeems),
       "homeArticles": len(home_articles),
+      "packages": len(packages),
+      "products": len(products),
     },
   )
 
@@ -9669,6 +9703,8 @@ def update_clinic_catalog():
         "rewardActions": reward_actions,
         "rewardRedeems": reward_redeems,
         "homeArticles": home_articles,
+        "packages": packages,
+        "products": products,
       },
     }
   )

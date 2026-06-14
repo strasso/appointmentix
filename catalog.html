@@ -77,11 +77,13 @@
       </div>
 
       <div class="shop-panel hidden" data-shop-panel="pakete">
-        <article class="card scaffold-card">
-          <img class="scaffold-icon" src="/assets/app-icons/pakete.png" alt="">
-          <h2>Pakete</h2>
-          <p>Behandlungs-Bundles zum Fixpreis — z. B. „3× Microneedling für 250 €". Mehrere Behandlungen zu einem Paket zusammenfassen.</p>
-          <p class="scaffold-note">Struktur-Vorschau · das Bearbeiten/Speichern bauen wir im nächsten Schritt.</p>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Pakete</h2>
+            <button id="addPackageBtn" class="btn ghost" type="button">+ Paket</button>
+          </div>
+          <p class="subline">Behandlungs-Bundles zum Fixpreis — kreuze die enthaltenen Behandlungen an.</p>
+          <div id="packagesList" class="cards"></div>
         </article>
       </div>
 
@@ -96,11 +98,13 @@
       </div>
 
       <div class="shop-panel hidden" data-shop-panel="produkte">
-        <article class="card scaffold-card">
-          <img class="scaffold-icon" src="/assets/app-icons/produkte.png" alt="">
-          <h2>Produkte</h2>
-          <p>Physische Produkte zum Verkauf — Name, Beschreibung, Preis und Bild (z. B. Cremes & Seren).</p>
-          <p class="scaffold-note">Struktur-Vorschau · das Bearbeiten/Speichern bauen wir im nächsten Schritt.</p>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Produkte</h2>
+            <button id="addProductBtn" class="btn ghost" type="button">+ Produkt</button>
+          </div>
+          <p class="subline">Physische Produkte zum Verkauf — z. B. Cremes & Seren.</p>
+          <div id="productsList" class="cards"></div>
         </article>
       </div>
 
