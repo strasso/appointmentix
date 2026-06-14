@@ -15,6 +15,8 @@ const toast = document.getElementById("toast");
 
 const saveCatalogBtn = document.getElementById("saveCatalogBtn");
 const autoGalleryBtn = document.getElementById("autoGalleryBtn");
+const importWebsiteBtn = document.getElementById("importWebsiteBtn");
+const exportCatalogBtn = document.getElementById("exportCatalogBtn");
 const categoriesList = document.getElementById("categoriesList");
 const treatmentsList = document.getElementById("treatmentsList");
 const membershipsList = document.getElementById("membershipsList");
@@ -815,6 +817,47 @@ async function handleAutoGallery() {
   }
 }
 
+async function handleExportCatalog() {
+  try {
+    const response = await fetch(`${API_BASE}/clinic/catalog/export`, { credentials: "same-origin" });
+    if (!response.ok) throw new Error("Export fehlgeschlagen");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "katalog.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast("Katalog exportiert");
+  } catch (error) {
+    showToast(error.message || "Export fehlgeschlagen");
+  }
+}
+
+async function handleImportWebsite() {
+  if (!state.user || state.user.role !== "owner") {
+    showToast("Nur Owner können importieren.");
+    return;
+  }
+  if (!window.confirm("Behandlungen von deiner Klinik-Website übernehmen? Bestehende Behandlungen können dabei überschrieben werden.")) return;
+  const previousLabel = importWebsiteBtn.textContent;
+  importWebsiteBtn.disabled = true;
+  importWebsiteBtn.textContent = "Wird übernommen …";
+  try {
+    const response = await apiRequest("/clinic/catalog/import-from-website", { method: "POST", body: {} });
+    renderCatalog(response.catalog || {});
+    const n = Number(response.websiteSync?.importedTreatments || 0);
+    showToast(n ? `${n} Behandlungen übernommen` : "Website übernommen");
+  } catch (error) {
+    showToast(error.message || "Website-Import fehlgeschlagen");
+  } finally {
+    importWebsiteBtn.disabled = false;
+    importWebsiteBtn.textContent = previousLabel || "Von Website übernehmen";
+  }
+}
+
 async function handleCopyUrl(url) {
   const normalized = String(url || "").trim();
   if (!normalized) return;
@@ -931,6 +974,8 @@ async function init() {
 
   saveCatalogBtn.addEventListener("click", handleSave);
   autoGalleryBtn.addEventListener("click", handleAutoGallery);
+  if (exportCatalogBtn) exportCatalogBtn.addEventListener("click", handleExportCatalog);
+  if (importWebsiteBtn) importWebsiteBtn.addEventListener("click", handleImportWebsite);
   logoutBtn.addEventListener("click", handleLogout);
   mediaUploadBtn.addEventListener("click", () => mediaUploadInput.click());
   refreshMediaBtn.addEventListener("click", () => {

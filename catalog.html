@@ -38,6 +38,8 @@
           <h1>Katalog-Editor</h1>
         </div>
         <div class="topbar-actions">
+          <button id="importWebsiteBtn" class="btn ghost" type="button">Von Website übernehmen</button>
+          <button id="exportCatalogBtn" class="btn ghost" type="button">Exportieren</button>
           <button id="autoGalleryBtn" class="btn ghost" type="button">Auto-Galerie</button>
           <button id="saveCatalogBtn" class="btn primary" type="button">Alle Änderungen speichern</button>
         </div>
@@ -120,15 +122,34 @@
         <div id="mediaGrid" class="media-grid"></div>
       </article>
 
-      <!-- Nicht Teil des Shops (Prämien & Startseite werden im Schnell-Editor gepflegt).
-           Hier nur versteckt gehalten, damit die Daten beim Speichern erhalten bleiben. -->
-      <div class="hidden" aria-hidden="true">
-        <button id="addRewardActionBtn" type="button"></button>
-        <div id="rewardActionsList" class="cards"></div>
-        <button id="addRewardRedeemBtn" type="button"></button>
-        <div id="rewardRedeemsList" class="cards"></div>
-        <button id="addHomeArticleBtn" type="button"></button>
-        <div id="homeArticlesList" class="cards"></div>
+      <!-- Weitere App-Inhalte: gehören nicht in den Shop, aber in die App. -->
+      <div class="extra-section">
+        <h2 class="extra-heading">Weitere App-Inhalte</h2>
+        <p class="subline">Treueprogramm und Startseite deiner Patienten-App — nicht Teil des Shops.</p>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Prämien sammeln</h2>
+            <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
+          </div>
+          <p class="subline">Aktionen, für die Kundinnen Punkte erhalten.</p>
+          <div id="rewardActionsList" class="cards"></div>
+        </article>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Prämien einlösen</h2>
+            <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Prämie</button>
+          </div>
+          <p class="subline">Prämien, die mit Punkten eingelöst werden.</p>
+          <div id="rewardRedeemsList" class="cards"></div>
+        </article>
+        <article class="card editor-block">
+          <div class="section-head">
+            <h2>Startseiten-Beiträge</h2>
+            <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Beitrag</button>
+          </div>
+          <p class="subline">Kurze Inhalte auf der Startseite der App.</p>
+          <div id="homeArticlesList" class="cards"></div>
+        </article>
       </div>
     </section>
 

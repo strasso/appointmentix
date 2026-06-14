@@ -851,7 +851,7 @@ function setSession(user) {
   showView(viewFromHash(), false);
 
   saveSettingsBtn.disabled = !state.isOwner;
-  saveCatalogBtn.disabled = !state.isOwner;
+  if (saveCatalogBtn) saveCatalogBtn.disabled = !state.isOwner;
   if (importCatalogBtn) importCatalogBtn.disabled = !state.isOwner;
   memberForm.classList.toggle("hidden", !state.isOwner);
   startCheckoutBtn.classList.toggle("hidden", !state.isOwner);
@@ -1936,6 +1936,10 @@ function catalogEmptyState(message) {
 function renderCatalog() {
   const catalog = normalizeCatalogPayload(state.catalog);
   state.catalog = catalog;
+
+  // Schnell-Editor DOM was removed; keep state.catalog populated (used by the
+  // appointment drawer treatment picker) but skip rendering the old form.
+  if (!categoriesBody) return;
 
   categoriesBody.innerHTML = catalog.categories.length
     ? catalog.categories
@@ -3420,19 +3424,21 @@ function bindEvents() {
       loadAnalyticsSummary().catch((error) => showToast(error.message));
     });
   }
-  saveCatalogBtn.addEventListener("click", saveCatalog);
-  exportCatalogBtn.addEventListener("click", handleExportCatalog);
-  importCatalogBtn.addEventListener("click", handleImportCatalogButton);
+  // The legacy "Schnell-Editor" was removed in favour of the visual editor
+  // (the /catalog iframe). Its controls may be absent — guard every binding.
+  if (saveCatalogBtn) saveCatalogBtn.addEventListener("click", saveCatalog);
+  if (exportCatalogBtn) exportCatalogBtn.addEventListener("click", handleExportCatalog);
+  if (importCatalogBtn) importCatalogBtn.addEventListener("click", handleImportCatalogButton);
   if (importCatalogInput) {
     importCatalogInput.addEventListener("change", handleImportCatalogChange);
   }
-  addCategoryBtn.addEventListener("click", () => addCatalogRow("categories"));
-  addTreatmentBtn.addEventListener("click", () => addCatalogRow("treatments"));
-  addMembershipBtn.addEventListener("click", () => addCatalogRow("memberships"));
-  addRewardActionBtn.addEventListener("click", () => addCatalogRow("rewardActions"));
-  addRewardRedeemBtn.addEventListener("click", () => addCatalogRow("rewardRedeems"));
-  addHomeArticleBtn.addEventListener("click", () => addCatalogRow("homeArticles"));
-  catalogForm.addEventListener("click", (event) => {
+  if (addCategoryBtn) addCategoryBtn.addEventListener("click", () => addCatalogRow("categories"));
+  if (addTreatmentBtn) addTreatmentBtn.addEventListener("click", () => addCatalogRow("treatments"));
+  if (addMembershipBtn) addMembershipBtn.addEventListener("click", () => addCatalogRow("memberships"));
+  if (addRewardActionBtn) addRewardActionBtn.addEventListener("click", () => addCatalogRow("rewardActions"));
+  if (addRewardRedeemBtn) addRewardRedeemBtn.addEventListener("click", () => addCatalogRow("rewardRedeems"));
+  if (addHomeArticleBtn) addHomeArticleBtn.addEventListener("click", () => addCatalogRow("homeArticles"));
+  if (catalogForm) catalogForm.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest("button[data-remove-list]") : null;
     if (!target) return;
     const listName = String(target.getAttribute("data-remove-list") || "");

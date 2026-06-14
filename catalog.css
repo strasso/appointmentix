@@ -416,6 +416,11 @@ input:focus, select:focus, textarea:focus {
 .pack-check input { width: auto; min-height: 0; margin: 0; accent-color: var(--brand); }
 .pack-check:has(input:checked) { background: var(--brand-wash); border-color: var(--brand); color: var(--brand-strong); }
 
+/* Weitere App-Inhalte (Prämien + Startseite) — abgesetzt vom Shop */
+.extra-section { display: grid; gap: 18px; padding-top: 22px; margin-top: 6px; border-top: 1px solid var(--border); }
+.extra-heading { font-size: 1.15rem; }
+.extra-section > .subline { margin-top: -12px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
