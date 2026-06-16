@@ -14,7 +14,11 @@ Infrastruktur drumherum.
     Region Frankfurt für EU. *(billigste Option; Haken: A1-Kapazität oft "out of capacity"
     beim Anlegen, Oracle reklamiert Gratis-Accounts gelegentlich → gut für Pilot, fürs
     Business riskanter. Keine Gratis-Postgres → Postgres selbst auf der VM.)*
+  - **netcup** (DE, Standort Wien): VPS ~€3–6/Mon — bestes Preis-Leistung in DACH.
+  - **Exoscale** (AT, Zone Wien): ~€5–10/Mon, saubere Console, DSGVO.
+  - **Scaleway** (FR/EU): ~€5–8/Mon, moderne Console/DX.
   - Alternativ Render / Fly.io / Railway in einer **EU-Region** (Procfile wird direkt genutzt).
+  - Ein VPS mit ~2 vCPU / 4 GB RAM reicht für den MVP locker. *(Preise ungefähr.)*
 
 ## 1. Datenbank: SQLite → Postgres
 SQLite ist nur für lokal. Live → Postgres (Code unterstützt es via `psycopg`):
