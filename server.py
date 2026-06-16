@@ -1451,6 +1451,7 @@ def init_db() -> None:
         "notify_email": "TEXT NOT NULL DEFAULT ''",
         "slack_webhook_url": "TEXT NOT NULL DEFAULT ''",
         "calendar_feed_token": "TEXT NOT NULL DEFAULT ''",
+        "chart_color": "TEXT NOT NULL DEFAULT '#b56f80'",
       },
     )
 
@@ -1460,6 +1461,7 @@ def init_db() -> None:
       {
         "clinic_id": "INTEGER",
         "role": "TEXT NOT NULL DEFAULT 'owner'",
+        "active": "INTEGER NOT NULL DEFAULT 1",
         "logo_url": "TEXT NOT NULL DEFAULT ''",
         "website": "TEXT NOT NULL DEFAULT ''",
         "brand_color": "TEXT NOT NULL DEFAULT '#16A34A'",
@@ -1630,6 +1632,7 @@ def get_user_row_by_id(user_id: int) -> sqlite3.Row | None:
         subscription_status,
         stripe_customer_id,
         stripe_subscription_id,
+        active,
         created_at
       FROM users
       WHERE id = ?
@@ -1782,19 +1785,29 @@ def revoke_all_user_tokens(user_id: int) -> None:
     )
 
 
+def is_user_row_active(row) -> bool:
+  if row is None:
+    return False
+  try:
+    return int(safe_row_value(row, "active", 1) or 0) != 0
+  except (TypeError, ValueError):
+    return True
+
+
 def get_current_user_row() -> sqlite3.Row | None:
   bearer_token = parse_bearer_token()
   if bearer_token:
     user_id_from_token = resolve_user_id_from_api_token(bearer_token)
     if user_id_from_token:
       row = get_user_row_by_id(user_id_from_token)
-      if row:
+      if row and is_user_row_active(row):
         return row
 
   user_id = session.get("user_id")
   if not user_id:
     return None
-  return get_user_row_by_id(int(user_id))
+  row = get_user_row_by_id(int(user_id))
+  return row if is_user_row_active(row) else None
 
 
 def require_auth_row() -> tuple[sqlite3.Row | None, tuple]:
@@ -1861,6 +1874,7 @@ def get_clinic_row_by_id(clinic_id: int | None):
         notify_email,
         slack_webhook_url,
         calendar_feed_token,
+        chart_color,
         created_at
       FROM clinics
       WHERE id = ?
@@ -8436,6 +8450,7 @@ def login():
         subscription_status,
         stripe_customer_id,
         stripe_subscription_id,
+        active,
         created_at
       FROM users
       WHERE email = ?
@@ -8445,6 +8460,9 @@ def login():
 
   if not user_row or not check_password_hash(user_row["password_hash"], password):
     return jsonify({"error": "Ungültige Login-Daten."}), 401
+
+  if int(safe_row_value(user_row, "active", 1) or 0) == 0:
+    return jsonify({"error": "Dieses Konto wurde deaktiviert. Bitte wende dich an die Klinik-Leitung."}), 403
 
   session["user_id"] = user_row["id"]
   api_token = issue_api_token(int(user_row["id"]))
@@ -10896,6 +10914,7 @@ def clinic_settings():
       "calendlyUrl": clinic_row["calendly_url"],
       "notifyEmail": clinic_row["notify_email"],
       "slackWebhookUrl": clinic_row["slack_webhook_url"],
+      "chartColor": safe_public_text(safe_row_value(clinic_row, "chart_color"), "#b56f80"),
       "calendarFeedUrl": (
         request.host_url.rstrip("/") + "/api/calendar/" + ensure_clinic_calendar_token(int(clinic_row["id"])) + ".ics"
         if ensure_clinic_calendar_token(int(clinic_row["id"]))
@@ -10914,6 +10933,7 @@ def clinic_settings():
       "calendlyUrl": user_row["calendly_url"],
       "notifyEmail": "",
       "slackWebhookUrl": "",
+      "chartColor": "#b56f80",
       "calendarFeedUrl": "",
     }
 
@@ -11181,6 +11201,19 @@ def publish_clinic_theme_draft():
     raw_theme = payload.get("theme") if isinstance(payload, dict) and "theme" in payload else current_state["draftTheme"]
     theme = normalize_clinic_theme(raw_theme)
     publish_clinic_theme(conn, clinic_id, theme)
+    # Single source of truth: mirror the published brand color / accent / font onto the
+    # clinic record so the public clinic bundle and dashboard stay in sync with the editor.
+    mirror_brand = theme["colors"]["primary"]
+    mirror_accent = theme["colors"]["accent"]
+    mirror_font = theme["typography"]["bodyFont"]
+    conn.execute(
+      "UPDATE clinics SET brand_color = ?, accent_color = ?, font_family = ? WHERE id = ?",
+      (mirror_brand, mirror_accent, mirror_font, clinic_id),
+    )
+    conn.execute(
+      "UPDATE users SET brand_color = ?, accent_color = ?, font_family = ? WHERE clinic_id = ?",
+      (mirror_brand, mirror_accent, mirror_font, clinic_id),
+    )
     row = fetch_clinic_theme_row(conn, clinic_id)
 
   create_audit_log(
@@ -11238,6 +11271,7 @@ def clinic_members():
         email,
         full_name,
         role,
+        active,
         created_at
       FROM users
       WHERE clinic_id = ?
@@ -11254,6 +11288,7 @@ def clinic_members():
           "email": row["email"],
           "fullName": row["full_name"],
           "role": row["role"],
+          "active": int(safe_row_value(row, "active", 1) or 0) != 0,
           "createdAt": row["created_at"],
         }
         for row in rows
@@ -11598,10 +11633,89 @@ def create_clinic_member():
         "email": member_row["email"],
         "fullName": member_row["full_name"],
         "role": member_row["role"],
+        "active": True,
         "createdAt": member_row["created_at"],
       }
     }
   ), 201
+
+
+@app.patch("/api/clinic/members/<int:member_id>")
+def update_clinic_member(member_id: int):
+  owner_row, auth_error = require_owner_row()
+  if not owner_row:
+    return auth_error
+
+  clinic_id = int(owner_row["clinic_id"]) if owner_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  if member_id == int(owner_row["id"]):
+    return jsonify({"error": "Du kannst dein eigenes Konto nicht deaktivieren."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  if "active" not in payload:
+    return jsonify({"error": "Kein gültiges Feld zum Aktualisieren."}), 400
+  new_active = 1 if parse_bool_flag(payload.get("active"), True) else 0
+
+  with get_db() as conn:
+    target = conn.execute(
+      "SELECT id, clinic_id, role, email, full_name, active, created_at FROM users WHERE id = ?",
+      (member_id,),
+    ).fetchone()
+    if not target or int(target["clinic_id"] or 0) != clinic_id:
+      return jsonify({"error": "Mitglied nicht gefunden."}), 404
+    if str(target["role"]) != "staff":
+      return jsonify({"error": "Nur Mitarbeiter:innen können deaktiviert werden."}), 400
+
+    conn.execute("UPDATE users SET active = ? WHERE id = ?", (new_active, member_id))
+    # End any active sessions/tokens so a deactivated member is signed out immediately.
+    if new_active == 0:
+      try:
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (member_id,))
+      except Exception:
+        pass
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(owner_row["id"]),
+    action="member.activated" if new_active else "member.deactivated",
+    entity_type="user",
+    entity_id=str(member_id),
+    metadata={"email": target["email"]},
+  )
+
+  return jsonify(
+    {
+      "member": {
+        "id": target["id"],
+        "email": target["email"],
+        "fullName": target["full_name"],
+        "role": target["role"],
+        "active": new_active != 0,
+        "createdAt": target["created_at"],
+      }
+    }
+  )
+
+
+@app.put("/api/clinic/chart-color")
+def update_clinic_chart_color():
+  owner_row, auth_error = require_owner_row()
+  if not owner_row:
+    return auth_error
+
+  clinic_id = int(owner_row["clinic_id"]) if owner_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  chart_color = to_hex_color(safe_public_text(payload.get("chartColor"), "#b56f80"), "#b56f80")
+
+  with get_db() as conn:
+    conn.execute("UPDATE clinics SET chart_color = ? WHERE id = ?", (chart_color, clinic_id))
+
+  return jsonify({"chartColor": chart_color})
 
 
 @app.post("/api/analytics/events")

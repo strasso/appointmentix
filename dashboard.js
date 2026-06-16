@@ -113,8 +113,8 @@ const authMessage = document.getElementById("authMessage");
 
 const settingsForm = document.getElementById("settingsForm");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
-const brandColorPicker = document.getElementById("brandColorPicker");
-const accentColorPicker = document.getElementById("accentColorPicker");
+const chartColorPicker = document.getElementById("chartColorPicker");
+const chartColorControl = document.getElementById("chartColorControl");
 const appearanceForm = document.getElementById("appearanceForm");
 const appearanceStatus = document.getElementById("appearanceStatus");
 const appearanceWarnings = document.getElementById("appearanceWarnings");
@@ -492,23 +492,8 @@ function renderBodyZoneChips(selected = []) {
     .join("");
 }
 
-function syncColorFieldPair(textInput, colorInput, fallback) {
-  if (!(textInput instanceof HTMLInputElement) || !(colorInput instanceof HTMLInputElement)) return;
-  const syncFromText = () => {
-    colorInput.value = normalizeHexColorForUi(textInput.value, fallback);
-  };
-  const syncFromColor = () => {
-    textInput.value = colorInput.value;
-  };
-  syncFromText();
-  textInput.addEventListener("input", syncFromText);
-  colorInput.addEventListener("input", syncFromColor);
-}
-
 function buildSettingsPayload(extra = {}) {
   const payload = parseAuthForm(settingsForm);
-  delete payload.brandColorPicker;
-  delete payload.accentColorPicker;
   return { ...payload, ...extra };
 }
 
@@ -920,9 +905,6 @@ function fillSettingsForm(settings) {
   settingsForm.elements.clinicName.value = settings.clinicName || "";
   settingsForm.elements.website.value = settings.website || "";
   settingsForm.elements.logoUrl.value = settings.logoUrl || "";
-  settingsForm.elements.brandColor.value = settings.brandColor || "";
-  settingsForm.elements.accentColor.value = settings.accentColor || "";
-  settingsForm.elements.fontFamily.value = settings.fontFamily || "";
   if (settingsForm.elements.designPreset) {
     settingsForm.elements.designPreset.value = settings.designPreset || "clean";
   }
@@ -937,12 +919,13 @@ function fillSettingsForm(settings) {
   if (calendarFeedField) {
     calendarFeedField.value = settings.calendarFeedUrl || "";
   }
-  if (brandColorPicker instanceof HTMLInputElement) {
-    brandColorPicker.value = normalizeHexColorForUi(settings.brandColor, "#16A34A");
+  chartColor = normalizeHexColorForUi(settings.chartColor, CHART_BRAND);
+  if (chartColorPicker instanceof HTMLInputElement) {
+    chartColorPicker.value = chartColor;
+    chartColorPicker.disabled = !state.isOwner;
   }
-  if (accentColorPicker instanceof HTMLInputElement) {
-    accentColorPicker.value = normalizeHexColorForUi(settings.accentColor, "#EB6C13");
-  }
+  if (chartColorControl) chartColorControl.style.setProperty("--chart-color", chartColor);
+  scheduleMetricsRender();
   if (previewClinicName) {
     previewClinicName.textContent = settings.clinicName || state.user?.clinicName || "Demo Aesthetics";
   }
@@ -1133,6 +1116,8 @@ function getCanvasContext(canvas) {
 }
 
 const CHART_BRAND = "#b56f80";
+// User-selectable analytics chart color (persisted per clinic via /clinic/chart-color).
+let chartColor = CHART_BRAND;
 
 function hexToRgba(hex, alpha) {
   const value = String(hex || "").replace("#", "");
@@ -1650,15 +1635,15 @@ function renderMetricsDashboard() {
   setDeltaBadge(metricVisitsDelta, deltas.appOpen, compareMode);
 
   const chartDates = timeseries.map((point) => point.date || "");
-  drawLineChart(chartDailyProcessing, revenueByDay, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartNetRevenue, revenueByDay, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartMRR, mrrSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartAppUserLTV, appUserLtvSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartClientLTV, clientLtvSeries, { lineColor: CHART_BRAND, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartAppUsers, cumulativeSeries(appOpenByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartReferrals, cumulativeSeries(referralByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartVisits, appOpenByDay, { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartReviews, cumulativeSeries(reviewByDay), { lineColor: CHART_BRAND, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartDailyProcessing, revenueByDay, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartNetRevenue, revenueByDay, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartMRR, mrrSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartAppUserLTV, appUserLtvSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartClientLTV, clientLtvSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
+  drawLineChart(chartAppUsers, cumulativeSeries(appOpenByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartReferrals, cumulativeSeries(referralByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartVisits, appOpenByDay, { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartReviews, cumulativeSeries(reviewByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
 
   renderLiveFeed(auditRows);
   const sourceRows = renderRevenueSources(summary, memberships, state.analytics.revenueSources || []);
@@ -2125,7 +2110,7 @@ function renderMembers(members) {
   }
   membersBody.innerHTML = "";
   if (!members.length) {
-    membersBody.innerHTML = '<tr><td colspan="3">Noch keine Team-Mitglieder.</td></tr>';
+    membersBody.innerHTML = '<tr><td colspan="4">Noch keine Team-Mitglieder.</td></tr>';
     renderMetricsDashboard();
     return;
   }
@@ -2140,15 +2125,47 @@ function renderMembers(members) {
         label: member.role || "—",
         cls: "muted",
       };
-      return `<tr>
+      const isActive = member.active !== false;
+      const isStaff = String(member.role || "").toLowerCase() === "staff";
+      const rolePill = `<span class="status-pill ${role.cls}">${escapeHtml(role.label)}</span>`;
+      const statusPill = isActive ? "" : '<span class="status-pill danger">Deaktiviert</span>';
+      let action = "";
+      if (state.isOwner && isStaff) {
+        const next = isActive ? "false" : "true";
+        const label = isActive ? "Deaktivieren" : "Aktivieren";
+        const btnCls = isActive ? "member-action-btn" : "member-action-btn member-action-activate";
+        action = `<button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}">${label}</button>`;
+      }
+      return `<tr class="${isActive ? "" : "member-row-inactive"}">
         <td>${escapeHtml(member.fullName || "—")}</td>
         <td>${escapeHtml(member.email || "—")}</td>
-        <td><span class="status-pill ${role.cls}">${escapeHtml(role.label)}</span></td>
+        <td><span class="member-role-cell">${rolePill}${statusPill}</span></td>
+        <td class="col-action">${action}</td>
       </tr>`;
     })
     .join("");
   membersBody.innerHTML = rows;
   renderMetricsDashboard();
+}
+
+async function handleMemberAction(target) {
+  const button = target.closest("[data-member-action]");
+  if (!button) return;
+  const memberId = button.getAttribute("data-member-id");
+  const nextActive = button.getAttribute("data-next-active") === "true";
+  if (!memberId) return;
+  if (!nextActive && !window.confirm("Mitglied deaktivieren? Es kann sich danach nicht mehr anmelden.")) {
+    return;
+  }
+  button.disabled = true;
+  try {
+    await apiRequest(`/clinic/members/${memberId}`, { method: "PATCH", body: { active: nextActive } });
+    await loadMembers();
+    showToast(nextActive ? "Mitglied aktiviert" : "Mitglied deaktiviert");
+  } catch (error) {
+    button.disabled = false;
+    showToast(error.message || "Aktion fehlgeschlagen.");
+  }
 }
 
 const SUBSCRIPTION_STATUS_LABELS = {
@@ -2859,49 +2876,11 @@ async function saveCatalog() {
   }
 }
 
-async function maybeAdoptWebsiteBranding(websiteSync) {
-  const suggestedBranding = websiteSync?.suggestedBranding;
-  if (!suggestedBranding || typeof suggestedBranding !== "object") return;
-
-  const suggestedBrandColor = String(suggestedBranding.brandColor || "").trim();
-  const suggestedAccentColor = String(suggestedBranding.accentColor || "").trim();
-  const suggestedFontFamily = String(suggestedBranding.fontFamily || "").trim();
-  const currentBrandColor = String(settingsForm.elements.brandColor?.value || "").trim();
-  const currentFontFamily = String(settingsForm.elements.fontFamily?.value || "").trim();
-
-  const wantsWebsiteColor = Boolean(suggestedBrandColor)
-    && suggestedBrandColor.toLowerCase() !== currentBrandColor.toLowerCase()
-    && window.confirm("Möchtest du die Markenfarbe von der Website übernehmen?");
-  const wantsWebsiteFont = Boolean(suggestedFontFamily)
-    && suggestedFontFamily !== currentFontFamily
-    && window.confirm("Möchtest du die Schriftart von der Website übernehmen?");
-
-  if (!wantsWebsiteColor && !wantsWebsiteFont) {
-    return;
-  }
-
-  const followUpPayload = buildSettingsPayload({
-    syncWebsiteCatalog: false,
-    skipWebsiteImport: true,
-    useWebsiteBrandColor: false,
-    useWebsiteAccentColor: false,
-    useWebsiteFontFamily: false,
-  });
-
-  if (wantsWebsiteColor) {
-    followUpPayload.brandColor = suggestedBrandColor;
-    if (suggestedAccentColor) {
-      followUpPayload.accentColor = suggestedAccentColor;
-    }
-  }
-  if (wantsWebsiteFont) {
-    followUpPayload.fontFamily = suggestedFontFamily;
-  }
-
-  const response = await apiRequest("/clinic/settings", { method: "PUT", body: followUpPayload });
-  await Promise.all([loadSettings(), loadAuditLogs()]);
-  showToast("Website-Branding übernommen");
-  return response;
+async function maybeAdoptWebsiteBranding() {
+  // Brand color, accent and font are managed centrally in the Branding (App-Design)
+  // editor now, so the website-import flow no longer adopts them here. The catalog/
+  // treatment import still happens server-side during the settings save.
+  return;
 }
 
 function downloadJsonFile(filename, payload) {
@@ -3368,8 +3347,19 @@ function bindEvents() {
   registerForm.addEventListener("submit", handleRegister);
   logoutBtn.addEventListener("click", handleLogout);
   settingsForm.addEventListener("submit", handleSettingsSave);
-  syncColorFieldPair(settingsForm.elements.brandColor, brandColorPicker, "#16A34A");
-  syncColorFieldPair(settingsForm.elements.accentColor, accentColorPicker, "#EB6C13");
+  if (chartColorPicker instanceof HTMLInputElement) {
+    const applyChartColor = () => {
+      chartColor = chartColorPicker.value || CHART_BRAND;
+      if (chartColorControl) chartColorControl.style.setProperty("--chart-color", chartColor);
+      scheduleMetricsRender();
+    };
+    chartColorPicker.addEventListener("input", applyChartColor);
+    chartColorPicker.addEventListener("change", () => {
+      applyChartColor();
+      apiRequest("/clinic/chart-color", { method: "PUT", body: { chartColor } })
+        .catch((error) => showToast(error.message || "Diagrammfarbe konnte nicht gespeichert werden."));
+    });
+  }
   if (appearanceForm) {
     appearanceForm.addEventListener("input", (event) => {
       const target = event.target;
@@ -3398,6 +3388,12 @@ function bindEvents() {
   if (resetAppearanceBtn) resetAppearanceBtn.addEventListener("click", resetThemeDraftToPublished);
   if (resetDefaultAppearanceBtn) resetDefaultAppearanceBtn.addEventListener("click", resetThemeToDefault);
   memberForm.addEventListener("submit", handleCreateMember);
+  if (membersBody) {
+    membersBody.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      handleMemberAction(event.target).catch((error) => showToast(error.message));
+    });
+  }
   startCheckoutBtn.addEventListener("click", handleCheckoutStart);
   refreshMetricsBtn.addEventListener("click", () => {
     loadAnalyticsSummary().catch((error) => showToast(error.message));
