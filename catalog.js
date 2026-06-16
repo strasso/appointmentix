@@ -499,9 +499,12 @@ function packageTreatmentChecksHtml(selectedIds = []) {
   const orphans = [...selected].filter((id) => !known.has(id)).map((id) => ({ id, name: id }));
   const all = [...treatments, ...orphans];
   if (!all.length) return '<p class="empty">Erst Behandlungen anlegen, dann hier auswählen.</p>';
+  // Same toggle-pill design as the Body-Zonen in the treatment editor: hidden
+  // checkbox, whole pill toggles, selected = solid rose. The list is built from
+  // the clinic's own treatments, so it is never a fixed set of terms.
   return all
     .map(
-      (t) => `<label class="pack-check"><input type="checkbox" data-package-treatment value="${escapeAttr(t.id)}" ${selected.has(t.id) ? "checked" : ""}><span>${escapeAttr(t.name || t.id)}</span></label>`
+      (t) => `<label class="body-zone-chip ${selected.has(t.id) ? "active" : ""}"><input type="checkbox" data-package-treatment value="${escapeAttr(t.id)}" ${selected.has(t.id) ? "checked" : ""}><span>${escapeAttr(t.name || t.id)}</span></label>`
     )
     .join("");
 }
@@ -539,7 +542,7 @@ function packageCard(item = {}) {
       </label>
       <div>
         <label>Inkludierte Behandlungen</label>
-        <div class="pack-checks">${packageTreatmentChecksHtml(item.includedTreatmentIds)}</div>
+        <div class="body-zone-picker">${packageTreatmentChecksHtml(item.includedTreatmentIds)}</div>
       </div>
       ${imageFieldHtml(item)}
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>

@@ -75,13 +75,42 @@
           </div>
           <div id="treatmentsList" class="cards"></div>
         </article>
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Startseiten-Beiträge</h2>
-            <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Beitrag</button>
-          </div>
-          <div id="homeArticlesList" class="cards"></div>
-        </article>
+
+        <div class="extra-section">
+          <h2 class="extra-heading">Weitere App-Inhalte</h2>
+          <article class="card editor-block">
+            <div class="section-head">
+              <h2>Medienbibliothek</h2>
+              <div class="topbar-actions">
+                <input id="mediaUploadInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+                <button id="mediaUploadBtn" class="btn ghost" type="button">Bild hochladen</button>
+                <button id="refreshMediaBtn" class="btn ghost" type="button">Aktualisieren</button>
+              </div>
+            </div>
+            <div id="mediaGrid" class="media-grid"></div>
+          </article>
+          <article class="card editor-block">
+            <div class="section-head">
+              <h2>Prämien sammeln</h2>
+              <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
+            </div>
+            <div id="rewardActionsList" class="cards"></div>
+          </article>
+          <article class="card editor-block">
+            <div class="section-head">
+              <h2>Prämien einlösen</h2>
+              <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Prämie</button>
+            </div>
+            <div id="rewardRedeemsList" class="cards"></div>
+          </article>
+          <article class="card editor-block">
+            <div class="section-head">
+              <h2>Startseiten-Beiträge</h2>
+              <button id="addHomeArticleBtn" class="btn ghost" type="button">+ Beitrag</button>
+            </div>
+            <div id="homeArticlesList" class="cards"></div>
+          </article>
+        </div>
       </div>
 
       <div class="shop-panel hidden" data-shop-panel="pakete">
@@ -114,36 +143,6 @@
         </article>
       </div>
 
-      <article class="card editor-block">
-        <div class="section-head">
-          <h2>Medienbibliothek</h2>
-          <div class="topbar-actions">
-            <input id="mediaUploadInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-            <button id="mediaUploadBtn" class="btn ghost" type="button">Bild hochladen</button>
-            <button id="refreshMediaBtn" class="btn ghost" type="button">Aktualisieren</button>
-          </div>
-        </div>
-        <div id="mediaGrid" class="media-grid"></div>
-      </article>
-
-      <!-- Weitere App-Inhalte: gehören nicht in den Shop, aber in die App. -->
-      <div class="extra-section">
-        <h2 class="extra-heading">Weitere App-Inhalte</h2>
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Prämien sammeln</h2>
-            <button id="addRewardActionBtn" class="btn ghost" type="button">+ Aktion</button>
-          </div>
-          <div id="rewardActionsList" class="cards"></div>
-        </article>
-        <article class="card editor-block">
-          <div class="section-head">
-            <h2>Prämien einlösen</h2>
-            <button id="addRewardRedeemBtn" class="btn ghost" type="button">+ Prämie</button>
-          </div>
-          <div id="rewardRedeemsList" class="cards"></div>
-        </article>
-      </div>
     </section>
 
     <div id="toast" class="toast"></div>
