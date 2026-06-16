@@ -953,17 +953,20 @@ async function init() {
     document.addEventListener("pointercancel", end);
     window.addEventListener("blur", end);
   });
-  addCategoryBtn.addEventListener("click", () => appendCard(categoriesList, categoryCard({})));
-  addTreatmentBtn.addEventListener("click", () => {
-    const card = appendCard(treatmentsList, treatmentCard({}), true);
-    card?.querySelector('input[data-field="name"]')?.focus();
-  });
-  addMembershipBtn.addEventListener("click", () => appendCard(membershipsList, membershipCard({})));
-  addRewardActionBtn.addEventListener("click", () => appendCard(rewardActionsList, rewardActionCard({})));
-  addRewardRedeemBtn.addEventListener("click", () => appendCard(rewardRedeemsList, rewardRedeemCard({})));
-  addHomeArticleBtn.addEventListener("click", () => appendCard(homeArticlesList, homeArticleCard({})));
-  if (addPackageBtn) addPackageBtn.addEventListener("click", () => appendCard(packagesList, packageCard({ id: genId("pkg") })));
-  if (addProductBtn) addProductBtn.addEventListener("click", () => appendCard(productsList, productCard({ id: genId("prod") })));
+  // All "+ add" buttons insert the new entry at the top (and focus its first
+  // field) so you never have to scroll to the bottom of a long list.
+  const addAtTop = (container, html, focusSel = 'input[data-field="name"]') => {
+    const card = appendCard(container, html, true);
+    card?.querySelector(focusSel)?.focus();
+  };
+  addCategoryBtn.addEventListener("click", () => addAtTop(categoriesList, categoryCard({}), 'input[data-field="label"]'));
+  addTreatmentBtn.addEventListener("click", () => addAtTop(treatmentsList, treatmentCard({})));
+  addMembershipBtn.addEventListener("click", () => addAtTop(membershipsList, membershipCard({})));
+  addRewardActionBtn.addEventListener("click", () => addAtTop(rewardActionsList, rewardActionCard({}), 'input[data-field="label"]'));
+  addRewardRedeemBtn.addEventListener("click", () => addAtTop(rewardRedeemsList, rewardRedeemCard({}), 'input[data-field="label"]'));
+  addHomeArticleBtn.addEventListener("click", () => addAtTop(homeArticlesList, homeArticleCard({}), 'input[data-field="title"]'));
+  if (addPackageBtn) addPackageBtn.addEventListener("click", () => addAtTop(packagesList, packageCard({ id: genId("pkg") })));
+  if (addProductBtn) addProductBtn.addEventListener("click", () => addAtTop(productsList, productCard({ id: genId("prod") })));
 
   // Shop-Bereich-Umschalter (Treatments / Pakete / Mitgliedschaften / Produkte)
   const shopNav = document.getElementById("shopNav");
