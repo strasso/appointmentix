@@ -773,12 +773,13 @@ function disableEditor(disabled) {
   });
 }
 
-function appendCard(container, html) {
+function appendCard(container, html, prepend = false) {
   const emptyNode = container.querySelector(".empty");
   if (emptyNode) {
     emptyNode.remove();
   }
-  container.insertAdjacentHTML("beforeend", html);
+  container.insertAdjacentHTML(prepend ? "afterbegin" : "beforeend", html);
+  return prepend ? container.firstElementChild : container.lastElementChild;
 }
 
 async function handleSave() {
@@ -953,7 +954,10 @@ async function init() {
     window.addEventListener("blur", end);
   });
   addCategoryBtn.addEventListener("click", () => appendCard(categoriesList, categoryCard({})));
-  addTreatmentBtn.addEventListener("click", () => appendCard(treatmentsList, treatmentCard({})));
+  addTreatmentBtn.addEventListener("click", () => {
+    const card = appendCard(treatmentsList, treatmentCard({}), true);
+    card?.querySelector('input[data-field="name"]')?.focus();
+  });
   addMembershipBtn.addEventListener("click", () => appendCard(membershipsList, membershipCard({})));
   addRewardActionBtn.addEventListener("click", () => appendCard(rewardActionsList, rewardActionCard({})));
   addRewardRedeemBtn.addEventListener("click", () => appendCard(rewardRedeemsList, rewardRedeemCard({})));
