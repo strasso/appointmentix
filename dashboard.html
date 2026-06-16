@@ -869,6 +869,14 @@
               <label>Calendly URL
                 <input name="calendlyUrl" type="text" placeholder="https://calendly.com/...">
               </label>
+              <label>Benachrichtigungs-E-Mail
+                <input name="notifyEmail" type="email" placeholder="team@deine-klinik.de">
+                <span class="field-hint">Hierhin geht die E-Mail, wenn ein:e Kund:in in der App bucht oder kauft. Leer = Inhaber-E-Mail.</span>
+              </label>
+              <label>Slack Webhook URL (optional)
+                <input name="slackWebhookUrl" type="text" placeholder="https://hooks.slack.com/services/...">
+                <span class="field-hint">Optional: schickt zusätzlich eine Nachricht in deinen Slack-Channel.</span>
+              </label>
               <button id="saveSettingsBtn" class="btn primary" type="submit">Einstellungen speichern</button>
             </form>
           </article>

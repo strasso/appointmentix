@@ -1448,6 +1448,8 @@ def init_db() -> None:
         "email": "TEXT",
         "import_source_url": "TEXT",
         "imported_at": "TEXT",
+        "notify_email": "TEXT NOT NULL DEFAULT ''",
+        "slack_webhook_url": "TEXT NOT NULL DEFAULT ''",
       },
     )
 
@@ -1855,6 +1857,8 @@ def get_clinic_row_by_id(clinic_id: int | None):
         subscription_status,
         stripe_customer_id,
         stripe_subscription_id,
+        notify_email,
+        slack_webhook_url,
         created_at
       FROM clinics
       WHERE id = ?
@@ -4894,6 +4898,99 @@ def insert_campaign_delivery(
         serialize_event_metadata(metadata or {}),
       ),
     )
+
+
+def _row_get(row, key, default=""):
+  try:
+    value = row[key]
+  except (KeyError, IndexError, TypeError):
+    return default
+  return value if value is not None else default
+
+
+def get_clinic_owner_email(clinic_id: int) -> str:
+  try:
+    with get_db() as conn:
+      row = conn.execute(
+        "SELECT email FROM users WHERE clinic_id = ? AND role = 'owner' ORDER BY id ASC LIMIT 1",
+        (clinic_id,),
+      ).fetchone()
+    return str(row["email"]).strip() if row and row["email"] else ""
+  except Exception:
+    return ""
+
+
+def send_slack_webhook(webhook_url: str, text: str) -> dict:
+  url = str(webhook_url or "").strip()
+  if not url.lower().startswith("https://"):
+    return {"status": "skipped", "error": "Kein Slack-Webhook konfiguriert"}
+  try:
+    response = requests.post(url, json={"text": text}, timeout=10)
+    if response.status_code >= 400:
+      return {"status": "failed", "error": f"Slack HTTP {response.status_code}"}
+    return {"status": "sent", "error": ""}
+  except Exception as exc:
+    return {"status": "failed", "error": str(exc)}
+
+
+def notify_clinic_of_checkout(
+  clinic_row,
+  *,
+  patient_name: str,
+  line_items: list[dict],
+  created_appointments: list[dict],
+  total_cents: int,
+  order_id: str,
+  payment_status: str,
+) -> dict:
+  """Notify the clinic team when a customer books/buys in the app.
+  Best-effort: any failure is swallowed so it never blocks a checkout."""
+  clinic_id = int(clinic_row["id"])
+  fresh = get_clinic_row_by_id(clinic_id) or clinic_row
+  clinic_name = str(_row_get(fresh, "name") or "deine Klinik").strip()
+
+  recipient = str(_row_get(fresh, "notify_email")).strip()
+  if "@" not in recipient:
+    recipient = get_clinic_owner_email(clinic_id)
+  slack_url = str(_row_get(fresh, "slack_webhook_url")).strip()
+  if not recipient and not slack_url:
+    return {"status": "skipped"}
+
+  has_appts = bool(created_appointments)
+  customer = sanitize_patient_name(patient_name) or "Eine Kundin / ein Kunde"
+  total_eur = f"{(int(total_cents or 0) / 100):.2f}".replace(".", ",")
+
+  def _when(iso_value):
+    parsed = parse_datetime_utc(iso_value) if iso_value else None
+    return parsed.strftime("%d.%m.%Y · %H:%M") if parsed else ""
+
+  item_lines = []
+  for item in line_items or []:
+    name = str(item.get("name") or item.get("treatmentId") or "Position").strip()
+    units = max(1, int(item.get("units") or 1))
+    when = _when(item.get("startsAt") or item.get("scheduledAt") or item.get("appointmentAt"))
+    label = name + (f" ×{units}" if units > 1 else "") + (f" — {when}" if when else "")
+    item_lines.append(f"• {label}")
+
+  action = "einen Termin gebucht" if has_appts else "etwas gekauft"
+  subject = f"Neue Buchung bei {clinic_name}: {customer}"
+  body_lines = [
+    f"{customer} hat über die Curabo-App {action}:",
+    "",
+    *(item_lines or ["• (keine Positionen)"]),
+    "",
+    f"Gesamt: {total_eur} €",
+    f"Zahlung: {payment_status}",
+    f"Bestell-Nr.: {order_id}",
+  ]
+  body = "\n".join(body_lines)
+
+  result = {"status": "sent", "email": None, "slack": None}
+  if recipient and "@" in recipient:
+    result["email"] = send_email_via_resend(recipient, subject, body.replace("\n", "<br>"))
+  if slack_url:
+    result["slack"] = send_slack_webhook(slack_url, f"*{subject}*\n{body}")
+  return result
 
 
 def deliver_campaign_message(clinic_name: str, channel: str, title: str, body: str, profile: dict) -> dict:
@@ -9100,6 +9197,20 @@ def fulfill_mobile_checkout(
         payment_status=resolved_payment_status,
       )
 
+  # Notify the clinic team about the booking/purchase (best-effort).
+  try:
+    notify_clinic_of_checkout(
+      clinic_row,
+      patient_name=patient_name,
+      line_items=line_items,
+      created_appointments=created_appointments,
+      total_cents=total_cents,
+      order_id=resolved_order_id,
+      payment_status=resolved_payment_status,
+    )
+  except Exception:
+    app.logger.warning("Clinic checkout notification failed", exc_info=True)
+
   return build_mobile_checkout_result_payload(
     clinic_row=clinic_row,
     patient_email=patient_email,
@@ -10658,6 +10769,8 @@ def clinic_settings():
       "fontFamily": clinic_row["font_family"],
       "designPreset": clinic_row["design_preset"],
       "calendlyUrl": clinic_row["calendly_url"],
+      "notifyEmail": clinic_row["notify_email"],
+      "slackWebhookUrl": clinic_row["slack_webhook_url"],
     }
   else:
     settings_payload = {
@@ -10669,6 +10782,8 @@ def clinic_settings():
       "fontFamily": user_row["font_family"],
       "designPreset": user_row["design_preset"],
       "calendlyUrl": user_row["calendly_url"],
+      "notifyEmail": "",
+      "slackWebhookUrl": "",
     }
 
   return jsonify(
@@ -10714,6 +10829,18 @@ def update_clinic_settings():
       safe_public_text(clinic_row["calendly_url"], CALENDLY_URL),
     )
   )
+  # Present key (even empty) overwrites; absent key keeps the stored value — so
+  # these can also be cleared.
+  if "notifyEmail" in payload:
+    notify_email = safe_public_text(payload.get("notifyEmail"), "")[:180]
+  else:
+    notify_email = safe_public_text(clinic_row["notify_email"], "")[:180]
+  if "slackWebhookUrl" in payload:
+    slack_webhook_url = safe_public_text(payload.get("slackWebhookUrl"), "")[:300]
+  else:
+    slack_webhook_url = safe_public_text(clinic_row["slack_webhook_url"], "")[:300]
+  if slack_webhook_url and not slack_webhook_url.lower().startswith("https://"):
+    return jsonify({"error": "Slack-Webhook-URL muss mit https:// beginnen."}), 400
   sync_website_catalog = bool(website) and parse_bool_flag(payload.get("syncWebsiteCatalog"), True)
   skip_website_import = parse_bool_flag(payload.get("skipWebsiteImport"), False)
   use_website_brand_color = parse_bool_flag(payload.get("useWebsiteBrandColor"), False)
@@ -10759,7 +10886,9 @@ def update_clinic_settings():
         accent_color = ?,
         font_family = ?,
         design_preset = ?,
-        calendly_url = ?
+        calendly_url = ?,
+        notify_email = ?,
+        slack_webhook_url = ?
       WHERE id = ?
       """,
       (
@@ -10771,6 +10900,8 @@ def update_clinic_settings():
         font_family,
         design_preset,
         calendly_url,
+        notify_email,
+        slack_webhook_url,
         clinic_id,
       ),
     )

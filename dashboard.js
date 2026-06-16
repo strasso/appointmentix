@@ -927,6 +927,12 @@ function fillSettingsForm(settings) {
     settingsForm.elements.designPreset.value = settings.designPreset || "clean";
   }
   settingsForm.elements.calendlyUrl.value = settings.calendlyUrl || "";
+  if (settingsForm.elements.notifyEmail) {
+    settingsForm.elements.notifyEmail.value = settings.notifyEmail || "";
+  }
+  if (settingsForm.elements.slackWebhookUrl) {
+    settingsForm.elements.slackWebhookUrl.value = settings.slackWebhookUrl || "";
+  }
   if (brandColorPicker instanceof HTMLInputElement) {
     brandColorPicker.value = normalizeHexColorForUi(settings.brandColor, "#16A34A");
   }
