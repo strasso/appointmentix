@@ -954,19 +954,33 @@ async function init() {
     window.addEventListener("blur", end);
   });
   // All "+ add" buttons insert the new entry at the top (and focus its first
-  // field) so you never have to scroll to the bottom of a long list.
-  const addAtTop = (container, html, focusSel = 'input[data-field="name"]') => {
-    const card = appendCard(container, html, true);
-    card?.querySelector(focusSel)?.focus();
+  // field) with subtle interaction feedback: a tiny haptic tap, a button pop,
+  // and a gentle enter animation on the new card. (Animations auto-disable
+  // under prefers-reduced-motion via the global media query.)
+  const haptics = (ms = 10) => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (_) {} };
+  const popButton = (btn) => {
+    if (!btn) return;
+    btn.classList.remove("btn-pop");
+    void btn.offsetWidth; // restart the animation if clicked again quickly
+    btn.classList.add("btn-pop");
   };
-  addCategoryBtn.addEventListener("click", () => addAtTop(categoriesList, categoryCard({}), 'input[data-field="label"]'));
-  addTreatmentBtn.addEventListener("click", () => addAtTop(treatmentsList, treatmentCard({})));
-  addMembershipBtn.addEventListener("click", () => addAtTop(membershipsList, membershipCard({})));
-  addRewardActionBtn.addEventListener("click", () => addAtTop(rewardActionsList, rewardActionCard({}), 'input[data-field="label"]'));
-  addRewardRedeemBtn.addEventListener("click", () => addAtTop(rewardRedeemsList, rewardRedeemCard({}), 'input[data-field="label"]'));
-  addHomeArticleBtn.addEventListener("click", () => addAtTop(homeArticlesList, homeArticleCard({}), 'input[data-field="title"]'));
-  if (addPackageBtn) addPackageBtn.addEventListener("click", () => addAtTop(packagesList, packageCard({ id: genId("pkg") })));
-  if (addProductBtn) addProductBtn.addEventListener("click", () => addAtTop(productsList, productCard({ id: genId("prod") })));
+  const addAtTop = (btn, container, html, focusSel = 'input[data-field="name"]') => {
+    haptics();
+    popButton(btn);
+    const card = appendCard(container, html, true);
+    if (!card) return;
+    card.classList.add("card-enter");
+    card.addEventListener("animationend", () => card.classList.remove("card-enter"), { once: true });
+    card.querySelector(focusSel)?.focus();
+  };
+  addCategoryBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, categoriesList, categoryCard({}), 'input[data-field="label"]'));
+  addTreatmentBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, treatmentsList, treatmentCard({})));
+  addMembershipBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, membershipsList, membershipCard({})));
+  addRewardActionBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, rewardActionsList, rewardActionCard({}), 'input[data-field="label"]'));
+  addRewardRedeemBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, rewardRedeemsList, rewardRedeemCard({}), 'input[data-field="label"]'));
+  addHomeArticleBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, homeArticlesList, homeArticleCard({}), 'input[data-field="title"]'));
+  if (addPackageBtn) addPackageBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, packagesList, packageCard({ id: genId("pkg") })));
+  if (addProductBtn) addProductBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, productsList, productCard({ id: genId("prod") })));
 
   // Shop-Bereich-Umschalter (Treatments / Pakete / Mitgliedschaften / Produkte)
   const shopNav = document.getElementById("shopNav");
