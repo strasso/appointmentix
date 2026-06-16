@@ -7,8 +7,13 @@ Infrastruktur drumherum.
 ## Was wohin
 - **Vertriebs-Website (curabo.app)** → bleibt bei united-domains (PHP-Webspace reicht dafür).
 - **App-Backend (dieses Repo, Python/Flask)** → **eigener Server**. united-domains-Webspace
-  kann das NICHT (kein Python-Daemon, kein Postgres). Empfohlen:
-  - **Hetzner Cloud** (EU/DE, DSGVO, günstig): CX22 ~€4–6/Mon. *(empfohlen)*
+  kann das NICHT (kein Python-Daemon, kein Postgres). Optionen:
+  - **Hetzner Cloud** (EU/DE, DSGVO): CX22 ~€4–6/Mon. *(empfohlen für stabiles Live-Business —
+    vorhersehbar, simpel.)*
+  - **Oracle Cloud (OCI) Always Free**: ARM A1 bis 4 vCPU / 24 GB / 200 GB Storage = **€0**,
+    Region Frankfurt für EU. *(billigste Option; Haken: A1-Kapazität oft "out of capacity"
+    beim Anlegen, Oracle reklamiert Gratis-Accounts gelegentlich → gut für Pilot, fürs
+    Business riskanter. Keine Gratis-Postgres → Postgres selbst auf der VM.)*
   - Alternativ Render / Fly.io / Railway in einer **EU-Region** (Procfile wird direkt genutzt).
 
 ## 1. Datenbank: SQLite → Postgres
