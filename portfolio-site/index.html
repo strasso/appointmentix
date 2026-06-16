@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valentin Strasser | Portfolio</title>
+  <meta name="description" content="Portfolio-Lebenslauf von Valentin Strasser mit Projekten aus Film, Sound und visueller Gestaltung.">
+  <meta name="theme-color" content="#111215">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#top" aria-label="Zur Startseite springen">
+        <span class="brand-mark"></span>
+        <span>Valentin Strasser</span>
+      </a>
+
+      <nav class="nav">
+        <a href="#portfolio">Projekte</a>
+        <a href="#experience">Praxis</a>
+        <a href="#education">Ausbildung</a>
+        <a href="#contact">Kontakt</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero section">
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Portfolio Lebenslauf</p>
+          <h1>Film, Sound und visuelles Erzählen mit Fokus auf Atmosphäre, Rhythmus und Produktion.</h1>
+          <p class="hero-text">
+            Ich arbeite an Projekten zwischen Stop Motion, Dokumentation, Sound Design, Pilotfilm und Installation.
+            Mein Schwerpunkt liegt auf Arbeiten, in denen Bild, Ton und dramaturgische Wirkung präzise zusammenspielen.
+          </p>
+
+          <div class="hero-meta">
+            <div class="meta-card">
+              <span class="meta-label">Standort</span>
+              <strong>Seiersberg-Pirka / Graz</strong>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Fokus</span>
+              <strong>Film, Audio, visuelle Konzepte</strong>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Ausbildung</span>
+              <strong>HTBLVA Ortweinschule, Film & Multimediaart</strong>
+            </div>
+          </div>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#portfolio">Projekte ansehen</a>
+            <a class="button button-secondary" href="#contact">Kontakt</a>
+          </div>
+        </div>
+
+        <div class="portrait-card reveal reveal-delay">
+          <div class="portrait-frame">
+            <img src="assets/valentin-portrait-web.jpg" alt="Portrait von Valentin Strasser">
+          </div>
+          <div class="portrait-caption">
+            <span class="caption-label">Aktuell</span>
+            <p>Portfolio-Auszug mit ausgewählten Arbeiten aus Film, Ton und Projektpraxis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section intro-strip">
+      <div class="container intro-grid">
+        <article class="intro-card reveal">
+          <span class="card-kicker">Positionierung</span>
+          <h2>Kein klassischer Skill-Block, sondern eine klare Arbeitsprobe.</h2>
+          <p>
+            Diese Seite ist bewusst als Portfolio-Lebenslauf aufgebaut: weniger allgemeine Buzzwords,
+            mehr konkrete Arbeiten, echte Produktionen und nachvollziehbare Praxisstationen.
+          </p>
+        </article>
+        <article class="intro-card reveal reveal-delay">
+          <span class="card-kicker">Schwerpunkte</span>
+          <p class="focus-list">
+            Sound Design und Audio für narrative Formate, Projektarbeit im Filmkontext,
+            dokumentarische Stoffe, Pilotprojekte und visuelle Formate mit räumlicher Wirkung.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="portfolio" class="section">
+      <div class="container">
+        <div class="section-head reveal">
+          <p class="eyebrow">Ausgewählte Projekte</p>
+          <h2>Projekte zwischen Film, Dokumentation, Audio und Installation</h2>
+          <p>
+            Die Auswahl bündelt deine aktuellen Arbeiten und ersetzt die früheren allgemeinen
+            Berufsstationen durch konkrete Produktionen und Rollen.
+          </p>
+        </div>
+
+        <div class="filters reveal reveal-delay" id="projectFilters" role="tablist" aria-label="Projektfilter">
+          <button class="filter-chip active" type="button" data-filter="all">Alle</button>
+          <button class="filter-chip" type="button" data-filter="film">Film</button>
+          <button class="filter-chip" type="button" data-filter="audio">Audio</button>
+          <button class="filter-chip" type="button" data-filter="doku">Dokumentation</button>
+          <button class="filter-chip" type="button" data-filter="installation">Installation</button>
+        </div>
+
+        <div class="project-grid" id="projectGrid"></div>
+      </div>
+    </section>
+
+    <section id="experience" class="section section-contrast">
+      <div class="container experience-grid">
+        <div class="section-head reveal">
+          <p class="eyebrow">Praxis</p>
+          <h2>Praktische Erfahrung, die im Portfolio-Lebenslauf relevant bleibt</h2>
+          <p>
+            Die frühere Business-Schiene ist bewusst rausgenommen. Übrig bleiben die Stationen,
+            die deinen filmischen und redaktionellen Weg tatsächlich stützen.
+          </p>
+        </div>
+
+        <div class="timeline" id="experienceTimeline"></div>
+      </div>
+    </section>
+
+    <section id="education" class="section">
+      <div class="container education-grid">
+        <div class="section-head reveal">
+          <p class="eyebrow">Ausbildung</p>
+          <h2>Schulischer Rahmen und fachlicher Kontext</h2>
+        </div>
+
+        <div class="education-card reveal reveal-delay">
+          <div class="education-year">seit 09/2021</div>
+          <div class="education-copy">
+            <h3>HTBLVA Ortweinschule Graz</h3>
+            <p>Film & Multimediaart, voraussichtlicher Abschluss Juni 2026</p>
+          </div>
+        </div>
+
+        <div class="education-card reveal">
+          <div class="education-year">2016 – 2021</div>
+          <div class="education-copy">
+            <h3>BG/BRG/MG 3hacken, Graz</h3>
+            <p>Musikzweig als Grundlage für musikalisches Arbeiten, Rhythmus und klangliches Verständnis.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact" class="section contact-section">
+      <div class="container contact-card reveal">
+        <div>
+          <p class="eyebrow">Kontakt</p>
+          <h2>Offen für Film-, Audio- und Projektarbeit.</h2>
+          <p>
+            Wenn du ein Portfolio brauchst, das Projekte klar erzählt statt nur Stationen aufzulisten,
+            ist diese Seite genau dafür gebaut.
+          </p>
+        </div>
+
+        <div class="contact-links">
+          <a href="mailto:office@valentinstrasser.com">office@valentinstrasser.com</a>
+          <a href="tel:+436642355835">0664 / 2355835</a>
+          <span>8055 Seiersberg-Pirka, Österreich</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

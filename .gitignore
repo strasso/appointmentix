@@ -7,3 +7,5 @@ clinicflow.db
 .DS_Store
 uploads/
 assets/app-icons/_originals/
+.claude/
+_devlogin.html

@@ -1,0 +1,184 @@
+%PDF-1.4
+%âãÏÓ
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 2644 >>
+stream
+BT /F2 22 Tf 52.00 783.89 Td (Curabo Dev Update) Tj ET
+BT /F1 10.5 Tf 52.00 737.89 Td (Stand: 30. März 2026) Tj ET
+BT /F2 14 Tf 52.00 713.89 Td (Source of Truth) Tj ET
+BT /F1 10.5 Tf 52.00 684.89 Td (- Hauptrepo: `/Users/valentinstrasser/Documents/New project`) Tj ET
+BT /F1 10.5 Tf 52.00 669.89 Td (- Mobile-App: `/Users/valentinstrasser/Documents/New project/mobile`) Tj ET
+BT /F2 14 Tf 52.00 645.89 Td (Kurzüberblick) Tj ET
+BT /F1 10.5 Tf 52.00 616.89 Td (Curabo ist eine White-Label Plattform für MedSpas und Kliniken im DACH-Markt.) Tj ET
+BT /F1 10.5 Tf 52.00 601.89 Td (Das Produkt besteht aus:) Tj ET
+BT /F1 10.5 Tf 52.00 577.89 Td (- Website) Tj ET
+BT /F1 10.5 Tf 52.00 562.89 Td (- Dashboard für Kliniken) Tj ET
+BT /F1 10.5 Tf 52.00 547.89 Td (- Admin/Superadmin) Tj ET
+BT /F1 10.5 Tf 52.00 532.89 Td (- Mobile Patienten-App) Tj ET
+BT /F1 10.5 Tf 52.00 517.89 Td (- Backend mit Multi-Tenant-Logik) Tj ET
+BT /F1 10.5 Tf 52.00 493.89 Td (Der aktuelle Hauptfokus liegt auf der Mobile-App und der möglichst exakten Übernahme) Tj ET
+BT /F1 10.5 Tf 52.00 478.89 Td (der Mowgli-UI in die bestehende Curabo-App, ohne den vorhandenen Datenfluss, die) Tj ET
+BT /F1 10.5 Tf 52.00 463.89 Td (Kliniklogik, OTP, Cart, Checkout, Rewards und White-Label-Mechanik zu zerstören.) Tj ET
+BT /F2 14 Tf 52.00 439.89 Td (Mobile Status) Tj ET
+BT /F1 10.5 Tf 52.00 410.89 Td (Die Mobile-App basiert weiterhin auf Curabo-Logik und Curabo-Backendschnittstellen,) Tj ET
+BT /F1 10.5 Tf 52.00 395.89 Td (aber die UI wird screenweise auf den exportierten Mowgli-Stand gezogen.) Tj ET
+BT /F1 10.5 Tf 52.00 371.89 Td (Bereits umgesetzt bzw. stark angeglichen:) Tj ET
+BT /F1 10.5 Tf 52.00 347.89 Td (- Onboarding / Klinik-Auswahl) Tj ET
+BT /F1 10.5 Tf 52.00 332.89 Td (- Auth / OTP-Einstieg) Tj ET
+BT /F1 10.5 Tf 52.00 317.89 Td (- Home) Tj ET
+BT /F1 10.5 Tf 52.00 302.89 Td (- Shop) Tj ET
+BT /F1 10.5 Tf 52.00 287.89 Td (- Rewards) Tj ET
+BT /F1 10.5 Tf 52.00 272.89 Td (- Profil) Tj ET
+BT /F1 10.5 Tf 52.00 257.89 Td (- Bottom Navigation) Tj ET
+BT /F1 10.5 Tf 52.00 233.89 Td (Noch offen bzw. noch nicht final 1:1:) Tj ET
+BT /F1 10.5 Tf 52.00 209.89 Td (- Scan) Tj ET
+BT /F1 10.5 Tf 52.00 194.89 Td (- Search Overlay) Tj ET
+BT /F1 10.5 Tf 52.00 179.89 Td (- Cart Overlay) Tj ET
+BT /F1 10.5 Tf 52.00 164.89 Td (- letzte Shared-Shell-Differenzen in `mobile/App.js`) Tj ET
+BT /F1 10.5 Tf 52.00 149.89 Td (- Theme-Feinschliff für klinikspezifische Brandingfarben) Tj ET
+BT /F2 14 Tf 52.00 125.89 Td (Mowgli-Referenz) Tj ET
+BT /F1 10.5 Tf 52.00 96.89 Td (Der visuelle Referenzstand liegt im Repo unter:) Tj ET
+BT /F1 10.5 Tf 52.00 72.89 Td (- `mobile/_mowgli_export`) Tj ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Length 2979 >>
+stream
+BT /F1 10.5 Tf 52.00 774.89 Td (Die offizielle Zuordnung zwischen Mowgli und produktiver Curabo-App liegt hier:) Tj ET
+BT /F1 10.5 Tf 52.00 750.89 Td (- `mobile/MOWGLI_UI_ADOPTION.md`) Tj ET
+BT /F1 10.5 Tf 52.00 726.89 Td (Wichtig:) Tj ET
+BT /F1 10.5 Tf 52.00 702.89 Td (- Mowgli ist die UI-Referenz) Tj ET
+BT /F1 10.5 Tf 52.00 687.89 Td (- Curabo bleibt Source of Truth für Logik, APIs, Datenmodelle und Tenant-Verhalten) Tj ET
+BT /F1 10.5 Tf 52.00 672.89 Td (- Ziel ist keine lose Inspiration, sondern eine möglichst exakte UI-Übernahme auf) Tj ET
+BT /F1 10.5 Tf 52.00 657.89 Td (  die bestehende App) Tj ET
+BT /F2 14 Tf 52.00 633.89 Td (Letzte relevante Commits) Tj ET
+BT /F1 10.5 Tf 52.00 604.89 Td (- `231380b` Pull mobile UI closer to exact Mowgli shell) Tj ET
+BT /F1 10.5 Tf 52.00 589.89 Td (- `cd99cf0` Port core mobile screens to exact Mowgli layout) Tj ET
+BT /F1 10.5 Tf 52.00 574.89 Td (- `eeb21d7` Restore Mowgli structure on core mobile screens) Tj ET
+BT /F1 10.5 Tf 52.00 559.89 Td (- `cbd0e43` Normalize Mowgli mobile theme behavior) Tj ET
+BT /F1 10.5 Tf 52.00 544.89 Td (- `5c931f1` Remove scalp article image fallback) Tj ET
+BT /F2 14 Tf 52.00 520.89 Td (Backend / Plattform) Tj ET
+BT /F1 10.5 Tf 52.00 491.89 Td (Das Backend in `server.py` bleibt zentral für:) Tj ET
+BT /F1 10.5 Tf 52.00 467.89 Td (- Klinik-Bundle pro MedSpa) Tj ET
+BT /F1 10.5 Tf 52.00 452.89 Td (- Kliniksuche) Tj ET
+BT /F1 10.5 Tf 52.00 437.89 Td (- QR-/Referral-Code-Auflösung) Tj ET
+BT /F1 10.5 Tf 52.00 422.89 Td (- OTP Request / Verify / Resend) Tj ET
+BT /F1 10.5 Tf 52.00 407.89 Td (- Membership Status / Activate / Cancel) Tj ET
+BT /F1 10.5 Tf 52.00 392.89 Td (- serverseitige Cart- und Checkout-Logik) Tj ET
+BT /F1 10.5 Tf 52.00 377.89 Td (- Dashboard-, Catalog- und Admin-Daten) Tj ET
+BT /F1 10.5 Tf 52.00 353.89 Td (Render, Postgres und die Hauptinfrastruktur sind bereits eingerichtet.) Tj ET
+BT /F1 10.5 Tf 52.00 338.89 Td (OTP/SMS ist noch nicht final als produktiver Go-Live-Stand abgeschlossen.) Tj ET
+BT /F2 14 Tf 52.00 314.89 Td (Dashboard / Admin / Catalog) Tj ET
+BT /F1 10.5 Tf 52.00 285.89 Td (Die Desktop-Flächen existieren bereits:) Tj ET
+BT /F1 10.5 Tf 52.00 261.89 Td (- `dashboard.html`, `dashboard.css`, `dashboard.js`) Tj ET
+BT /F1 10.5 Tf 52.00 246.89 Td (- `admin.html`, `admin.css`, `admin.js`) Tj ET
+BT /F1 10.5 Tf 52.00 231.89 Td (- `catalog.html`, `catalog.css`, `catalog.js`) Tj ET
+BT /F1 10.5 Tf 52.00 207.89 Td (Der sinnvolle Parallel-Track zur Mobile-Mowgli-Arbeit ist:) Tj ET
+BT /F1 10.5 Tf 52.00 183.89 Td (- Dashboard/Admin/Catalog separat weiterentwickeln) Tj ET
+BT /F1 10.5 Tf 52.00 168.89 Td (- Backend nur in klar abgegrenzten Scopes anfassen) Tj ET
+BT /F1 10.5 Tf 52.00 153.89 Td (- `server.py` nicht gleichzeitig von zwei Tracks ohne Scope-Trennung bearbeiten) Tj ET
+BT /F2 14 Tf 52.00 129.89 Td (Smart Parallelisierung) Tj ET
+BT /F1 10.5 Tf 52.00 100.89 Td (Saubere Aufteilung:) Tj ET
+BT /F2 12 Tf 52.00 76.89 Td (Track A: Mobile / Mowgli) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 2657 >>
+stream
+BT /F1 10.5 Tf 52.00 774.89 Td (Besitzt:) Tj ET
+BT /F1 10.5 Tf 52.00 750.89 Td (- `mobile/App.js`) Tj ET
+BT /F1 10.5 Tf 52.00 735.89 Td (- `mobile/src/screens/**`) Tj ET
+BT /F1 10.5 Tf 52.00 720.89 Td (- `mobile/src/components/**`) Tj ET
+BT /F1 10.5 Tf 52.00 705.89 Td (- `mobile/src/overlays/**`) Tj ET
+BT /F1 10.5 Tf 52.00 690.89 Td (- `mobile/src/theme/tokens.js`) Tj ET
+BT /F2 12 Tf 52.00 666.89 Td (Track B: Dashboard / Admin / Catalog) Tj ET
+BT /F1 10.5 Tf 52.00 640.89 Td (Besitzt:) Tj ET
+BT /F1 10.5 Tf 52.00 616.89 Td (- `dashboard.*`) Tj ET
+BT /F1 10.5 Tf 52.00 601.89 Td (- `admin.*`) Tj ET
+BT /F1 10.5 Tf 52.00 586.89 Td (- `catalog.*`) Tj ET
+BT /F2 12 Tf 52.00 562.89 Td (Track C: Backend) Tj ET
+BT /F1 10.5 Tf 52.00 536.89 Td (Besitzt:) Tj ET
+BT /F1 10.5 Tf 52.00 512.89 Td (- `server.py`) Tj ET
+BT /F1 10.5 Tf 52.00 497.89 Td (- mobile-bezogene Endpoints nur dann, wenn klar abgegrenzt) Tj ET
+BT /F1 10.5 Tf 52.00 482.89 Td (- dashboard-/admin-bezogene API-Arbeit nur seriell oder klar geschnitten) Tj ET
+BT /F2 14 Tf 52.00 458.89 Td (Nächste sinnvolle Schritte) Tj ET
+BT /F2 12 Tf 52.00 429.89 Td (Mobile) Tj ET
+BT /F1 10.5 Tf 52.00 403.89 Td (1. Scan exakt auf Mowgli ziehen) Tj ET
+BT /F1 10.5 Tf 52.00 388.89 Td (2. Search Overlay exakt auf Mowgli ziehen) Tj ET
+BT /F1 10.5 Tf 52.00 373.89 Td (3. Cart Overlay exakt auf Mowgli ziehen) Tj ET
+BT /F1 10.5 Tf 52.00 358.89 Td (4. Restliche Shell-Differenzen in `mobile/App.js` entfernen) Tj ET
+BT /F1 10.5 Tf 52.00 343.89 Td (5. Brandingfarben pro MedSpa sauber theme-basiert durchziehen) Tj ET
+BT /F2 12 Tf 52.00 319.89 Td (Produkt / Features) Tj ET
+BT /F1 10.5 Tf 52.00 293.89 Td (1. Appointments) Tj ET
+BT /F1 10.5 Tf 52.00 278.89 Td (2. Wissen & Tipps als eigener Bereich) Tj ET
+BT /F1 10.5 Tf 52.00 263.89 Td (3. Kontakt & Klinik als eigener Screen) Tj ET
+BT /F1 10.5 Tf 52.00 248.89 Td (4. Referral-Flow) Tj ET
+BT /F1 10.5 Tf 52.00 233.89 Td (5. Offers / Wallet / Vouchers) Tj ET
+BT /F2 14 Tf 52.00 209.89 Td (Aktueller Risikohinweis) Tj ET
+BT /F1 10.5 Tf 52.00 180.89 Td (Im Repo liegen aktuell neben der produktiven App auch zusätzliche Mowgli-Referenz- und) Tj ET
+BT /F1 10.5 Tf 52.00 165.89 Td (Tooling-Dateien in `mobile/_mowgli_export` sowie offene Tooling-Dateien unter) Tj ET
+BT /F1 10.5 Tf 52.00 150.89 Td (`mobile/package.json`, `mobile/package-lock.json` und `mobile/tsconfig.json`.) Tj ET
+BT /F1 10.5 Tf 52.00 126.89 Td (Diese sollten nicht blind mit produktiven UI-Änderungen vermischt committed werden.) Tj ET
+BT /F2 14 Tf 52.00 102.89 Td (Zielbild) Tj ET
+BT /F1 10.5 Tf 52.00 73.89 Td (Curabo soll als White-Label MedSpa-/Klinikplattform eine deutlich hochwertigere) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 703 >>
+stream
+BT /F1 10.5 Tf 52.00 783.89 Td (Patient Experience liefern als Dermis:) Tj ET
+BT /F1 10.5 Tf 52.00 759.89 Td (- klinikspezifisches Branding) Tj ET
+BT /F1 10.5 Tf 52.00 744.89 Td (- hochwertige Mobile-UI) Tj ET
+BT /F1 10.5 Tf 52.00 729.89 Td (- Memberships) Tj ET
+BT /F1 10.5 Tf 52.00 714.89 Td (- Rewards) Tj ET
+BT /F1 10.5 Tf 52.00 699.89 Td (- Checkout) Tj ET
+BT /F1 10.5 Tf 52.00 684.89 Td (- später Appointments, Journeys, Offers und Custom Plans) Tj ET
+BT /F1 10.5 Tf 52.00 660.89 Td (Kurz:) Tj ET
+BT /F1 10.5 Tf 52.00 636.89 Td (Curabo soll nicht nur eine schöne App sein, sondern das digitale) Tj ET
+BT /F1 10.5 Tf 52.00 621.89 Td (Patientenbetriebssystem für Premium-MedSpas und Kliniken.) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 11 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R] /Count 4 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+xref
+0 13
+0000000000 65535 f 
+0000000015 00000 n 
+0000000085 00000 n 
+0000000160 00000 n 
+0000002856 00000 n 
+0000002999 00000 n 
+0000006030 00000 n 
+0000006173 00000 n 
+0000008882 00000 n 
+0000009025 00000 n 
+0000009779 00000 n 
+0000009923 00000 n 
+0000010000 00000 n 
+trailer
+<< /Size 13 /Root 12 0 R >>
+startxref
+10051
+%%EOF

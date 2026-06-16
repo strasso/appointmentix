@@ -1,0 +1,655 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Manrope:wght@400;500;600;700&display=swap');
+
+  .vs-portfolio,
+  .vs-portfolio * {
+    box-sizing: border-box;
+  }
+
+  .vs-portfolio {
+    --vs-bg: #0f1012;
+    --vs-surface: #17191d;
+    --vs-surface-alt: #1d2025;
+    --vs-border: rgba(255, 245, 224, 0.11);
+    --vs-border-strong: rgba(255, 245, 224, 0.18);
+    --vs-text: #f3ede2;
+    --vs-text-soft: #c3bcaf;
+    --vs-accent: #d3a15a;
+    --vs-container: min(1120px, 100%);
+    background: linear-gradient(180deg, #111214 0%, #0d0e10 100%);
+    color: var(--vs-text);
+    font-family: 'Manrope', sans-serif;
+    padding: clamp(24px, 4vw, 48px) 18px 72px;
+    border-radius: 26px;
+    margin: 0;
+  }
+
+  .vs-shell {
+    width: var(--vs-container);
+    margin: 0 auto;
+  }
+
+  .vs-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 18px;
+    margin-bottom: 22px;
+    border: 1px solid var(--vs-border);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .vs-brand,
+  .vs-nav a,
+  .vs-action {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .vs-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .vs-brand::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--vs-accent);
+    box-shadow: 0 0 0 8px rgba(211, 161, 90, 0.12);
+  }
+
+  .vs-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 18px;
+  }
+
+  .vs-nav a {
+    color: var(--vs-text-soft);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .vs-nav a:hover,
+  .vs-nav a:focus-visible,
+  .vs-action:hover,
+  .vs-action:focus-visible,
+  .vs-project-link:hover,
+  .vs-project-link:focus-visible {
+    color: var(--vs-text);
+  }
+
+  .vs-eyebrow {
+    margin: 0 0 12px;
+    color: var(--vs-accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .vs-portfolio h1,
+  .vs-portfolio h2,
+  .vs-portfolio h3,
+  .vs-portfolio h4 {
+    margin: 0;
+    font-family: 'Bebas Neue', sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--vs-text);
+    line-height: 0.94;
+  }
+
+  .vs-portfolio h1 {
+    font-size: clamp(58px, 10vw, 110px);
+    max-width: 9.2ch;
+  }
+
+  .vs-portfolio h2 {
+    font-size: clamp(40px, 5vw, 64px);
+    max-width: 16ch;
+    text-wrap: balance;
+  }
+
+  .vs-portfolio h3 {
+    font-size: clamp(28px, 3.4vw, 42px);
+  }
+
+  .vs-portfolio h4 {
+    font-size: 30px;
+  }
+
+  .vs-portfolio p,
+  .vs-portfolio li,
+  .vs-portfolio strong,
+  .vs-portfolio span {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .vs-portfolio p,
+  .vs-portfolio li,
+  .vs-copy,
+  .vs-project-copy,
+  .vs-contact-list,
+  .vs-detail-copy,
+  .vs-mini-list {
+    color: var(--vs-text-soft);
+  }
+
+  .vs-section {
+    margin-top: 26px;
+  }
+
+  .vs-panel {
+    border: 1px solid var(--vs-border);
+    background: var(--vs-surface);
+    border-radius: 28px;
+  }
+
+  .vs-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.72fr);
+    gap: 22px;
+    align-items: stretch;
+  }
+
+  .vs-hero-copy,
+  .vs-hero-photo,
+  .vs-feature-card,
+  .vs-project-card,
+  .vs-timeline-item,
+  .vs-detail-card,
+  .vs-edu-card,
+  .vs-contact-card {
+    border: 1px solid var(--vs-border);
+    border-radius: 28px;
+    background: var(--vs-surface);
+  }
+
+  .vs-hero-copy {
+    padding: 30px;
+  }
+
+  .vs-copy {
+    margin-top: 16px;
+    max-width: 62ch;
+  }
+
+  .vs-hero-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+  }
+
+  .vs-meta-item {
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid var(--vs-border);
+    background: rgba(255,255,255,0.02);
+  }
+
+  .vs-meta-item span {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--vs-accent);
+  }
+
+  .vs-meta-item strong {
+    display: block;
+    color: var(--vs-text);
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .vs-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 26px;
+  }
+
+  .vs-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0 18px;
+    border-radius: 999px;
+    border: 1px solid var(--vs-border-strong);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .vs-action-primary {
+    background: var(--vs-text);
+    color: #111215;
+    border-color: transparent;
+  }
+
+  .vs-action-secondary {
+    color: var(--vs-text);
+  }
+
+  .vs-hero-photo {
+    padding: 20px;
+  }
+
+  .vs-hero-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 520px;
+    object-fit: cover;
+    object-position: center 18%;
+    border-radius: 18px;
+  }
+
+  .vs-section-head {
+    max-width: 980px;
+    margin-bottom: 18px;
+  }
+
+  .vs-feature-grid,
+  .vs-project-grid,
+  .vs-detail-grid,
+  .vs-footer-grid {
+    display: grid;
+    gap: 18px;
+  }
+
+  .vs-feature-grid,
+  .vs-project-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-feature-card {
+    overflow: hidden;
+  }
+
+  .vs-feature-card img {
+    display: block;
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+  }
+
+  .vs-feature-body,
+  .vs-project-card,
+  .vs-detail-card,
+  .vs-edu-card,
+  .vs-contact-card,
+  .vs-timeline-item {
+    padding: 22px;
+  }
+
+  .vs-feature-meta,
+  .vs-project-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: var(--vs-accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .vs-project-copy {
+    margin-top: 12px;
+  }
+
+  .vs-link-row,
+  .vs-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .vs-project-link,
+  .vs-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    border: 1px solid var(--vs-border);
+  }
+
+  .vs-project-link {
+    color: var(--vs-text);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .vs-chip {
+    font-size: 13px;
+    color: var(--vs-text-soft);
+  }
+
+  .vs-list-head {
+    margin-bottom: 10px;
+  }
+
+  .vs-mini-list {
+    margin: 12px 0 0;
+    padding-left: 18px;
+  }
+
+  .vs-mini-list li + li {
+    margin-top: 6px;
+  }
+
+  .vs-timeline {
+    display: grid;
+    gap: 14px;
+  }
+
+  .vs-timeline-item strong,
+  .vs-credits strong {
+    display: block;
+    margin-top: 8px;
+    color: var(--vs-text);
+    font-weight: 600;
+  }
+
+  .vs-detail-grid,
+  .vs-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vs-credits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+  }
+
+  .vs-credits div {
+    padding-top: 10px;
+    border-top: 1px solid var(--vs-border);
+  }
+
+  .vs-credits a,
+  .vs-contact-list a {
+    color: var(--vs-text-soft);
+    text-decoration: none;
+  }
+
+  .vs-credits a:hover,
+  .vs-contact-list a:focus-visible,
+  .vs-credits a:focus-visible {
+    color: var(--vs-text);
+  }
+
+  .vs-edu-card p,
+  .vs-contact-list {
+    margin-top: 10px;
+  }
+
+  .vs-contact-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .vs-note {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--vs-text-soft);
+  }
+
+  @media (max-width: 980px) {
+    .vs-hero,
+    .vs-feature-grid,
+    .vs-project-grid,
+    .vs-detail-grid,
+    .vs-footer-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .vs-hero-photo {
+      max-width: 540px;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .vs-topbar {
+      border-radius: 24px;
+      padding: 16px;
+    }
+
+    .vs-nav {
+      justify-content: flex-start;
+      gap: 12px;
+    }
+
+    .vs-hero-copy,
+    .vs-feature-body,
+    .vs-project-card,
+    .vs-detail-card,
+    .vs-edu-card,
+    .vs-contact-card,
+    .vs-timeline-item,
+    .vs-hero-photo {
+      padding: 20px;
+    }
+
+    .vs-hero-meta,
+    .vs-credits {
+      grid-template-columns: 1fr;
+    }
+
+    .vs-hero-photo img {
+      min-height: 360px;
+    }
+  }
+</style>
+
+<section class="vs-portfolio">
+  <div class="vs-shell">
+    <div class="vs-topbar">
+      <a class="vs-brand" href="#vs-top">Valentin Strasser</a>
+      <nav class="vs-nav">
+        <a href="#vs-featured">Projektseiten</a>
+        <a href="#vs-projects">Weitere Projekte</a>
+        <a href="#vs-practice">Praxis</a>
+        <a href="#vs-contact">Kontakt</a>
+      </nav>
+    </div>
+
+    <section class="vs-hero" id="vs-top">
+      <div class="vs-hero-copy">
+        <p class="vs-eyebrow">Portfolio Lebenslauf</p>
+        <h1>Film, Sound und visuelles Erzählen.</h1>
+        <div class="vs-hero-meta">
+          <div class="vs-meta-item">
+            <span>Standort</span>
+            <strong>Seiersberg-Pirka / Graz</strong>
+          </div>
+          <div class="vs-meta-item">
+            <span>Fokus</span>
+            <strong>Film, Audio, visuelle Konzepte</strong>
+          </div>
+          <div class="vs-meta-item">
+            <span>Ausbildung</span>
+            <strong>HTBLVA Ortweinschule, Film &amp; Multimediaart</strong>
+          </div>
+        </div>
+        <div class="vs-actions">
+          <a class="vs-action vs-action-primary" href="#vs-featured">Projektseiten ansehen</a>
+          <a class="vs-action vs-action-secondary" href="#vs-contact">Kontakt</a>
+        </div>
+      </div>
+      <figure class="vs-hero-photo">
+        <img src="https://valentin-strasser.com/wp-content/uploads/2026/04/valentin-portrait-portfolio-scaled.jpg" alt="Portrait von Valentin Strasser">
+      </figure>
+    </section>
+
+    <section class="vs-section" id="vs-featured">
+      <div class="vs-section-head">
+        <p class="vs-eyebrow">Bestehende Projektseiten</p>
+      </div>
+
+      <div class="vs-feature-grid">
+        <article class="vs-feature-card">
+          <img src="https://valentin-strasser.com/wp-content/uploads/2025/01/Bildschirmfoto-2025-01-24-um-09.37.47.png" alt="marGits Werbespot">
+          <div class="vs-feature-body">
+            <div class="vs-feature-meta">
+              <span>Werbefilm</span>
+              <span>2023</span>
+            </div>
+            <h3>Friseur Werbefilm</h3>
+            <p class="vs-project-copy">Ein kompakter Werbespot für einen Friseursalon mit Fokus auf Vorher-Nachher-Wirkung, Vertrauen und einer klaren Handlungsaufforderung für potenzielle Kundinnen und Kunden.</p>
+            <div class="vs-link-row">
+              <a class="vs-project-link" href="https://valentin-strasser.com/2025/01/17/120/">Projektseite</a>
+              <a class="vs-project-link" href="https://www.youtube.com/watch?v=OrbSWVOZ6MA">Video</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="vs-feature-card">
+          <img src="https://valentin-strasser.com/wp-content/uploads/2025/01/Tilt-1-1630x2048-3.jpg" alt="Die Tränen des Krieges">
+          <div class="vs-feature-body">
+            <div class="vs-feature-meta">
+              <span>Sound Design &amp; Audio</span>
+              <span>2023</span>
+            </div>
+            <h3>Tränen des Krieges</h3>
+            <p class="vs-project-copy">Audio- und Sounddesign für einen Kurzfilm, bei dem Spannung und emotionale Wirkung stark über die auditive Ebene getragen werden. Besonders die Rückblende entstand fast vollständig in der Postproduktion.</p>
+            <div class="vs-link-row">
+              <a class="vs-project-link" href="https://valentin-strasser.com/2025/01/17/92/">Projektseite</a>
+              <a class="vs-project-link" href="https://www.youtube.com/watch?v=5TeEp2ZPg4U">Film</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="vs-feature-card">
+          <img src="https://valentin-strasser.com/wp-content/uploads/2025/01/Bildschirmfoto-2025-01-10-um-12.57.51.png" alt="Projection Mapping">
+          <div class="vs-feature-body">
+            <div class="vs-feature-meta">
+              <span>Open House Projekt</span>
+              <span>2024</span>
+            </div>
+            <h3>Projection Mapping</h3>
+            <p class="vs-project-copy">Beim Open House 2024 der Ortweinschule verwandelte ein animiertes Video die Flächen von drei Quadern in eine räumliche Installation, die den Eindruck erzeugt, das Bild liege direkt im Objekt.</p>
+            <div class="vs-link-row">
+              <a class="vs-project-link" href="https://valentin-strasser.com/2025/01/10/64/">Projektseite</a>
+              <a class="vs-project-link" href="https://www.youtube.com/watch?v=yYU1xq4lJSg">Video</a>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="vs-section" id="vs-projects">
+      <div class="vs-section-head">
+        <p class="vs-eyebrow">Weitere Projekte</p>
+      </div>
+
+      <div class="vs-project-grid">
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Stop Motion Film</span><span>2021–2022</span></div>
+          <h3>The Medal Detector</h3>
+          <p class="vs-project-copy">Frühes Stop-Motion-Projekt mit Fokus auf Timing, Bildaufbau und erzählerische Verdichtung über Einzelbilder.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Stop Motion</span><span class="vs-chip">Kurzfilm</span></div>
+        </article>
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Dokumentarfilm</span><span>2023–2024</span></div>
+          <h3>Das Andere Theater</h3>
+          <p class="vs-project-copy">Dokumentation über ein Theater mit Blick auf Arbeitsprozesse, Menschen, Raumstimmung und beobachtende Erzählweise.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Dokumentation</span><span class="vs-chip">Theater</span></div>
+        </article>
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Sound Design Projekt</span><span>2024</span></div>
+          <h3>Soundscape</h3>
+          <p class="vs-project-copy">Eigenständiges Audio-Projekt über Klangräume, Layering und die dramaturgische Wirkung von Ton als primäre Erzählebene.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Sound Design</span><span class="vs-chip">Klangraum</span></div>
+        </article>
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Pilotfilm</span><span>2025</span></div>
+          <h3>Herr Petrovic</h3>
+          <p class="vs-project-copy">Regieassistenz bei einem Pilotfilm mit Fokus auf Set-Abläufe, Abstimmung zwischen Departments und organisatorische Stabilität.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Regieassistenz</span><span class="vs-chip">Set Organisation</span></div>
+        </article>
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Thriller Pilotfilm</span><span>2025–2026</span></div>
+          <h3>Das Rot meiner Hände</h3>
+          <p class="vs-project-copy">Arbeit in Produktion und Audio für ein deutlich narratives Format, in dem Spannungsaufbau sowohl organisatorisch als auch klanglich entsteht.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Produktion</span><span class="vs-chip">Audio</span><span class="vs-chip">Pilotfilm</span></div>
+        </article>
+        <article class="vs-project-card">
+          <div class="vs-project-meta"><span>Diplomprojekt</span><span>2025–2026</span></div>
+          <h3>New Avalon</h3>
+          <p class="vs-project-copy">Diplomprojekt mit Schwerpunkt Soundscape und räumlicher Klangführung als klares Profilprojekt im Bereich Atmosphäre und Ton.</p>
+          <div class="vs-chip-row"><span class="vs-chip">Diplomprojekt</span><span class="vs-chip">Soundscape</span></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="vs-section" id="vs-practice">
+      <div class="vs-section-head">
+        <p class="vs-eyebrow">Praxis</p>
+      </div>
+      <div class="vs-timeline">
+        <article class="vs-timeline-item">
+          <p class="vs-eyebrow">08/2024 &amp; 08/2025</p>
+          <h3>Praktikum Redaktion &amp; Recherche</h3>
+          <strong>RCA Nachrichtenagentur, Graz</strong>
+          <p>Recherche, journalistische Aufbereitung und telefonische Interviews mit Pressestellen von Unternehmen und Verbänden. Arbeit unter Zeitdruck mit Fokus auf Genauigkeit und Verdichtung.</p>
+        </article>
+        <article class="vs-timeline-item">
+          <p class="vs-eyebrow">12/2024 – 04/2025</p>
+          <h3>Projektleitung Filmproduktion</h3>
+          <strong>HTBLVA Ortweinschule, Pilotfilmprojekt</strong>
+          <p>Koordination, Organisation und Mitführung eines Teams von rund 18 Personen. Verantwortung für Ablauf, Abstimmung und praktische Umsetzung im schulischen Produktionskontext.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="vs-section" id="vs-contact">
+      <div class="vs-footer-grid">
+        <article class="vs-edu-card">
+          <p class="vs-eyebrow">Ausbildung</p>
+          <h3>HTBLVA Ortweinschule Graz</h3>
+          <p>Film &amp; Multimediaart, voraussichtlicher Abschluss Juni 2026.</p>
+          <p class="vs-note">Davor: BG/BRG/MG 3hacken, Graz, Musikzweig.</p>
+        </article>
+        <article class="vs-contact-card">
+          <p class="vs-eyebrow">Kontakt</p>
+          <h3>Für Film-, Audio- und Projektarbeit erreichbar.</h3>
+          <div class="vs-contact-list">
+            <a href="mailto:office@valentinstrasser.com">office@valentinstrasser.com</a>
+            <a href="tel:+436642355835">0664 / 2355835</a>
+            <span>8055 Seiersberg-Pirka, Österreich</span>
+          </div>
+        </article>
+      </div>
+    </section>
+  </div>
+</section>
