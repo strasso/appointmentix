@@ -1450,6 +1450,7 @@ def init_db() -> None:
         "imported_at": "TEXT",
         "notify_email": "TEXT NOT NULL DEFAULT ''",
         "slack_webhook_url": "TEXT NOT NULL DEFAULT ''",
+        "calendar_feed_token": "TEXT NOT NULL DEFAULT ''",
       },
     )
 
@@ -1859,6 +1860,7 @@ def get_clinic_row_by_id(clinic_id: int | None):
         stripe_subscription_id,
         notify_email,
         slack_webhook_url,
+        calendar_feed_token,
         created_at
       FROM clinics
       WHERE id = ?
@@ -4991,6 +4993,108 @@ def notify_clinic_of_checkout(
   if slack_url:
     result["slack"] = send_slack_webhook(slack_url, f"*{subject}*\n{body}")
   return result
+
+
+def ensure_clinic_calendar_token(clinic_id: int) -> str:
+  """Return the clinic's secret iCal-feed token, generating it on first use."""
+  try:
+    with get_db() as conn:
+      row = conn.execute(
+        "SELECT calendar_feed_token FROM clinics WHERE id = ? LIMIT 1",
+        (clinic_id,),
+      ).fetchone()
+      token = str(_row_get(row, "calendar_feed_token")).strip() if row else ""
+      if not token:
+        token = secrets.token_urlsafe(24)
+        conn.execute("UPDATE clinics SET calendar_feed_token = ? WHERE id = ?", (token, clinic_id))
+      return token
+  except Exception:
+    return ""
+
+
+def _ical_escape(text: str) -> str:
+  return (
+    str(text or "")
+    .replace("\\", "\\\\")
+    .replace(";", "\\;")
+    .replace(",", "\\,")
+    .replace("\r\n", "\\n")
+    .replace("\n", "\\n")
+  )
+
+
+def _ical_dt(iso_value) -> str:
+  parsed = parse_datetime_utc(iso_value) if iso_value else None
+  return parsed.strftime("%Y%m%dT%H%M%SZ") if parsed else ""
+
+
+def build_clinic_ical(clinic_id: int, clinic_name: str) -> str:
+  """Standard iCal (RFC 5545) feed of the clinic's scheduled appointments."""
+  with get_db() as conn:
+    rows = conn.execute(
+      """
+      SELECT id, patient_name, treatment_name, practitioner_name,
+             starts_at, ends_at, treatment_duration_minutes, status, notes, location_label
+      FROM patient_appointments
+      WHERE clinic_id = ? AND starts_at IS NOT NULL AND starts_at != ''
+      ORDER BY starts_at ASC
+      LIMIT 1000
+      """,
+      (clinic_id,),
+    ).fetchall()
+
+  now_stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+  lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    f"PRODID:-//Curabo//Klinik {clinic_id}//DE",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    f"X-WR-CALNAME:{_ical_escape(clinic_name)} · Curabo",
+    "X-PUBLISHED-TTL:PT1H",
+  ]
+  for row in rows:
+    dtstart = _ical_dt(_row_get(row, "starts_at"))
+    if not dtstart:
+      continue
+    dtend = _ical_dt(_row_get(row, "ends_at"))
+    if not dtend:
+      parsed = parse_datetime_utc(_row_get(row, "starts_at"))
+      duration = max(0, int(_row_get(row, "treatment_duration_minutes", 0) or 0)) or 30
+      if parsed:
+        dtend = (parsed + timedelta(minutes=duration)).strftime("%Y%m%dT%H%M%SZ")
+    treatment = _row_get(row, "treatment_name") or "Termin"
+    patient = _row_get(row, "patient_name")
+    practitioner = _row_get(row, "practitioner_name")
+    status = str(_row_get(row, "status") or "")
+    summary = treatment + (f" — {patient}" if patient else "")
+    desc = []
+    if patient:
+      desc.append(f"Kundin/Kunde: {patient}")
+    if practitioner:
+      desc.append(f"Behandler:in: {practitioner}")
+    if status:
+      desc.append(f"Status: {status}")
+    notes = _row_get(row, "notes")
+    if notes:
+      desc.append(str(notes))
+    ical_status = "CANCELLED" if status == "canceled" else ("CONFIRMED" if status == "confirmed" else "TENTATIVE")
+    lines += [
+      "BEGIN:VEVENT",
+      f"UID:curabo-{clinic_id}-{_row_get(row, 'id')}@curabo.app",
+      f"DTSTAMP:{now_stamp}",
+      f"DTSTART:{dtstart}",
+      f"DTEND:{dtend}",
+      f"SUMMARY:{_ical_escape(summary)}",
+      f"DESCRIPTION:{_ical_escape(' · '.join(desc))}",
+      f"STATUS:{ical_status}",
+    ]
+    location = _row_get(row, "location_label")
+    if location:
+      lines.append(f"LOCATION:{_ical_escape(location)}")
+    lines.append("END:VEVENT")
+  lines.append("END:VCALENDAR")
+  return "\r\n".join(lines) + "\r\n"
 
 
 def deliver_campaign_message(clinic_name: str, channel: str, title: str, body: str, profile: dict) -> dict:
@@ -10752,6 +10856,27 @@ def clinic_media_delete():
   return jsonify({"success": True})
 
 
+@app.get("/api/calendar/<token>.ics")
+def clinic_calendar_feed(token: str):
+  """Public per-clinic iCal subscription feed (secret token = the auth)."""
+  clean = str(token or "").strip()
+  if len(clean) < 16:
+    return ("Not found", 404)
+  with get_db() as conn:
+    row = conn.execute(
+      "SELECT id, name FROM clinics WHERE calendar_feed_token = ? AND calendar_feed_token != '' LIMIT 1",
+      (clean,),
+    ).fetchone()
+  if not row:
+    return ("Not found", 404)
+  ics = build_clinic_ical(int(row["id"]), str(row["name"] or "Klinik"))
+  return app.response_class(
+    ics,
+    mimetype="text/calendar",
+    headers={"Content-Disposition": "inline; filename=curabo.ics", "Cache-Control": "no-cache"},
+  )
+
+
 @app.get("/api/clinic/settings")
 def clinic_settings():
   user_row, auth_error = require_auth_row()
@@ -10771,6 +10896,11 @@ def clinic_settings():
       "calendlyUrl": clinic_row["calendly_url"],
       "notifyEmail": clinic_row["notify_email"],
       "slackWebhookUrl": clinic_row["slack_webhook_url"],
+      "calendarFeedUrl": (
+        request.host_url.rstrip("/") + "/api/calendar/" + ensure_clinic_calendar_token(int(clinic_row["id"])) + ".ics"
+        if ensure_clinic_calendar_token(int(clinic_row["id"]))
+        else ""
+      ),
     }
   else:
     settings_payload = {
@@ -10784,6 +10914,7 @@ def clinic_settings():
       "calendlyUrl": user_row["calendly_url"],
       "notifyEmail": "",
       "slackWebhookUrl": "",
+      "calendarFeedUrl": "",
     }
 
   return jsonify(

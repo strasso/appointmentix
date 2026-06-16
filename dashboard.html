@@ -877,6 +877,10 @@
                 <input name="slackWebhookUrl" type="text" placeholder="https://hooks.slack.com/services/...">
                 <span class="field-hint">Optional: schickt zusätzlich eine Nachricht in deinen Slack-Channel.</span>
               </label>
+              <label>Kalender-Abo (App-Termine in deinem Kalender)
+                <input id="calendarFeedUrl" type="text" readonly onclick="this.select()" placeholder="wird automatisch erzeugt …">
+                <span class="field-hint">Diese URL in Google Calendar / Outlook / Apple Kalender (oder über Google in Fresha) als Kalender-Abo hinzufügen — App-Buchungen erscheinen dann automatisch.</span>
+              </label>
               <button id="saveSettingsBtn" class="btn primary" type="submit">Einstellungen speichern</button>
             </form>
           </article>

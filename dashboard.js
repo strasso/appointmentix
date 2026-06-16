@@ -933,6 +933,10 @@ function fillSettingsForm(settings) {
   if (settingsForm.elements.slackWebhookUrl) {
     settingsForm.elements.slackWebhookUrl.value = settings.slackWebhookUrl || "";
   }
+  const calendarFeedField = document.getElementById("calendarFeedUrl");
+  if (calendarFeedField) {
+    calendarFeedField.value = settings.calendarFeedUrl || "";
+  }
   if (brandColorPicker instanceof HTMLInputElement) {
     brandColorPicker.value = normalizeHexColorForUi(settings.brandColor, "#16A34A");
   }
