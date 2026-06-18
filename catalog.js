@@ -356,9 +356,10 @@ function initialDiscountPct(item = {}) {
   if (p <= 0 || m <= 0 || m > p) return "";
   return String(computeDiscountPct(p, m));
 }
-function percentStepperHtml(pctValue, placeholder) {
+function percentStepperHtml(pctValue) {
   return `<span class="eur-stepper pct-stepper">
-    <input data-percent-input type="text" inputmode="numeric" autocomplete="off" value="${escapeAttr(pctValue)}" placeholder="${placeholder}">
+    <input data-percent-input type="text" inputmode="numeric" autocomplete="off" value="${escapeAttr(pctValue)}">
+    <span class="pct-suffix" aria-hidden="true">%</span>
     <span class="eur-stepper-btns">
       <button type="button" class="pct-step" data-pct-step="1" tabindex="-1" aria-label="Rabatt erhöhen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
       <button type="button" class="pct-step" data-pct-step="-1" tabindex="-1" aria-label="Rabatt verringern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
@@ -436,7 +437,7 @@ function treatmentCard(item = {}) {
           ${euroStepperHtml("memberPriceCents", item.memberPriceCents, "99")}
         </label>
         <label>Mitglieder-Rabatt (%)
-          ${percentStepperHtml(initialDiscountPct(item), "10")}
+          ${percentStepperHtml(initialDiscountPct(item))}
         </label>
       </div>
       <label>Beschreibung

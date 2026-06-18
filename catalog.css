@@ -321,6 +321,19 @@ input:focus, select:focus, textarea:focus {
 /* Euro stepper (hold to accelerate) */
 .eur-stepper { position: relative; display: block; }
 .eur-stepper > input { padding-right: 36px; }
+/* Percent field: number hugs a fixed "%" sign, arrows sit further right. */
+.eur-stepper.pct-stepper > input { text-align: right; padding-right: 48px; }
+.pct-suffix {
+  position: absolute;
+  right: 32px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+  pointer-events: none;
+}
 .eur-stepper-btns {
   position: absolute;
   top: 5px;
