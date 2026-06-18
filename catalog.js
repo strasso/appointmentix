@@ -309,6 +309,7 @@ function euroStepControl(button) {
       ? (Math.floor(current / stepCents) + 1) * stepCents
       : (Math.ceil(current / stepCents) - 1) * stepCents;
     input.value = centsToEuroInput(Math.max(0, next));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
   };
   apply();
   let repeat = null;
@@ -333,6 +334,83 @@ function euroToCents(value) {
   return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric * 100)) : 0;
 }
 
+// --- Mitglieder-Rabatt: zweites, synchrones Feld neben dem Mitgliedspreis ---
+// Der Mitgliedspreis (€) bleibt der gespeicherte Wert; der Rabatt (%) ist nur eine
+// Live-Spiegelung aus Preis & Mitgliedspreis (wird NICHT separat gespeichert).
+// Tippt man den Rabatt, wird daraus der Mitgliedspreis berechnet; ändert man Preis
+// oder Mitgliedspreis, wird der Rabatt neu berechnet.
+function computeDiscountPct(priceCents, memberCents) {
+  const p = Number(priceCents) || 0;
+  const m = Number(memberCents) || 0;
+  if (p <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((1 - m / p) * 100)));
+}
+function memberCentsFromPct(priceCents, pct) {
+  const p = Number(priceCents) || 0;
+  const d = Math.min(100, Math.max(0, Number(pct) || 0));
+  return Math.max(0, Math.round(p * (1 - d / 100)));
+}
+function initialDiscountPct(item = {}) {
+  const p = Number(item.priceCents) || 0;
+  const m = Number(item.memberPriceCents) || 0;
+  if (p <= 0 || m <= 0 || m > p) return "";
+  return String(computeDiscountPct(p, m));
+}
+function percentStepperHtml(pctValue, placeholder) {
+  return `<span class="eur-stepper pct-stepper">
+    <input data-percent-input type="text" inputmode="numeric" autocomplete="off" value="${escapeAttr(pctValue)}" placeholder="${placeholder}">
+    <span class="eur-stepper-btns">
+      <button type="button" class="pct-step" data-pct-step="1" tabindex="-1" aria-label="Rabatt erhöhen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg></button>
+      <button type="button" class="pct-step" data-pct-step="-1" tabindex="-1" aria-label="Rabatt verringern"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button>
+    </span>
+  </span>`;
+}
+function sanitizePercentField(element) {
+  if (!element) return;
+  let value = String(element.value).replace(/[^0-9]/g, "");
+  if (value !== "") value = String(Math.min(100, parseInt(value, 10) || 0));
+  element.value = value;
+}
+// Recompute the partner field within a treatment card.
+// source "pct" → member price from %, otherwise → % from price & member price.
+function syncTreatmentPricing(card, source) {
+  if (!card) return;
+  const priceEl = card.querySelector('[data-field="priceCents"]');
+  const memberEl = card.querySelector('[data-field="memberPriceCents"]');
+  const pctEl = card.querySelector("[data-percent-input]");
+  if (!priceEl || !memberEl || !pctEl) return;
+  const priceCents = euroToCents(priceEl.value);
+  if (source === "pct") {
+    const pctRaw = pctEl.value.trim();
+    if (priceCents > 0 && pctRaw !== "") {
+      memberEl.value = centsToEuroInput(memberCentsFromPct(priceCents, parseInt(pctRaw, 10) || 0));
+    }
+  } else {
+    const memberCents = euroToCents(memberEl.value);
+    pctEl.value = (priceCents > 0 && memberCents > 0 && memberCents <= priceCents)
+      ? String(computeDiscountPct(priceCents, memberCents))
+      : "";
+  }
+}
+// Percent stepper: tap ±1 %, holding accelerates to ±5 %. Mirrors the euro stepper.
+function pctStepControl(button) {
+  const wrap = button.closest(".eur-stepper");
+  const input = wrap && wrap.querySelector("input[data-percent-input]");
+  if (!input) return null;
+  const dir = Number(button.getAttribute("data-pct-step")) || 1;
+  const start = Date.now();
+  const apply = () => {
+    const step = Date.now() - start > 1200 ? 5 : 1;
+    const current = Math.min(100, Math.max(0, parseInt(input.value, 10) || 0));
+    input.value = String(Math.min(100, Math.max(0, current + dir * step)));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  apply();
+  let repeat = null;
+  const delay = window.setTimeout(() => { repeat = window.setInterval(apply, 90); }, 320);
+  return () => { window.clearTimeout(delay); if (repeat) window.clearInterval(repeat); };
+}
+
 function treatmentCard(item = {}) {
   return `
     <div class="item-card" data-kind="treatment">
@@ -350,12 +428,15 @@ function treatmentCard(item = {}) {
           <input data-field="durationMinutes" value="${escapeAttr(item.durationMinutes)}" placeholder="60">
         </label>
       </div>
-      <div class="field-grid-2">
+      <div class="field-grid-3">
         <label>Preis (€)
           ${euroStepperHtml("priceCents", item.priceCents, "110")}
         </label>
         <label>Mitgliedspreis (€)
           ${euroStepperHtml("memberPriceCents", item.memberPriceCents, "99")}
+        </label>
+        <label>Mitglieder-Rabatt (%)
+          ${percentStepperHtml(initialDiscountPct(item), "10")}
         </label>
       </div>
       <label>Beschreibung
@@ -933,15 +1014,24 @@ async function init() {
   bindImageUpload(productsList);
 
   document.addEventListener("input", (event) => {
-    if (event.target instanceof HTMLElement && event.target.matches("[data-price-input]")) {
-      sanitizeEuroField(event.target);
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.matches("[data-price-input]")) {
+      sanitizeEuroField(target);
+      syncTreatmentPricing(target.closest('.item-card[data-kind="treatment"]'), "price");
+    } else if (target.matches("[data-percent-input]")) {
+      sanitizePercentField(target);
+      syncTreatmentPricing(target.closest('.item-card[data-kind="treatment"]'), "pct");
     }
   });
   document.addEventListener("pointerdown", (event) => {
-    const button = event.target instanceof Element ? event.target.closest(".eur-step") : null;
-    if (!button) return;
+    const el = event.target instanceof Element ? event.target : null;
+    if (!el) return;
+    const eurBtn = el.closest(".eur-step");
+    const pctBtn = eurBtn ? null : el.closest(".pct-step");
+    if (!eurBtn && !pctBtn) return;
     event.preventDefault();
-    const stop = euroStepControl(button);
+    const stop = eurBtn ? euroStepControl(eurBtn) : pctStepControl(pctBtn);
     if (!stop) return;
     const end = () => {
       stop();

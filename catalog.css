@@ -331,7 +331,7 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   gap: 1px;
 }
-.eur-step {
+.eur-step, .pct-step {
   flex: 1;
   display: grid;
   place-items: center;
@@ -344,9 +344,9 @@ input:focus, select:focus, textarea:focus {
   touch-action: manipulation;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.eur-step:hover { color: var(--brand); background: var(--brand-wash); }
-.eur-step:active { color: var(--brand-strong); background: var(--brand-tint); }
-.eur-step svg { width: 12px; height: 12px; pointer-events: none; }
+.eur-step:hover, .pct-step:hover { color: var(--brand); background: var(--brand-wash); }
+.eur-step:active, .pct-step:active { color: var(--brand-strong); background: var(--brand-tint); }
+.eur-step svg, .pct-step svg { width: 12px; height: 12px; pointer-events: none; }
 
 /* ---------- Shop-Bereiche (Treatments / Pakete / Mitgliedschaften / Produkte) ---------- */
 #editorSection { display: grid; gap: 18px; }
