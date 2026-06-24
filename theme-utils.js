@@ -8,16 +8,22 @@
   ];
 
   const MEMBERSHIP_PRESETS = ["classic", "metallic", "minimal", "dark-premium", "gradient"];
+  const LEGACY_THEME_COLOR_MAP = {
+    primary: { "#B56F80": "#F56B8A", "#A15E72": "#F56B8A", "#8C4F63": "#F56B8A" },
+    secondary: { "#B56F80": "#2F5D9B", "#A15E72": "#2F5D9B", "#8C4F63": "#2F5D9B" },
+    accent: { "#B56F80": "#35B2D8", "#A15E72": "#35B2D8", "#8C4F63": "#35B2D8" },
+    membershipAccent: { "#B56F80": "#F56B8A", "#A15E72": "#F56B8A", "#8C4F63": "#F56B8A" },
+  };
 
   const DEFAULT_THEME = {
     colors: {
-      primary: "#B56F80",
-      secondary: "#A15E72",
+      primary: "#F56B8A",
+      secondary: "#2F5D9B",
       background: "#F3F4F6",
       surface: "#FFFFFF",
       textPrimary: "#16181D",
       textSecondary: "#697079",
-      accent: "#B56F80",
+      accent: "#35B2D8",
     },
     typography: {
       headingFont: "Inter, system-ui, sans-serif",
@@ -32,7 +38,7 @@
       preset: "classic",
       backgroundColor: "#FFFFFF",
       textColor: "#16181D",
-      accentColor: "#B56F80",
+      accentColor: "#F56B8A",
       borderRadius: 22,
       gradientStrength: 34,
       textureOpacity: 10,
@@ -83,12 +89,19 @@
     return APPROVED_FONTS.some((item) => item.value === raw) ? raw : fallback;
   }
 
+  function normalizeThemeAccentHex(key, value, fallback) {
+    const normalized = normalizeHex(value, fallback);
+    return LEGACY_THEME_COLOR_MAP[key]?.[normalized] || normalized;
+  }
+
   function normalizeTheme(partial) {
     const merged = mergeTheme(DEFAULT_THEME, partial);
     const theme = clone(DEFAULT_THEME);
 
     Object.keys(theme.colors).forEach((key) => {
-      theme.colors[key] = normalizeHex(merged.colors[key], DEFAULT_THEME.colors[key]);
+      theme.colors[key] = ["primary", "secondary", "accent"].includes(key)
+        ? normalizeThemeAccentHex(key, merged.colors[key], DEFAULT_THEME.colors[key])
+        : normalizeHex(merged.colors[key], DEFAULT_THEME.colors[key]);
     });
     theme.typography.headingFont = normalizeFont(merged.typography.headingFont, DEFAULT_THEME.typography.headingFont);
     theme.typography.bodyFont = normalizeFont(merged.typography.bodyFont, DEFAULT_THEME.typography.bodyFont);
@@ -104,7 +117,8 @@
       DEFAULT_THEME.membershipCard.backgroundColor
     );
     theme.membershipCard.textColor = normalizeHex(merged.membershipCard.textColor, DEFAULT_THEME.membershipCard.textColor);
-    theme.membershipCard.accentColor = normalizeHex(
+    theme.membershipCard.accentColor = normalizeThemeAccentHex(
+      "membershipAccent",
       merged.membershipCard.accentColor,
       DEFAULT_THEME.membershipCard.accentColor
     );

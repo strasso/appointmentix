@@ -1,5 +1,5 @@
 :root {
-  /* Neutrals — clean cool grey (brand-neutral, lets the rose accent lead) */
+  /* Neutrals — clean cool grey; brand colors are accents, not page backgrounds. */
   --bg: #f3f4f6;
   --bg-soft: #fafbfc;
   --surface: rgba(255, 255, 255, 0.92);
@@ -20,15 +20,18 @@
   --border: rgba(18, 22, 30, 0.08);
   --border-strong: rgba(18, 22, 30, 0.14);
 
-  /* Brand — refined dusty rose, used as the single accent */
-  --brand: #b56f80;
-  --brand-strong: #a15e72;
-  --brand-700: #8c4f63;
-  --brand-soft: #f6ebee;
-  --brand-tint: #f7eef1;
-  --brand-wash: #fbf5f7;
-  --accent: #b56f80;
-  --accent-soft: #f7eef1;
+  /* Brand accents from the Curabo logo */
+  --logo-cyan: #35b2d8;
+  --logo-pink: #f56b8a;
+  --logo-blue: #2f5d9b;
+  --brand: var(--logo-pink);
+  --brand-strong: var(--logo-blue);
+  --brand-700: var(--logo-blue);
+  --brand-soft: #ffe7ed;
+  --brand-tint: #fff0f4;
+  --brand-wash: #fff7f9;
+  --accent: var(--logo-cyan);
+  --accent-soft: #eef9fd;
 
   --positive: #1d7a55;
   --positive-soft: #e8f4ee;
@@ -36,7 +39,7 @@
   --danger-soft: #fbecef;
   --warning: #97681b;
   --warning-soft: #f6efdc;
-  --ring: rgba(181, 111, 128, 0.30);
+  --ring: rgba(245, 107, 138, 0.28);
 
   --shadow-sm: 0 1px 2px rgba(20, 18, 24, 0.04), 0 1px 3px rgba(20, 18, 24, 0.05);
   --shadow-md: 0 2px 6px rgba(20, 18, 24, 0.05), 0 10px 28px rgba(20, 18, 24, 0.07);
@@ -847,7 +850,7 @@ a.btn:visited {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--chart-color, #b56f80);
+  background: var(--chart-color, var(--brand));
   box-shadow: inset 0 0 0 1px rgba(18, 22, 30, 0.12);
 }
 .chart-color-text {
@@ -882,7 +885,7 @@ a.btn:visited {
   gap: 14px;
   padding: 14px 16px;
   margin: 2px 0 4px;
-  border: 1px solid rgba(181, 111, 128, 0.16);
+  border: 1px solid rgba(245, 107, 138, 0.18);
   border-radius: var(--radius-md);
   background: linear-gradient(90deg, var(--brand-wash), var(--surface-strong));
   text-decoration: none;
@@ -2141,7 +2144,7 @@ td small {
   --preview-surface: #ffffff;
   --preview-primary: #18181d;
   --preview-secondary: #697079;
-  --preview-accent: #b56f80;
+  --preview-accent: #f56b8a;
   --preview-text: #16181d;
   --preview-muted: #697079;
   --preview-button-radius: 999px;
@@ -2151,7 +2154,7 @@ td small {
   --preview-body-font: Inter, system-ui, sans-serif;
   --membership-bg: #ffffff;
   --membership-text: #16181d;
-  --membership-accent: #b56f80;
+  --membership-accent: #f56b8a;
   --membership-radius: 18px;
   --membership-gradient-opacity: 0.34;
   --membership-texture-opacity: 0.1;

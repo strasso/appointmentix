@@ -925,7 +925,7 @@ function fillSettingsForm(settings) {
   if (calendarFeedField) {
     calendarFeedField.value = settings.calendarFeedUrl || "";
   }
-  chartColor = normalizeHexColorForUi(settings.chartColor, CHART_BRAND);
+  chartColor = normalizeChartColorForUi(settings.chartColor);
   if (chartColorPicker instanceof HTMLInputElement) {
     chartColorPicker.value = chartColor;
     chartColorPicker.disabled = !state.isOwner;
@@ -1121,19 +1121,28 @@ function getCanvasContext(canvas) {
   return context;
 }
 
-const CHART_BRAND = "#b56f80";
+const LOGO_CYAN = "#35B2D8";
+const LOGO_PINK = "#F56B8A";
+const LOGO_BLUE = "#2F5D9B";
+const LEGACY_CHART_BRAND = "#b56f80";
+const CHART_BRAND = LOGO_PINK;
 // User-selectable analytics chart color (persisted per clinic via /clinic/chart-color).
 let chartColor = CHART_BRAND;
 
+function normalizeChartColorForUi(value) {
+  const normalized = normalizeHexColorForUi(value, CHART_BRAND);
+  return normalized.toLowerCase() === LEGACY_CHART_BRAND ? CHART_BRAND : normalized;
+}
+
 function updateChartColorControl(color) {
-  const normalized = normalizeHexColorForUi(color, CHART_BRAND);
+  const normalized = normalizeChartColorForUi(color);
   if (chartColorControl) chartColorControl.style.setProperty("--chart-color", normalized);
   if (chartColorText) chartColorText.textContent = normalized.toUpperCase();
 }
 
 function hexToRgba(hex, alpha) {
   const value = String(hex || "").replace("#", "");
-  if (value.length !== 6) return `rgba(181, 111, 128, ${alpha})`;
+  if (value.length !== 6) return `rgba(245, 107, 138, ${alpha})`;
   const r = parseInt(value.slice(0, 2), 16);
   const g = parseInt(value.slice(2, 4), 16);
   const b = parseInt(value.slice(4, 6), 16);
@@ -1331,12 +1340,12 @@ function actionToFeedText(action) {
 }
 
 const ACTIVITY_COLORS = {
-  campaign: "#7b61e6",
-  catalog: "#1fb6a6",
+  campaign: LOGO_BLUE,
+  catalog: LOGO_CYAN,
   clinic: "#6c8ab6",
   billing: "#d98a2b",
-  appointment: "#b56f80",
-  default: "#b56f80",
+  appointment: LOGO_PINK,
+  default: LOGO_PINK,
 };
 function activityColor(action) {
   const key = String(action || "").split(".")[0];
@@ -1410,17 +1419,16 @@ function renderRevenueSources(summary = {}, memberships = {}, backendSources = [
     const customPlans = Math.max(0, Math.round(revenue * 0.07));
     const shop = Math.max(0, revenue - notificationOffers - customPlans);
     rows = [
-      { label: "Mitgliedschaften", value: mrr, color: "#b56f80" },
-      { label: "Rewards & Guthaben", value: rewardsCash, color: "#cf9aa6" },
-      { label: "Angebotskampagnen", value: notificationOffers, color: "#8c6f9e" },
-      { label: "Sonderpläne", value: customPlans, color: "#c98a5e" },
+      { label: "Mitgliedschaften", value: mrr, color: LOGO_PINK },
+      { label: "Rewards & Guthaben", value: rewardsCash, color: LOGO_CYAN },
+      { label: "Angebotskampagnen", value: notificationOffers, color: LOGO_BLUE },
+      { label: "Sonderpläne", value: customPlans, color: "#8b97a6" },
       { label: "Shop", value: shop, color: "#6b7280" },
     ];
   }
 
-  // Harmonized brand palette — applied regardless of source so the
-  // legend stays tonal (rose family + warm neutrals), not a rainbow.
-  const SOURCE_PALETTE = ["#b56f80", "#cf9aa6", "#8c6f9e", "#c98a5e", "#6b7280", "#a98a72"];
+  // Harmonized brand palette — logo accents plus neutral support colors.
+  const SOURCE_PALETTE = [LOGO_PINK, LOGO_CYAN, LOGO_BLUE, "#8b97a6", "#6b7280", "#9aa3af"];
   rows = rows.map((row, index) => ({ ...row, color: SOURCE_PALETTE[index % SOURCE_PALETTE.length] }));
 
   const total = Math.max(rows.reduce((sum, row) => sum + row.value, 0), 1);
@@ -3364,7 +3372,7 @@ function bindEvents() {
   settingsForm.addEventListener("submit", handleSettingsSave);
   if (chartColorPicker instanceof HTMLInputElement) {
     const applyChartColor = () => {
-      chartColor = normalizeHexColorForUi(chartColorPicker.value, CHART_BRAND);
+      chartColor = normalizeChartColorForUi(chartColorPicker.value);
       updateChartColorControl(chartColor);
       scheduleMetricsRender();
     };

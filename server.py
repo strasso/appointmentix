@@ -91,13 +91,13 @@ THEME_APPROVED_FONTS = {
 }
 DEFAULT_CLINIC_THEME = {
   "colors": {
-    "primary": "#B56F80",
-    "secondary": "#A15E72",
+    "primary": "#F56B8A",
+    "secondary": "#2F5D9B",
     "background": "#F3F4F6",
     "surface": "#FFFFFF",
     "textPrimary": "#16181D",
     "textSecondary": "#697079",
-    "accent": "#B56F80",
+    "accent": "#35B2D8",
   },
   "typography": {
     "headingFont": "Inter, system-ui, sans-serif",
@@ -112,7 +112,7 @@ DEFAULT_CLINIC_THEME = {
     "preset": "classic",
     "backgroundColor": "#FFFFFF",
     "textColor": "#16181D",
-    "accentColor": "#B56F80",
+    "accentColor": "#F56B8A",
     "borderRadius": 22,
     "gradientStrength": 34,
     "textureOpacity": 10,
@@ -1451,7 +1451,7 @@ def init_db() -> None:
         "notify_email": "TEXT NOT NULL DEFAULT ''",
         "slack_webhook_url": "TEXT NOT NULL DEFAULT ''",
         "calendar_feed_token": "TEXT NOT NULL DEFAULT ''",
-        "chart_color": "TEXT NOT NULL DEFAULT '#b56f80'",
+        "chart_color": "TEXT NOT NULL DEFAULT '#F56B8A'",
       },
     )
 
@@ -4052,6 +4052,19 @@ def normalize_theme_hex(value: object, fallback: str) -> str:
   return to_hex_color(str(value or "").strip().upper(), fallback)
 
 
+LEGACY_THEME_ACCENT_COLORS = {
+  "primary": {"#B56F80": "#F56B8A", "#A15E72": "#F56B8A", "#8C4F63": "#F56B8A"},
+  "secondary": {"#B56F80": "#2F5D9B", "#A15E72": "#2F5D9B", "#8C4F63": "#2F5D9B"},
+  "accent": {"#B56F80": "#35B2D8", "#A15E72": "#35B2D8", "#8C4F63": "#35B2D8"},
+  "membershipAccent": {"#B56F80": "#F56B8A", "#A15E72": "#F56B8A", "#8C4F63": "#F56B8A"},
+}
+
+
+def normalize_theme_accent_hex(key: str, value: object, fallback: str) -> str:
+  normalized = normalize_theme_hex(value, fallback)
+  return LEGACY_THEME_ACCENT_COLORS.get(key, {}).get(normalized, normalized)
+
+
 def normalize_theme_font(value: object, fallback: str) -> str:
   candidate = str(value or "").strip()
   if candidate in THEME_APPROVED_FONTS:
@@ -4065,7 +4078,11 @@ def normalize_clinic_theme(raw_theme: object) -> dict:
 
   colors = source.get("colors") if isinstance(source.get("colors"), dict) else {}
   for key, fallback in DEFAULT_CLINIC_THEME["colors"].items():
-    theme["colors"][key] = normalize_theme_hex(colors.get(key), fallback)
+    theme["colors"][key] = (
+      normalize_theme_accent_hex(key, colors.get(key), fallback)
+      if key in {"primary", "secondary", "accent"}
+      else normalize_theme_hex(colors.get(key), fallback)
+    )
 
   typography = source.get("typography") if isinstance(source.get("typography"), dict) else {}
   theme["typography"]["headingFont"] = normalize_theme_font(
@@ -4093,7 +4110,8 @@ def normalize_clinic_theme(raw_theme: object) -> dict:
     membership_card.get("textColor"),
     DEFAULT_CLINIC_THEME["membershipCard"]["textColor"],
   )
-  theme["membershipCard"]["accentColor"] = normalize_theme_hex(
+  theme["membershipCard"]["accentColor"] = normalize_theme_accent_hex(
+    "membershipAccent",
     membership_card.get("accentColor"),
     DEFAULT_CLINIC_THEME["membershipCard"]["accentColor"],
   )
@@ -10914,7 +10932,7 @@ def clinic_settings():
       "calendlyUrl": clinic_row["calendly_url"],
       "notifyEmail": clinic_row["notify_email"],
       "slackWebhookUrl": clinic_row["slack_webhook_url"],
-      "chartColor": safe_public_text(safe_row_value(clinic_row, "chart_color"), "#b56f80"),
+      "chartColor": safe_public_text(safe_row_value(clinic_row, "chart_color"), "#F56B8A"),
       "calendarFeedUrl": (
         request.host_url.rstrip("/") + "/api/calendar/" + ensure_clinic_calendar_token(int(clinic_row["id"])) + ".ics"
         if ensure_clinic_calendar_token(int(clinic_row["id"]))
@@ -10933,7 +10951,7 @@ def clinic_settings():
       "calendlyUrl": user_row["calendly_url"],
       "notifyEmail": "",
       "slackWebhookUrl": "",
-      "chartColor": "#b56f80",
+      "chartColor": "#F56B8A",
       "calendarFeedUrl": "",
     }
 
@@ -11710,7 +11728,7 @@ def update_clinic_chart_color():
     return jsonify({"error": "Klinikzuordnung fehlt."}), 400
 
   payload = request.get_json(silent=True) or {}
-  chart_color = to_hex_color(safe_public_text(payload.get("chartColor"), "#b56f80"), "#b56f80")
+  chart_color = to_hex_color(safe_public_text(payload.get("chartColor"), "#F56B8A"), "#F56B8A")
 
   with get_db() as conn:
     conn.execute("UPDATE clinics SET chart_color = ? WHERE id = ?", (chart_color, clinic_id))
