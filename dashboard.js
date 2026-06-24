@@ -115,6 +115,7 @@ const settingsForm = document.getElementById("settingsForm");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 const chartColorPicker = document.getElementById("chartColorPicker");
 const chartColorControl = document.getElementById("chartColorControl");
+const chartColorText = document.getElementById("chartColorText");
 const appearanceForm = document.getElementById("appearanceForm");
 const appearanceStatus = document.getElementById("appearanceStatus");
 const appearanceWarnings = document.getElementById("appearanceWarnings");
@@ -363,6 +364,7 @@ const HAPTIC_PATTERNS = { light: 8, medium: 16, success: [6, 30, 10], warn: [14,
 
 function haptics(kind = "light") {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+  if (navigator.userActivation && !navigator.userActivation.isActive) return;
   try {
     navigator.vibrate(HAPTIC_PATTERNS[kind] || HAPTIC_PATTERNS.light);
   } catch {
@@ -924,7 +926,7 @@ function fillSettingsForm(settings) {
     chartColorPicker.value = chartColor;
     chartColorPicker.disabled = !state.isOwner;
   }
-  if (chartColorControl) chartColorControl.style.setProperty("--chart-color", chartColor);
+  updateChartColorControl(chartColor);
   scheduleMetricsRender();
   if (previewClinicName) {
     previewClinicName.textContent = settings.clinicName || state.user?.clinicName || "Demo Aesthetics";
@@ -1118,6 +1120,12 @@ function getCanvasContext(canvas) {
 const CHART_BRAND = "#b56f80";
 // User-selectable analytics chart color (persisted per clinic via /clinic/chart-color).
 let chartColor = CHART_BRAND;
+
+function updateChartColorControl(color) {
+  const normalized = normalizeHexColorForUi(color, CHART_BRAND);
+  if (chartColorControl) chartColorControl.style.setProperty("--chart-color", normalized);
+  if (chartColorText) chartColorText.textContent = normalized.toUpperCase();
+}
 
 function hexToRgba(hex, alpha) {
   const value = String(hex || "").replace("#", "");
@@ -2157,13 +2165,16 @@ async function handleMemberAction(target) {
   if (!nextActive && !window.confirm("Mitglied deaktivieren? Es kann sich danach nicht mehr anmelden.")) {
     return;
   }
+  const originalLabel = button.textContent;
   button.disabled = true;
+  button.textContent = nextActive ? "Aktiviere ..." : "Deaktiviere ...";
   try {
     await apiRequest(`/clinic/members/${memberId}`, { method: "PATCH", body: { active: nextActive } });
-    await loadMembers();
+    await Promise.all([loadMembers(), loadAuditLogs()]);
     showToast(nextActive ? "Mitglied aktiviert" : "Mitglied deaktiviert");
   } catch (error) {
     button.disabled = false;
+    button.textContent = originalLabel;
     showToast(error.message || "Aktion fehlgeschlagen.");
   }
 }
@@ -3349,8 +3360,8 @@ function bindEvents() {
   settingsForm.addEventListener("submit", handleSettingsSave);
   if (chartColorPicker instanceof HTMLInputElement) {
     const applyChartColor = () => {
-      chartColor = chartColorPicker.value || CHART_BRAND;
-      if (chartColorControl) chartColorControl.style.setProperty("--chart-color", chartColor);
+      chartColor = normalizeHexColorForUi(chartColorPicker.value, CHART_BRAND);
+      updateChartColorControl(chartColor);
       scheduleMetricsRender();
     };
     chartColorPicker.addEventListener("input", applyChartColor);

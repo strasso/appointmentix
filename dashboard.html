@@ -268,7 +268,7 @@
                 </select>
                 <label id="chartColorControl" class="chart-color-control" title="Diagrammfarbe wählen">
                   <span class="chart-color-dot"></span>
-                  <span class="chart-color-text">Farbe</span>
+                  <span id="chartColorText" class="chart-color-text">#B56F80</span>
                   <input id="chartColorPicker" type="color" value="#b56f80" aria-label="Diagrammfarbe wählen">
                 </label>
                 <button id="refreshMetricsBtn" class="icon-btn" type="button" title="Aktualisieren" aria-label="Aktualisieren"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v5h-5"/></svg></button>
@@ -289,7 +289,7 @@
           <div class="patient-stats" id="analyseStats"></div>
 
           <div class="stats-grid">
-            <section id="shopSummarySection" class="card analytics-tile">
+            <section id="shopSummarySection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg">
               <div class="tile-top">
                 <p class="tile-label">Nettoumsatz</p>
                 <button class="icon-btn" type="button" data-export-kind="netRevenue" title="CSV exportieren" aria-label="Nettoumsatz als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -299,7 +299,7 @@
               <canvas id="chartNetRevenue" height="110"></canvas>
             </section>
 
-            <section id="membershipsSection" class="card analytics-tile">
+            <section id="membershipsSection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg">
               <div class="tile-top">
                 <p class="tile-label">MRR</p>
                 <button class="icon-btn" type="button" data-export-kind="mrr" title="CSV exportieren" aria-label="MRR als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -309,7 +309,7 @@
               <canvas id="chartMRR" height="110"></canvas>
             </section>
 
-            <section class="card analytics-tile">
+            <section class="card analytics-tile analytics-source-tile">
               <div class="tile-top">
                 <p class="tile-label">Umsatzquellen</p>
                 <button class="icon-btn" type="button" data-export-kind="revenueSources" title="CSV exportieren" aria-label="Umsatzquellen als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -318,7 +318,7 @@
               <div id="revenueSourcesBody" class="source-list"></div>
             </section>
 
-            <section id="clinicProfilesSection" class="card analytics-tile">
+            <section id="clinicProfilesSection" class="card analytics-tile analytics-table-tile">
               <div class="tile-top">
                 <p class="tile-label">Top-Kunden</p>
                 <button class="icon-btn" type="button" data-export-kind="topClients" title="CSV exportieren" aria-label="Top-Kunden als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -336,7 +336,7 @@
               </div>
             </section>
 
-            <section id="appBuilderSection" class="card analytics-tile">
+            <section id="appBuilderSection" class="card analytics-tile analytics-table-tile">
               <div class="tile-top">
                 <p class="tile-label">Top-Teammitglieder</p>
                 <button class="icon-btn" type="button" data-export-kind="topTeam" title="CSV exportieren" aria-label="Top-Teammitglieder als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -362,7 +362,7 @@
                 </div>
               </div>
               <div class="metric-cluster-grid">
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">LTV pro App-Nutzer</p>
                     <button class="icon-btn" type="button" data-export-kind="appUserLtv" title="CSV exportieren" aria-label="LTV pro App-Nutzer als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -372,7 +372,7 @@
                   <canvas id="chartAppUserLTV" height="110"></canvas>
                 </div>
 
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">Kunden-LTV</p>
                     <button class="icon-btn" type="button" data-export-kind="clientLtv" title="CSV exportieren" aria-label="Kunden-LTV als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -382,7 +382,7 @@
                   <canvas id="chartClientLTV" height="110"></canvas>
                 </div>
 
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">App-Nutzer</p>
                     <button class="icon-btn" type="button" data-export-kind="appUsers" title="CSV exportieren" aria-label="App-Nutzer als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -392,7 +392,7 @@
                   <canvas id="chartAppUsers" height="110"></canvas>
                 </div>
 
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">Empfehlungen</p>
                     <button class="icon-btn" type="button" data-export-kind="referrals" title="CSV exportieren" aria-label="Empfehlungen als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -402,7 +402,7 @@
                   <canvas id="chartReferrals" height="110"></canvas>
                 </div>
 
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">Besuche</p>
                     <button class="icon-btn" type="button" data-export-kind="visits" title="CSV exportieren" aria-label="Besuche als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -412,7 +412,7 @@
                   <canvas id="chartVisits" height="110"></canvas>
                 </div>
 
-                <div class="analytics-mini-tile">
+                <div class="analytics-mini-tile analytics-chart-tile">
                   <div class="tile-top">
                     <p class="tile-label">Google-Bewertungen</p>
                     <button class="icon-btn" type="button" data-export-kind="reviews" title="CSV exportieren" aria-label="Google-Bewertungen als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -801,8 +801,13 @@
         <!-- TEAM -->
         <section class="view-panel" data-view-panel="team">
           <article class="card">
-            <h2>Team-Mitglieder</h2>
-            <p class="subline">Owner kann Staff-User anlegen.</p>
+            <div class="section-head team-head">
+              <div>
+                <h2>Team-Mitglieder</h2>
+                <p class="subline">Mitarbeiter:innen anlegen, deaktivieren und bei Bedarf wieder aktivieren.</p>
+              </div>
+              <span class="status-pill muted">Owner-Bereich</span>
+            </div>
 
             <div class="table-wrap">
               <table>
@@ -828,7 +833,7 @@
               <label>Passwort
                 <input name="password" type="password" minlength="8" required>
               </label>
-              <button class="btn primary" type="submit">Staff anlegen</button>
+              <button class="btn primary" type="submit">Mitarbeiter:in anlegen</button>
             </form>
           </article>
         </section>
@@ -839,7 +844,8 @@
             <h2>Klinik-Einstellungen</h2>
             <p class="subline">Basisdaten, Benachrichtigungen und Kalender deiner Klinik.</p>
 
-            <form id="settingsForm" class="form">
+            <form id="settingsForm" class="form settings-form">
+              <div class="settings-section-title">Klinikprofil</div>
               <label>Klinikname
                 <input name="clinicName" type="text" required>
               </label>
@@ -853,11 +859,12 @@
               <a class="settings-link-row" href="#branding">
                 <span class="settings-link-text">
                   <strong>Markenfarbe, Akzent &amp; Schrift</strong>
-                  <span class="field-hint">Werden jetzt zentral unter Branding gepflegt – inkl. Live-Vorschau der App.</span>
+                  <span class="field-hint">Zentral unter Branding gepflegt, inklusive Live-Vorschau der Kunden-App.</span>
                 </span>
                 <span class="settings-link-go">Branding öffnen →</span>
               </a>
               <input name="designPreset" type="hidden" value="clean">
+              <div class="settings-section-title">Buchung &amp; Benachrichtigung</div>
               <label>Calendly URL
                 <input name="calendlyUrl" type="text" placeholder="https://calendly.com/...">
               </label>
