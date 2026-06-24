@@ -361,6 +361,38 @@ input:focus, select:focus, textarea:focus {
 .eur-step:active, .pct-step:active { color: var(--brand-strong); background: var(--brand-tint); }
 .eur-step svg, .pct-step svg { width: 12px; height: 12px; pointer-events: none; }
 
+/* "Nur für Mitglieder"-Schalter (Behandlungen/Pakete/Produkte) */
+.members-only-row { margin-top: 2px; }
+.members-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 140ms var(--ease), background 140ms var(--ease), color 140ms var(--ease);
+}
+.members-toggle input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+.members-toggle-box {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.members-toggle:hover { border-color: var(--brand); color: var(--brand-strong); }
+.members-toggle:has(input:checked) { border-color: var(--brand); background: var(--brand-wash); color: var(--brand-strong); }
+.members-toggle:has(input:checked) .members-toggle-box { background: var(--brand); border-color: var(--brand); }
+.members-toggle:has(input:checked) .members-toggle-box::after { content: "✓"; color: #fff; font-size: 11px; font-weight: 800; line-height: 1; }
+
 /* ---------- Shop-Bereiche (Treatments / Pakete / Mitgliedschaften / Produkte) ---------- */
 #editorSection { display: grid; gap: 18px; }
 .shop-intro { color: var(--muted); font-size: 0.92rem; margin: -4px 0 -2px; }

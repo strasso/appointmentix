@@ -412,6 +412,16 @@ function pctStepControl(button) {
   return () => { window.clearTimeout(delay); if (repeat) window.clearInterval(repeat); };
 }
 
+// "Nur für Mitglieder"-Schalter: Flag läuft als membersOnly per JSON durch
+// (Backend speichert/lädt es unverändert) und landet so im Klinik-Bundle der App.
+function membersOnlyToggleHtml(checked) {
+  return `<label class="members-toggle">
+    <input type="checkbox" data-field="membersOnly"${checked ? " checked" : ""}>
+    <span class="members-toggle-box" aria-hidden="true"></span>
+    <span>Nur für Mitglieder</span>
+  </label>`;
+}
+
 function treatmentCard(item = {}) {
   return `
     <div class="item-card" data-kind="treatment">
@@ -449,6 +459,7 @@ function treatmentCard(item = {}) {
           ${renderBodyZoneChips(item.bodyZones)}
         </div>
       </div>
+      <div class="members-only-row">${membersOnlyToggleHtml(item.membersOnly)}</div>
       <div class="field-grid-2">
         <label>Bild URL
           <input data-field="imageUrl" value="${escapeAttr(item.imageUrl)}" placeholder="/uploads/clinic_x/beispiel.jpg">
@@ -626,6 +637,7 @@ function packageCard(item = {}) {
         <label>Inkludierte Behandlungen</label>
         <div class="body-zone-picker">${packageTreatmentChecksHtml(item.includedTreatmentIds)}</div>
       </div>
+      <div class="members-only-row">${membersOnlyToggleHtml(item.membersOnly)}</div>
       ${imageFieldHtml(item)}
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
@@ -647,6 +659,7 @@ function productCard(item = {}) {
       <label>Beschreibung
         <textarea data-field="description" placeholder="Kurzbeschreibung">${escapeAttr(item.description)}</textarea>
       </label>
+      <div class="members-only-row">${membersOnlyToggleHtml(item.membersOnly)}</div>
       ${imageFieldHtml(item)}
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
@@ -727,6 +740,7 @@ function collectCatalogFromDom() {
       memberPriceCents: euroToCents(card.querySelector('[data-field="memberPriceCents"]')?.value),
       description: card.querySelector('[data-field="description"]')?.value.trim() || "",
       imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+      membersOnly: card.querySelector('[data-field="membersOnly"]')?.checked || false,
       bodyZones: Array.from(card.querySelectorAll('input[data-body-zone-option]:checked'))
         .map((input) => normalizeBodyZoneId(input.value))
         .filter(Boolean),
@@ -777,6 +791,7 @@ function collectCatalogFromDom() {
           priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
           description: card.querySelector('[data-field="description"]')?.value.trim() || "",
           imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+          membersOnly: card.querySelector('[data-field="membersOnly"]')?.checked || false,
           includedTreatmentIds: Array.from(card.querySelectorAll('input[data-package-treatment]:checked'))
             .map((input) => String(input.value || "").trim())
             .filter(Boolean),
@@ -792,6 +807,7 @@ function collectCatalogFromDom() {
           priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
           description: card.querySelector('[data-field="description"]')?.value.trim() || "",
           imageUrl: card.querySelector('[data-field="imageUrl"]')?.value.trim() || "",
+          membersOnly: card.querySelector('[data-field="membersOnly"]')?.checked || false,
         }))
         .filter((item) => item.id && item.name)
     : [];
