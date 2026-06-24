@@ -596,13 +596,17 @@ function updateAppearanceWorkflowState() {
     appearanceDirtyBadge.classList.toggle("hidden", !state.themeDirty);
   }
   if (appearanceStatus) {
-    const publishedAt = state.themePublishedAt ? `Published ${formatDate(state.themePublishedAt)}` : "Noch nicht veröffentlicht";
     const draftLabel = state.themeDirty
       ? "Lokale Änderungen"
       : state.themeHasDraftChanges
-        ? "Draft gespeichert"
+        ? "Entwurf gespeichert"
         : "Live";
-    appearanceStatus.textContent = `${draftLabel} • ${publishedAt}`;
+    if (state.themePublishedAt) {
+      const liveSince = `seit ${formatDate(state.themePublishedAt)}`;
+      appearanceStatus.textContent = draftLabel === "Live" ? `Live ${liveSince}` : `${draftLabel} • live ${liveSince}`;
+    } else {
+      appearanceStatus.textContent = `${draftLabel} • noch nicht veröffentlicht`;
+    }
   }
 
   const disabled = !state.isOwner || state.themeLoading || hasInvalidColors;
@@ -739,7 +743,7 @@ async function saveThemeDraft() {
   try {
     const response = await apiRequest("/clinic/theme/draft", { method: "PUT", body: { theme } });
     applyThemeStatePayload(response);
-    showToast("Theme-Draft gespeichert");
+    showToast("Theme-Entwurf gespeichert");
     await loadAuditLogs();
   } catch (error) {
     showToast(error.message);
@@ -774,7 +778,7 @@ async function resetThemeDraftToPublished() {
   try {
     const response = await apiRequest("/clinic/theme/reset-draft", { method: "POST", body: {} });
     applyThemeStatePayload(response);
-    showToast("Theme auf Published zurückgesetzt");
+    showToast("Theme auf Live-Stand zurückgesetzt");
     await loadAuditLogs();
   } catch (error) {
     showToast(error.message);

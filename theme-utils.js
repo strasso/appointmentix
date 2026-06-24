@@ -162,7 +162,7 @@
       ["Primärtext auf Hintergrund", theme.colors.textPrimary, theme.colors.background],
       ["Sekundärtext auf Hintergrund", theme.colors.textSecondary, theme.colors.background],
       ["Primärtext auf Fläche", theme.colors.textPrimary, theme.colors.surface],
-      ["Membership-Text auf Karte", theme.membershipCard.textColor, theme.membershipCard.backgroundColor],
+      ["Mitgliedskarten-Text auf Karte", theme.membershipCard.textColor, theme.membershipCard.backgroundColor],
     ];
     return checks
       .map(([label, foreground, background]) => ({
