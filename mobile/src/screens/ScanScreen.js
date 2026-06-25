@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createMowgliTheme } from '../theme/tokens';
 
+// Fallback pattern shown only if the live QR code hasn't loaded yet (offline / first paint).
 const QR_MATRIX = [
   '1110001001011010',
   '1010011100010111',
@@ -22,18 +23,25 @@ const QR_MATRIX = [
   '0110100110011010',
 ];
 
-function QrPattern() {
+// Renders a QR module matrix (array of "0"/"1" rows) as a crisp black/white grid.
+function QrPattern({ matrix }) {
+  const rows = Array.isArray(matrix) && matrix.length ? matrix : QR_MATRIX;
+  const size = rows.length || 1;
+  const cell = Math.max(3, Math.floor(200 / size));
+  const dim = cell * size;
   return (
-    <View style={{ width: 192, height: 192, flexDirection: 'row', flexWrap: 'wrap' }}>
-      {QR_MATRIX.join('').split('').map((bit, index) => (
-        <View
-          key={`qr-${index}`}
-          style={{
-            width: 12,
-            height: 12,
-            backgroundColor: bit === '1' ? '#000000' : '#FFFFFF',
-          }}
-        />
+    <View style={{ width: dim, height: dim, flexDirection: 'column' }}>
+      {rows.map((row, r) => (
+        <View key={`qr-r-${r}`} style={{ flexDirection: 'row' }}>
+          {String(row)
+            .split('')
+            .map((bit, c) => (
+              <View
+                key={`qr-${r}-${c}`}
+                style={{ width: cell, height: cell, backgroundColor: bit === '1' ? '#000000' : '#FFFFFF' }}
+              />
+            ))}
+        </View>
       ))}
     </View>
   );
@@ -42,17 +50,12 @@ function QrPattern() {
 export default function ScanScreen({
   styles,
   mowgliTheme,
-  clinicProfile,
-  points,
-  checkInViaScan,
+  checkinData,
 }) {
   const theme = mowgliTheme || createMowgliTheme({ mode: 'dark' });
   const [showManualId, setShowManualId] = useState(false);
-  const manualId = useMemo(() => {
-    const prefix = String(clinicProfile.shortName || 'CUR').toUpperCase().slice(0, 4);
-    const pointPart = String(points || 0).padStart(4, '0').slice(0, 4);
-    return `${prefix}-${pointPart}-A1`;
-  }, [clinicProfile.shortName, points]);
+  const code = checkinData && checkinData.code ? String(checkinData.code) : '——————';
+  const matrix = checkinData ? checkinData.qrMatrix : null;
 
   return (
     <View style={[styles.mowgliScanShell, { backgroundColor: theme.page }]}>
@@ -63,13 +66,13 @@ export default function ScanScreen({
 
         <Text style={[styles.mowgliScanTitle, { color: theme.text }]}>Check-in Code</Text>
         <Text style={[styles.mowgliScanBody, { color: theme.textMuted }]}>
-          Zeige diesen Code an der Rezeption für Check-in oder Bezahlung.
+          Zeige diesen QR-Code an der Rezeption — das Team scannt ihn für deinen Check-in.
         </Text>
 
         {!showManualId && (
           <View style={styles.mowgliScanQrShell}>
             <View style={styles.mowgliScanQrCard}>
-              <QrPattern />
+              <QrPattern matrix={matrix} />
               <View style={styles.mowgliScanQrMark}>
                 <Ionicons name="sparkles" size={18} color="#0A0A0C" />
               </View>
@@ -79,10 +82,10 @@ export default function ScanScreen({
 
         {showManualId && (
           <View style={[styles.mowgliScanManualCard, { backgroundColor: theme.shell, borderColor: theme.border }]}>
-            <Text style={[styles.mowgliScanManualLabel, { color: theme.accent }]}>Manuelle ID</Text>
-            <Text style={[styles.mowgliScanManualValue, { color: theme.text }]}>{manualId}</Text>
+            <Text style={[styles.mowgliScanManualLabel, { color: theme.accent }]}>Code für die Rezeption</Text>
+            <Text style={[styles.mowgliScanManualValue, { color: theme.text }]}>{code}</Text>
             <Text style={[styles.mowgliScanManualBody, { color: theme.textMuted }]}>
-              Falls der Scanner nicht funktioniert, kann das Team diese ID manuell eingeben.
+              Falls der Scanner nicht funktioniert, kann das Team diesen Code manuell eingeben.
             </Text>
           </View>
         )}
@@ -95,20 +98,9 @@ export default function ScanScreen({
           onPress={() => setShowManualId((prev) => !prev)}
         >
           <Text style={[styles.mowgliScanToggleText, { color: theme.accent }]}>
-            {showManualId ? 'Code anzeigen statt ID' : 'ID anzeigen statt Code'}
+            {showManualId ? 'QR-Code anzeigen' : 'Code anzeigen statt QR'}
           </Text>
           <Ionicons name={showManualId ? 'qr-code-outline' : 'keypad-outline'} size={16} color={theme.accent} />
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.mowgliHeroCta,
-            { backgroundColor: theme.primaryButtonBg, borderColor: theme.borderStrong, minWidth: 240 },
-            pressed && styles.mowgliLiftSoft,
-          ]}
-          onPress={checkInViaScan}
-        >
-          <Text style={[styles.mowgliHeroCtaText, { color: theme.primaryButtonText }]}>Check-in bestätigen</Text>
         </Pressable>
       </View>
     </View>

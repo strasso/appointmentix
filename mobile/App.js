@@ -900,6 +900,25 @@ async function fetchClinicBundle(baseUrl, clinicName, clinicId = '') {
   return response.json();
 }
 
+async function requestCheckinCode(baseUrl, { clinicId, clinicName, phone, name, email }) {
+  const safeBaseUrl = normalizeUrl(baseUrl);
+  const response = await fetchWithRetry(`${safeBaseUrl}/api/mobile/checkin/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      clinicId: String(clinicId || ''),
+      clinicName: String(clinicName || ''),
+      phone: String(phone || ''),
+      name: String(name || ''),
+      email: String(email || ''),
+    }),
+  }, { timeoutMs: 9000, retries: 1, retryDelayMs: 450 });
+  if (!response.ok) {
+    throw new Error('Check-in-Code konnte nicht geladen werden.');
+  }
+  return response.json();
+}
+
 async function fetchClinicSearch(baseUrl, query, limit = 10) {
   const safeBaseUrl = normalizeUrl(baseUrl);
   const safeQuery = String(query || '').trim();
@@ -1430,6 +1449,7 @@ export default function App() {
   const [membershipStatus, setMembershipStatus] = useState(null);
   const [membershipSyncing, setMembershipSyncing] = useState(false);
   const [points, setPoints] = useState(430);
+  const [checkinData, setCheckinData] = useState(null);
   const [walletCents, setWalletCents] = useState(2500);
   const [lastAction, setLastAction] = useState('');
   const [history, setHistory] = useState([]);
@@ -3270,6 +3290,31 @@ function continueToAccessStep() {
     }
   }
 
+  useEffect(() => {
+    if (mainTab !== 'scan') return undefined;
+    let active = true;
+    const loadCheckin = async () => {
+      try {
+        const data = await requestCheckinCode(resolvedOnboardingBaseUrl, {
+          clinicId: clinicLookupId,
+          clinicName: clinicLookupName,
+          phone: patientPhone,
+          name: settingsName,
+          email: settingsEmail,
+        });
+        if (active) setCheckinData(data);
+      } catch (_) {
+        // keep any previously loaded code; ScanScreen falls back gracefully
+      }
+    };
+    loadCheckin();
+    const timer = setInterval(loadCheckin, 10 * 60 * 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [mainTab, resolvedOnboardingBaseUrl, clinicLookupId, clinicLookupName, patientPhone, settingsName, settingsEmail]);
+
   function checkInViaScan() {
     const bonusPoints = 30;
     setPoints((prev) => prev + bonusPoints);
@@ -3923,9 +3968,7 @@ function continueToAccessStep() {
           <ScanScreen
             styles={styles}
             mowgliTheme={mowgliTheme}
-            clinicProfile={clinicProfile}
-            points={points}
-            checkInViaScan={checkInViaScan}
+            checkinData={checkinData}
           />
         );
       case 'rewards':

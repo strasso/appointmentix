@@ -33,6 +33,11 @@ except ImportError:
   psycopg = None
   dict_row = None
 
+try:
+  import segno
+except ImportError:
+  segno = None
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "clinicflow.db"
@@ -1093,6 +1098,35 @@ def init_db() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_clinic_import_services_clinic_id ON clinic_import_services(clinic_id);
+
+        CREATE TABLE IF NOT EXISTS checkin_tokens (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          code TEXT NOT NULL DEFAULT '',
+          patient_phone TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          patient_email TEXT NOT NULL DEFAULT '',
+          expires_at TEXT NOT NULL,
+          used_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_checkin_tokens_clinic_code ON checkin_tokens(clinic_id, code);
+
+        CREATE TABLE IF NOT EXISTS clinic_visits (
+          id BIGSERIAL PRIMARY KEY,
+          clinic_id BIGINT NOT NULL,
+          patient_phone TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          patient_email TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'qr',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_clinic_visits_clinic_created ON clinic_visits(clinic_id, created_at DESC);
         """
       )
     else:
@@ -1425,6 +1459,35 @@ def init_db() -> None:
         );
 
         CREATE INDEX IF NOT EXISTS idx_clinic_import_services_clinic_id ON clinic_import_services(clinic_id);
+
+        CREATE TABLE IF NOT EXISTS checkin_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          code TEXT NOT NULL DEFAULT '',
+          patient_phone TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          patient_email TEXT NOT NULL DEFAULT '',
+          expires_at TEXT NOT NULL,
+          used_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_checkin_tokens_clinic_code ON checkin_tokens(clinic_id, code);
+
+        CREATE TABLE IF NOT EXISTS clinic_visits (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          clinic_id INTEGER NOT NULL,
+          patient_phone TEXT NOT NULL DEFAULT '',
+          patient_name TEXT NOT NULL DEFAULT '',
+          patient_email TEXT NOT NULL DEFAULT '',
+          source TEXT NOT NULL DEFAULT 'qr',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (clinic_id) REFERENCES clinics(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_clinic_visits_clinic_created ON clinic_visits(clinic_id, created_at DESC);
         """
       )
 
@@ -11734,6 +11797,171 @@ def update_clinic_chart_color():
     conn.execute("UPDATE clinics SET chart_color = ? WHERE id = ?", (chart_color, clinic_id))
 
   return jsonify({"chartColor": chart_color})
+
+
+# ---------- Check-in (QR + Code) ----------
+# Customer app requests a short-lived check-in token (POST /api/mobile/checkin/start);
+# clinic staff redeem it in the dashboard by scanning the QR or typing the 6-digit code
+# (POST /api/clinic/checkin/redeem). The visit is auto-assigned to the staff member's own
+# clinic_id, so a code from another clinic can never be redeemed here.
+CHECKIN_TOKEN_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_checkin_token() -> str:
+  return "".join(secrets.choice(CHECKIN_TOKEN_ALPHABET) for _ in range(10))
+
+
+def generate_checkin_qr_matrix(token: str) -> list[str]:
+  """QR module matrix as rows of '0'/'1'. The mobile app renders it as a grid,
+  so it needs no QR library of its own. Empty list if segno is unavailable."""
+  if segno is None:
+    return []
+  try:
+    qr = segno.make(str(token), error="m")
+    return ["".join("1" if cell else "0" for cell in row) for row in qr.matrix]
+  except Exception:
+    return []
+
+
+def resolve_clinic_row_from_payload(payload: dict):
+  clinic_id_raw = str(payload.get("clinicId", "")).strip()
+  clinic_name = str(payload.get("clinicName", "")).strip()
+  clinic_row = None
+  if clinic_id_raw:
+    try:
+      clinic_row = get_clinic_row_by_id(int(clinic_id_raw))
+    except (TypeError, ValueError):
+      clinic_row = None
+  if clinic_row is None and clinic_name:
+    clinic_row = get_clinic_row_by_name(clinic_name)
+  return clinic_row
+
+
+@app.post("/api/mobile/checkin/start")
+def mobile_checkin_start():
+  payload = request.get_json(silent=True) or {}
+  clinic_row = resolve_clinic_row_from_payload(payload)
+  if not clinic_row:
+    return jsonify({"error": "MedSpa nicht gefunden."}), 404
+  clinic_id = int(clinic_row["id"])
+  phone = sanitize_phone_e164(payload.get("phone")) or ""
+  name = safe_public_text(payload.get("name"), "")[:120]
+  email = sanitize_patient_email(payload.get("email") or "")
+  token = generate_checkin_token()
+  code = f"{secrets.randbelow(1000000):06d}"
+  expires_at = (utc_now() + timedelta(minutes=15)).isoformat()
+  with get_db() as conn:
+    conn.execute(
+      """
+      INSERT INTO checkin_tokens
+        (clinic_id, token, code, patient_phone, patient_name, patient_email, expires_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      (clinic_id, token, code, phone, name, email, expires_at, utc_now_iso()),
+    )
+  return jsonify(
+    {
+      "token": token,
+      "code": code,
+      "qrMatrix": generate_checkin_qr_matrix(token),
+      "expiresAt": expires_at,
+      "ttlSeconds": 900,
+    }
+  )
+
+
+@app.post("/api/clinic/checkin/redeem")
+def clinic_checkin_redeem():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"error": "Klinikzuordnung fehlt."}), 400
+
+  payload = request.get_json(silent=True) or {}
+  token = str(payload.get("token", "")).strip()
+  code = re.sub(r"\D", "", str(payload.get("code", "")))[:6]
+  if not token and not code:
+    return jsonify({"error": "Kein Check-in-Code übergeben."}), 400
+
+  now = utc_now()
+  with get_db() as conn:
+    if token:
+      row = conn.execute(
+        "SELECT id, patient_phone, patient_name, patient_email, expires_at, used_at FROM checkin_tokens WHERE token = ? AND clinic_id = ?",
+        (token, clinic_id),
+      ).fetchone()
+    else:
+      row = conn.execute(
+        "SELECT id, patient_phone, patient_name, patient_email, expires_at, used_at FROM checkin_tokens WHERE code = ? AND clinic_id = ? ORDER BY id DESC LIMIT 1",
+        (code, clinic_id),
+      ).fetchone()
+    if not row:
+      return jsonify({"error": "Code nicht gefunden oder gehört zu einer anderen Klinik."}), 404
+    if row["used_at"]:
+      return jsonify({"error": "Dieser Check-in-Code wurde bereits eingelöst."}), 409
+    expires = parse_datetime_utc(row["expires_at"])
+    if expires is None or expires <= now:
+      return jsonify({"error": "Der Check-in-Code ist abgelaufen."}), 410
+    checked_in_at = utc_now_iso()
+    source = "qr" if token else "code"
+    visit_id = insert_and_get_id(
+      conn,
+      """
+      INSERT INTO clinic_visits
+        (clinic_id, patient_phone, patient_name, patient_email, source, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      """,
+      (clinic_id, row["patient_phone"], row["patient_name"], row["patient_email"], source, checked_in_at),
+    )
+    conn.execute("UPDATE checkin_tokens SET used_at = ? WHERE id = ?", (checked_in_at, row["id"]))
+
+  create_audit_log(
+    clinic_id=clinic_id,
+    actor_user_id=int(user_row["id"]),
+    action="checkin.recorded",
+    entity_type="visit",
+    entity_id=str(visit_id),
+    metadata={"name": row["patient_name"], "source": source},
+  )
+  return jsonify(
+    {
+      "visit": {
+        "id": visit_id,
+        "patientName": safe_public_text(row["patient_name"], "Gast") or "Gast",
+        "patientPhone": row["patient_phone"],
+        "checkedInAt": checked_in_at,
+      }
+    }
+  )
+
+
+@app.get("/api/clinic/checkin/today")
+def clinic_checkin_today():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"visits": [], "count": 0})
+  start_of_day = utc_now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+  with get_db() as conn:
+    rows = conn.execute(
+      "SELECT id, patient_phone, patient_name, patient_email, source, created_at FROM clinic_visits WHERE clinic_id = ? AND created_at >= ? ORDER BY id DESC LIMIT 200",
+      (clinic_id, start_of_day),
+    ).fetchall()
+  visits = [
+    {
+      "id": r["id"],
+      "patientName": safe_public_text(r["patient_name"], "Gast") or "Gast",
+      "patientPhone": r["patient_phone"],
+      "source": r["source"],
+      "checkedInAt": r["created_at"],
+    }
+    for r in rows
+  ]
+  return jsonify({"visits": visits, "count": len(visits)})
 
 
 @app.post("/api/analytics/events")

@@ -96,6 +96,7 @@ const VIEW_META = {
   overview: { eyebrow: "Performance Center" },
   patienten: { eyebrow: "Patienten" },
   termine: { eyebrow: "Termine" },
+  checkin: { eyebrow: "Check-in" },
   analyse: { eyebrow: "Analyse" },
   katalog: { eyebrow: "Katalog & App" },
   branding: { eyebrow: "App-Design" },
@@ -1772,6 +1773,11 @@ function showView(viewName, updateHash = true) {
   if (target === "analyse") {
     scheduleMetricsRender();
   }
+  if (target === "checkin") {
+    onEnterCheckin();
+  } else {
+    leaveCheckin();
+  }
   if (updateHash && state.user) {
     const nextHash = `#${target}`;
     if (window.location.hash !== nextHash) {
@@ -2189,6 +2195,153 @@ async function handleMemberAction(target) {
     button.textContent = originalLabel;
     showToast(error.message || "Aktion fehlgeschlagen.");
   }
+}
+
+// ---------- Check-in (QR-Scan + Code) ----------
+const checkinVideo = document.getElementById("checkinVideo");
+const checkinScanner = document.getElementById("checkinScanner");
+const checkinScanHint = document.getElementById("checkinScanHint");
+const checkinCamBtn = document.getElementById("checkinCamBtn");
+const checkinCodeInput = document.getElementById("checkinCodeInput");
+const checkinCodeBtn = document.getElementById("checkinCodeBtn");
+const checkinFeedback = document.getElementById("checkinFeedback");
+const checkinTodayBody = document.getElementById("checkinTodayBody");
+const checkinTodayCount = document.getElementById("checkinTodayCount");
+const checkinRefreshBtn = document.getElementById("checkinRefreshBtn");
+
+const checkin = { stream: null, detector: null, scanTimer: null, pollTimer: null, busy: false, lastValue: "", lastValueAt: 0 };
+
+function setCheckinFeedback(message, kind = "") {
+  if (!checkinFeedback) return;
+  checkinFeedback.textContent = message || "";
+  checkinFeedback.className = `checkin-feedback${kind ? " " + kind : ""}`;
+}
+
+function formatCheckinTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(d);
+}
+
+function renderCheckinToday(visits) {
+  if (!checkinTodayBody) return;
+  const list = Array.isArray(visits) ? visits : [];
+  if (checkinTodayCount) checkinTodayCount.textContent = `${list.length} heute`;
+  if (!list.length) {
+    checkinTodayBody.innerHTML = '<tr><td colspan="3" class="checkin-empty">Noch niemand eingecheckt.</td></tr>';
+    return;
+  }
+  checkinTodayBody.innerHTML = list
+    .map((v) => `<tr>
+      <td>${escapeHtml(v.patientName || "Gast")}</td>
+      <td>${escapeHtml(v.patientPhone || "—")}</td>
+      <td>${escapeHtml(formatCheckinTime(v.checkedInAt))}</td>
+    </tr>`)
+    .join("");
+}
+
+async function loadCheckinToday() {
+  try {
+    const res = await apiRequest("/clinic/checkin/today");
+    renderCheckinToday(res.visits || []);
+  } catch (_) {
+    // keep the last list on transient errors
+  }
+}
+
+async function redeemCheckin(payload, { fromCamera = false } = {}) {
+  if (checkin.busy) return;
+  checkin.busy = true;
+  try {
+    const res = await apiRequest("/clinic/checkin/redeem", { method: "POST", body: payload });
+    const name = (res.visit && res.visit.patientName) || "Gast";
+    setCheckinFeedback(`✓ ${name} eingecheckt`, "ok");
+    try { if (navigator.vibrate) navigator.vibrate(14); } catch (_) {}
+    await loadCheckinToday();
+  } catch (error) {
+    setCheckinFeedback(error.message || "Check-in fehlgeschlagen.", "err");
+  } finally {
+    // cooldown so a QR lingering in view doesn't fire repeatedly
+    window.setTimeout(() => { checkin.busy = false; }, fromCamera ? 2500 : 600);
+  }
+}
+
+function submitCheckinCode() {
+  const code = String(checkinCodeInput ? checkinCodeInput.value : "").replace(/\D/g, "").slice(0, 6);
+  if (code.length !== 6) {
+    setCheckinFeedback("Bitte einen 6-stelligen Code eingeben.", "err");
+    return;
+  }
+  redeemCheckin({ code }).then(() => { if (checkinCodeInput) checkinCodeInput.value = ""; });
+}
+
+async function scanCheckinFrame() {
+  if (!checkin.detector || !checkinVideo || checkin.busy) return;
+  try {
+    const codes = await checkin.detector.detect(checkinVideo);
+    if (codes && codes.length) {
+      const value = String(codes[0].rawValue || "").trim();
+      const now = Date.now();
+      if (value && !(value === checkin.lastValue && now - checkin.lastValueAt < 3000)) {
+        checkin.lastValue = value;
+        checkin.lastValueAt = now;
+        redeemCheckin({ token: value }, { fromCamera: true });
+      }
+    }
+  } catch (_) {
+    // detect() can throw transiently between frames; ignore
+  }
+}
+
+async function startCheckinCamera() {
+  if (checkin.stream) { stopCheckinCamera(); return; }
+  if (!("BarcodeDetector" in window)) {
+    setCheckinFeedback("QR-Scan wird von diesem Browser nicht unterstützt — bitte den Code eingeben.", "err");
+    return;
+  }
+  if (!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+    setCheckinFeedback("Kein Kamerazugriff möglich — bitte den Code eingeben.", "err");
+    return;
+  }
+  try {
+    checkin.detector = checkin.detector || new window.BarcodeDetector({ formats: ["qr_code"] });
+    checkin.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    if (checkinVideo) {
+      checkinVideo.srcObject = checkin.stream;
+      await checkinVideo.play().catch(() => {});
+    }
+    if (checkinScanner) checkinScanner.classList.add("is-live");
+    if (checkinScanHint) checkinScanHint.textContent = "QR-Code in den Rahmen halten …";
+    if (checkinCamBtn) checkinCamBtn.textContent = "Kamera stoppen";
+    setCheckinFeedback("");
+    checkin.scanTimer = window.setInterval(scanCheckinFrame, 350);
+  } catch (_) {
+    setCheckinFeedback("Kamerazugriff verweigert — bitte den Code eingeben.", "err");
+    stopCheckinCamera();
+  }
+}
+
+function stopCheckinCamera() {
+  if (checkin.scanTimer) { window.clearInterval(checkin.scanTimer); checkin.scanTimer = null; }
+  if (checkin.stream) {
+    checkin.stream.getTracks().forEach((t) => t.stop());
+    checkin.stream = null;
+  }
+  if (checkinVideo) checkinVideo.srcObject = null;
+  if (checkinScanner) checkinScanner.classList.remove("is-live");
+  if (checkinCamBtn) checkinCamBtn.textContent = "Kamera starten";
+  if (checkinScanHint) checkinScanHint.textContent = "Tippe auf „Kamera starten\", um den QR-Code zu scannen.";
+}
+
+function onEnterCheckin() {
+  loadCheckinToday();
+  if (checkin.pollTimer) window.clearInterval(checkin.pollTimer);
+  checkin.pollTimer = window.setInterval(loadCheckinToday, 12000);
+}
+
+function leaveCheckin() {
+  stopCheckinCamera();
+  if (checkin.pollTimer) { window.clearInterval(checkin.pollTimer); checkin.pollTimer = null; }
 }
 
 const SUBSCRIPTION_STATUS_LABELS = {
@@ -3417,6 +3570,12 @@ function bindEvents() {
       handleMemberAction(event.target).catch((error) => showToast(error.message));
     });
   }
+  if (checkinCamBtn) checkinCamBtn.addEventListener("click", () => { startCheckinCamera(); });
+  if (checkinCodeBtn) checkinCodeBtn.addEventListener("click", submitCheckinCode);
+  if (checkinCodeInput) checkinCodeInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); submitCheckinCode(); }
+  });
+  if (checkinRefreshBtn) checkinRefreshBtn.addEventListener("click", () => { loadCheckinToday(); });
   startCheckoutBtn.addEventListener("click", handleCheckoutStart);
   refreshMetricsBtn.addEventListener("click", () => {
     loadAnalyticsSummary().catch((error) => showToast(error.message));
