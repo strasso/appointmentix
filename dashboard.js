@@ -922,6 +922,15 @@ function fillSettingsForm(settings) {
   if (settingsForm.elements.slackWebhookUrl) {
     settingsForm.elements.slackWebhookUrl.value = settings.slackWebhookUrl || "";
   }
+  if (settingsForm.elements.instagramUrl) {
+    settingsForm.elements.instagramUrl.value = settings.instagramUrl || "";
+  }
+  if (settingsForm.elements.facebookUrl) {
+    settingsForm.elements.facebookUrl.value = settings.facebookUrl || "";
+  }
+  if (settingsForm.elements.tiktokUrl) {
+    settingsForm.elements.tiktokUrl.value = settings.tiktokUrl || "";
+  }
   const calendarFeedField = document.getElementById("calendarFeedUrl");
   if (calendarFeedField) {
     calendarFeedField.value = settings.calendarFeedUrl || "";

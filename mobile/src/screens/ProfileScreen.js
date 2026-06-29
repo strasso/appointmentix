@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
 import { createMowgliTheme } from '../theme/tokens';
 
@@ -70,6 +71,21 @@ export default function ProfileScreen({
     if (patientPhone) return patientPhone;
     return 'Keine Kontaktdaten hinterlegt';
   }, [patientGuestMode, patientPhone, settingsEmail]);
+  const socialLinks = useMemo(() => {
+    const s = (clinicProfile && clinicProfile.socials) || {};
+    return [
+      { key: 'instagram', label: 'Instagram', icon: 'logo-instagram', url: String(s.instagram || '').trim() },
+      { key: 'facebook', label: 'Facebook', icon: 'logo-facebook', url: String(s.facebook || '').trim() },
+      { key: 'tiktok', label: 'TikTok', icon: 'logo-tiktok', url: String(s.tiktok || '').trim() },
+    ].filter((item) => item.url);
+  }, [clinicProfile]);
+  const openSocial = async (url) => {
+    try {
+      await Linking.openURL(url);
+    } catch (_) {
+      // ignore — nothing to do if the platform can't open the link
+    }
+  };
 
   return (
     <View style={[profileStyles.screen, { backgroundColor: theme.page }]}>
@@ -165,6 +181,22 @@ export default function ProfileScreen({
           noBorder
         />
       </View>
+
+      {socialLinks.length > 0 && (
+        <View style={profileStyles.menuSection}>
+          {socialLinks.map((item, idx) => (
+            <MenuRow
+              key={item.key}
+              theme={theme}
+              icon={item.icon}
+              title={item.label}
+              subtitle="Profil öffnen"
+              onPress={() => openSocial(item.url)}
+              noBorder={idx === socialLinks.length - 1}
+            />
+          ))}
+        </View>
+      )}
 
       <View style={[profileStyles.settingsCard, { backgroundColor: theme.surfaceAlt, borderColor: theme.border }]}>
         <Text style={[profileStyles.settingsLabel, { color: theme.accent }]}>Darstellung & Profil</Text>

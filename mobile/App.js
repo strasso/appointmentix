@@ -2336,6 +2336,7 @@ function selectClinicFromSearch(clinic) {
     logoUrl: clinic?.logoUrl || prev?.logoUrl || '',
     brandColor: clinic?.brandColor || prev?.brandColor || '',
     accentColor: clinic?.accentColor || prev?.accentColor || '',
+    socials: clinic?.socials || prev?.socials || {},
   }));
   setClinicDropdownOpen(false);
   setBackendCheckMessage('');

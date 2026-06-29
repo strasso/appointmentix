@@ -1515,6 +1515,9 @@ def init_db() -> None:
         "slack_webhook_url": "TEXT NOT NULL DEFAULT ''",
         "calendar_feed_token": "TEXT NOT NULL DEFAULT ''",
         "chart_color": "TEXT NOT NULL DEFAULT '#F56B8A'",
+        "instagram_url": "TEXT NOT NULL DEFAULT ''",
+        "facebook_url": "TEXT NOT NULL DEFAULT ''",
+        "tiktok_url": "TEXT NOT NULL DEFAULT ''",
       },
     )
 
@@ -1938,6 +1941,9 @@ def get_clinic_row_by_id(clinic_id: int | None):
         slack_webhook_url,
         calendar_feed_token,
         chart_color,
+        instagram_url,
+        facebook_url,
+        tiktok_url,
         created_at
       FROM clinics
       WHERE id = ?
@@ -2072,6 +2078,39 @@ def safe_row_value(row, key: str, fallback: object = "") -> object:
     return fallback
 
 
+SOCIAL_PLATFORM_BASE = {
+  "instagram": "https://instagram.com/",
+  "facebook": "https://facebook.com/",
+  "tiktok": "https://tiktok.com/@",
+}
+SOCIAL_URL_HINTS = ("instagram.com", "facebook.com", "fb.com", "fb.me", "tiktok.com")
+
+
+def normalize_social_url(value: object, platform: str) -> str:
+  """Accept either a full profile URL or a bare @handle and return a clean https URL."""
+  raw = safe_public_text(value, "")[:300].strip()
+  if not raw:
+    return ""
+  low = raw.lower()
+  looks_like_url = (
+    "://" in low or low.startswith("www.") or "/" in raw or any(hint in low for hint in SOCIAL_URL_HINTS)
+  )
+  if looks_like_url:
+    return normalize_url(raw)[:300]
+  handle = raw.lstrip("@").strip()
+  if not handle:
+    return ""
+  return (SOCIAL_PLATFORM_BASE.get(platform, "https://") + handle)[:300]
+
+
+def serialize_public_clinic_socials(row) -> dict:
+  return {
+    "instagram": normalize_social_url(safe_row_value(row, "instagram_url"), "instagram"),
+    "facebook": normalize_social_url(safe_row_value(row, "facebook_url"), "facebook"),
+    "tiktok": normalize_social_url(safe_row_value(row, "tiktok_url"), "tiktok"),
+  }
+
+
 def serialize_public_clinic_branding(row) -> dict:
   brand_color = safe_public_text(safe_row_value(row, "brand_color"), "#8A5A2F")
   accent_color = safe_public_text(safe_row_value(row, "accent_color"), "#EB6C13")
@@ -2103,6 +2142,7 @@ def serialize_public_clinic(row) -> dict:
     "latitude": profile["latitude"],
     "longitude": profile["longitude"],
     "website": normalize_url(safe_public_text(safe_row_value(row, "website"))),
+    "socials": serialize_public_clinic_socials(row),
     **branding,
     "branding": branding,
   }
@@ -10996,6 +11036,9 @@ def clinic_settings():
       "notifyEmail": clinic_row["notify_email"],
       "slackWebhookUrl": clinic_row["slack_webhook_url"],
       "chartColor": safe_public_text(safe_row_value(clinic_row, "chart_color"), "#F56B8A"),
+      "instagramUrl": safe_public_text(safe_row_value(clinic_row, "instagram_url")),
+      "facebookUrl": safe_public_text(safe_row_value(clinic_row, "facebook_url")),
+      "tiktokUrl": safe_public_text(safe_row_value(clinic_row, "tiktok_url")),
       "calendarFeedUrl": (
         request.host_url.rstrip("/") + "/api/calendar/" + ensure_clinic_calendar_token(int(clinic_row["id"])) + ".ics"
         if ensure_clinic_calendar_token(int(clinic_row["id"]))
@@ -11015,6 +11058,9 @@ def clinic_settings():
       "notifyEmail": "",
       "slackWebhookUrl": "",
       "chartColor": "#F56B8A",
+      "instagramUrl": "",
+      "facebookUrl": "",
+      "tiktokUrl": "",
       "calendarFeedUrl": "",
     }
 
@@ -11073,6 +11119,19 @@ def update_clinic_settings():
     slack_webhook_url = safe_public_text(clinic_row["slack_webhook_url"], "")[:300]
   if slack_webhook_url and not slack_webhook_url.lower().startswith("https://"):
     return jsonify({"error": "Slack-Webhook-URL muss mit https:// beginnen."}), 400
+  # Social links: present key (even empty) overwrites; absent key keeps the stored value.
+  if "instagramUrl" in payload:
+    instagram_url = normalize_social_url(payload.get("instagramUrl"), "instagram")
+  else:
+    instagram_url = safe_public_text(safe_row_value(clinic_row, "instagram_url"), "")
+  if "facebookUrl" in payload:
+    facebook_url = normalize_social_url(payload.get("facebookUrl"), "facebook")
+  else:
+    facebook_url = safe_public_text(safe_row_value(clinic_row, "facebook_url"), "")
+  if "tiktokUrl" in payload:
+    tiktok_url = normalize_social_url(payload.get("tiktokUrl"), "tiktok")
+  else:
+    tiktok_url = safe_public_text(safe_row_value(clinic_row, "tiktok_url"), "")
   sync_website_catalog = bool(website) and parse_bool_flag(payload.get("syncWebsiteCatalog"), True)
   skip_website_import = parse_bool_flag(payload.get("skipWebsiteImport"), False)
   use_website_brand_color = parse_bool_flag(payload.get("useWebsiteBrandColor"), False)
@@ -11120,7 +11179,10 @@ def update_clinic_settings():
         design_preset = ?,
         calendly_url = ?,
         notify_email = ?,
-        slack_webhook_url = ?
+        slack_webhook_url = ?,
+        instagram_url = ?,
+        facebook_url = ?,
+        tiktok_url = ?
       WHERE id = ?
       """,
       (
@@ -11134,6 +11196,9 @@ def update_clinic_settings():
         calendly_url,
         notify_email,
         slack_webhook_url,
+        instagram_url,
+        facebook_url,
+        tiktok_url,
         clinic_id,
       ),
     )
