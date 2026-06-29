@@ -823,12 +823,47 @@ function setAuthMessage(text, success = false) {
   authMessage.classList.toggle("success", success);
 }
 
+function passwordEyeIcon(isVisible = false) {
+  return isVisible
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.2 5.3A9.9 9.9 0 0 1 12 5c6 0 9.5 7 9.5 7a16.9 16.9 0 0 1-3 3.9"/><path d="M6.2 6.5C3.8 8.2 2.5 12 2.5 12s3.5 7 9.5 7a9.8 9.8 0 0 0 4.1-.9"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+
+function setPasswordFieldVisible(field, isVisible = false) {
+  const input = field?.querySelector("input");
+  const toggle = field?.querySelector("[data-password-toggle]");
+  if (!(input instanceof HTMLInputElement) || !(toggle instanceof HTMLButtonElement)) return;
+  input.type = isVisible ? "text" : "password";
+  toggle.innerHTML = passwordEyeIcon(isVisible);
+  toggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
+  toggle.setAttribute("aria-label", isVisible ? "Passwort ausblenden" : "Passwort anzeigen");
+  toggle.title = isVisible ? "Passwort ausblenden" : "Passwort anzeigen";
+}
+
+function resetPasswordVisibility(scope = document) {
+  scope.querySelectorAll(".password-field").forEach((field) => setPasswordFieldVisible(field, false));
+}
+
+function handlePasswordToggleClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const toggle = target.closest("[data-password-toggle]");
+  if (!(toggle instanceof HTMLButtonElement)) return;
+  const field = toggle.closest(".password-field");
+  const input = field?.querySelector("input");
+  if (!(field instanceof Element) || !(input instanceof HTMLInputElement)) return;
+  const nextVisible = input.type === "password";
+  setPasswordFieldVisible(field, nextVisible);
+  input.focus({ preventScroll: true });
+}
+
 function setTab(nextTab) {
   state.activeTab = nextTab;
   tabLogin.classList.toggle("active", nextTab === "login");
   tabRegister.classList.toggle("active", nextTab === "register");
   loginForm.classList.toggle("hidden", nextTab !== "login");
   registerForm.classList.toggle("hidden", nextTab !== "register");
+  resetPasswordVisibility(authSection);
   setAuthMessage("");
 }
 
@@ -3667,6 +3702,7 @@ function openMemberDrawer(member = null) {
     memberSaveBtn.disabled = false;
     memberSaveBtn.textContent = state.memberDrawerMode === "edit" ? "Speichern" : "Anlegen";
   }
+  resetPasswordVisibility(memberDrawer);
   memberDrawer.classList.remove("hidden");
   memberDrawer.setAttribute("aria-hidden", "false");
   window.requestAnimationFrame(() => memberDrawer.classList.add("open"));
@@ -3816,6 +3852,7 @@ function bindEvents() {
   tabRegister.addEventListener("click", () => setTab("register"));
   loginForm.addEventListener("submit", handleLogin);
   registerForm.addEventListener("submit", handleRegister);
+  document.addEventListener("click", handlePasswordToggleClick);
   logoutBtn.addEventListener("click", handleLogout);
   settingsForm.addEventListener("submit", handleSettingsSave);
   if (chartColorPicker instanceof HTMLInputElement) {

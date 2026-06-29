@@ -32,7 +32,10 @@
           <input name="email" type="email" placeholder="du@klinik.de" required>
         </label>
         <label>Passwort
-          <input name="password" type="password" minlength="8" required>
+          <span class="password-field">
+            <input name="password" type="password" minlength="8" required>
+            <button class="password-toggle" type="button" data-password-toggle aria-label="Passwort anzeigen" aria-pressed="false" title="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </span>
         </label>
         <button class="btn primary" type="submit">Einloggen</button>
       </form>
@@ -48,7 +51,10 @@
           <input name="email" type="email" placeholder="owner@klinik.de" required>
         </label>
         <label>Passwort
-          <input name="password" type="password" minlength="8" required>
+          <span class="password-field">
+            <input name="password" type="password" minlength="8" required>
+            <button class="password-toggle" type="button" data-password-toggle aria-label="Passwort anzeigen" aria-pressed="false" title="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </span>
         </label>
         <button class="btn primary" type="submit">Owner-Konto erstellen</button>
       </form>
@@ -1073,7 +1079,10 @@
             <input name="email" type="email" autocomplete="email" required>
           </label>
           <label id="memberPasswordLabel">Passwort
-            <input name="password" type="password" minlength="8" autocomplete="new-password" required>
+            <span class="password-field">
+              <input name="password" type="password" minlength="8" autocomplete="new-password" required>
+              <button class="password-toggle" type="button" data-password-toggle aria-label="Passwort anzeigen" aria-pressed="false" title="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            </span>
           </label>
           <p id="memberFormError" class="message"></p>
         </form>
