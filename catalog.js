@@ -479,6 +479,25 @@ function treatmentCard(item = {}) {
 
 // Inkludierte Behandlungen als Auswahl-Chips (wie bei Paketen), aus den eigenen
 // Treatments der Klinik — keine ID-Eingabe mehr nötig.
+const MEMBERSHIP_ACCENT_DEFAULT = "#f56b8a";
+const MEMBERSHIP_ACCENT_PRESETS = ["#f56b8a", "#2f5d9b", "#35b2d8", "#7c5cff", "#1d7a55", "#e0a106", "#16181d"];
+
+function normAccent(value) {
+  const s = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(s) ? s.toLowerCase() : MEMBERSHIP_ACCENT_DEFAULT;
+}
+
+function membershipAccentHtml(accent) {
+  const value = normAccent(accent);
+  const swatches = MEMBERSHIP_ACCENT_PRESETS
+    .map((c) => `<button type="button" class="accent-swatch ${c === value ? "active" : ""}" data-accent-preset="${c}" style="--sw: ${c}" aria-label="Farbe ${c}"></button>`)
+    .join("");
+  return `<div class="accent-field">
+      <label class="accent-color-label"><input type="color" data-field="accentColor" value="${value}"><span>Akzentfarbe</span></label>
+      <div class="accent-swatches">${swatches}</div>
+    </div>`;
+}
+
 function membershipTreatmentChecksHtml(selectedIds = []) {
   const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((id) => String(id).trim()).filter(Boolean));
   const treatments = Array.from(treatmentsList.querySelectorAll('.item-card[data-kind="treatment"]'))
@@ -513,14 +532,15 @@ function membershipBenefitsHtml(perks = []) {
   return `<div class="benefit-list" data-benefit-list>${rows}</div><button type="button" class="btn ghost btn-sm benefit-add" data-add-benefit>+ Vorteil hinzufügen</button>`;
 }
 
-function membershipPreviewInner(name, priceCents, benefits, treatmentNames) {
+function membershipPreviewInner(name, priceCents, benefits, treatmentNames, accent) {
+  const accentColor = normAccent(accent);
   const benefitHtml = (benefits.length ? benefits : ["Deine Vorteile erscheinen hier"])
     .map((b) => `<li>${escapeAttr(b)}</li>`)
     .join("");
   const treatHtml = treatmentNames.length
     ? `<div class="mp-treatments"><span class="mp-treatments-label">Inklusive</span><div class="mp-chips">${treatmentNames.map((n) => `<span class="mp-chip">${escapeAttr(n)}</span>`).join("")}</div></div>`
     : "";
-  return `<div class="mp-card">
+  return `<div class="mp-card mp-card--accent" style="--mp-accent: ${accentColor}">
       <div class="mp-head"><span class="mp-name">${escapeAttr(name || "Mitgliedschaft")}</span><span class="mp-price">${escapeAttr(centsToEuroInput(priceCents))} €<small>/Monat</small></span></div>
       <ul class="mp-benefits">${benefitHtml}</ul>
       ${treatHtml}
@@ -534,7 +554,9 @@ function updateMembershipPreview(card) {
   const priceCents = euroToCents(card.querySelector('[data-field="priceCents"]')?.value);
   const benefits = Array.from(card.querySelectorAll("[data-membership-benefit]")).map((i) => i.value.trim()).filter(Boolean);
   const ids = Array.from(card.querySelectorAll("input[data-membership-treatment]:checked")).map((i) => i.value);
-  preview.innerHTML = membershipPreviewInner(name, priceCents, benefits, resolveTreatmentNames(ids));
+  const accent = card.querySelector('[data-field="accentColor"]')?.value || "";
+  card.querySelectorAll("[data-accent-preset]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-accent-preset") === normAccent(accent)));
+  preview.innerHTML = membershipPreviewInner(name, priceCents, benefits, resolveTreatmentNames(ids), accent);
 }
 
 function membershipCard(item = {}) {
@@ -561,10 +583,14 @@ function membershipCard(item = {}) {
             <label>Vorteile</label>
             ${membershipBenefitsHtml(item.perks)}
           </div>
+          <div>
+            <label>Farbe</label>
+            ${membershipAccentHtml(item.accentColor)}
+          </div>
         </div>
         <div class="membership-preview-col">
           <span class="membership-preview-label">App-Vorschau</span>
-          <div data-membership-preview>${membershipPreviewInner(item.name || "", item.priceCents, benefits, treatmentNames)}</div>
+          <div data-membership-preview>${membershipPreviewInner(item.name || "", item.priceCents, benefits, treatmentNames, item.accentColor)}</div>
         </div>
       </div>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
@@ -825,6 +851,7 @@ function collectCatalogFromDom() {
       perks: Array.from(card.querySelectorAll('[data-membership-benefit]'))
         .map((input) => input.value.trim())
         .filter(Boolean),
+      accentColor: normAccent(card.querySelector('[data-field="accentColor"]')?.value),
     }))
     .filter((item) => item.id && item.name);
 
@@ -1159,6 +1186,15 @@ async function init() {
       if (!(event.target instanceof Element)) return;
       const card = event.target.closest('.item-card[data-kind="membership"]');
       if (!card) return;
+      const presetBtn = event.target.closest("[data-accent-preset]");
+      if (presetBtn) {
+        const input = card.querySelector('[data-field="accentColor"]');
+        if (input) {
+          input.value = presetBtn.getAttribute("data-accent-preset");
+          updateMembershipPreview(card);
+        }
+        return;
+      }
       if (event.target.closest("[data-add-benefit]")) {
         const list = card.querySelector("[data-benefit-list]");
         if (list) {
