@@ -564,6 +564,8 @@ a.btn:visited {
 .stats-grid canvas {
   display: block;
   width: 100%;
+  cursor: crosshair;
+  touch-action: pan-y;
 }
 
 .hero-chart canvas {
@@ -962,9 +964,19 @@ a.btn:visited {
   font-weight: 800;
   letter-spacing: 0.02em;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.20);
+  overflow: hidden;
 }
 .team-member-row.is-inactive .team-member-avatar {
   background: linear-gradient(140deg, #9aa3af, #6b7280);
+}
+.team-member-avatar.has-photo {
+  background: var(--surface-muted);
+}
+.team-member-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .team-member-main {
   min-width: 0;
@@ -992,17 +1004,35 @@ a.btn:visited {
   gap: 6px;
   flex-wrap: wrap;
 }
-.team-member-email {
+.team-member-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--muted);
   font-size: 0.84rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.team-member-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-member-meta span + span::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin: 0 8px 2px 0;
+  border-radius: 50%;
+  background: var(--muted-soft);
+}
 .team-member-actions {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   min-width: 124px;
 }
 .team-owner-lock {
@@ -1010,7 +1040,8 @@ a.btn:visited {
   font-size: 0.78rem;
   font-weight: 700;
 }
-.member-action-btn {
+.member-action-btn,
+.member-edit-btn {
   appearance: none;
   border: 1px solid rgba(18, 22, 30, 0.12);
   background: var(--surface-strong);
@@ -1023,7 +1054,13 @@ a.btn:visited {
   cursor: pointer;
   transition: border-color 160ms var(--ease), color 160ms var(--ease), background 160ms var(--ease), transform 160ms var(--ease);
 }
-.member-action-btn:hover {
+.member-edit-btn {
+  border-color: transparent;
+  background: rgba(18, 22, 30, 0.05);
+  color: var(--muted);
+}
+.member-action-btn:hover,
+.member-edit-btn:hover {
   border-color: var(--brand);
   color: var(--brand);
   background: var(--brand-wash);
@@ -1078,6 +1115,65 @@ a.btn:visited {
   width: 18px;
   height: 18px;
 }
+.member-photo-field {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: rgba(247, 248, 250, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(18, 22, 30, 0.06);
+}
+.member-photo-preview {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--brand);
+  background: var(--brand-wash);
+  font-size: 1.35rem;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(245, 107, 138, 0.18);
+}
+.member-photo-preview.has-photo {
+  background: var(--surface-muted);
+}
+.member-photo-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.member-photo-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.member-photo-copy strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.member-photo-copy small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.member-photo-field .icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--muted);
+}
+.member-photo-field .icon-btn:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
 @media (max-width: 720px) {
   .team-card {
     padding: 20px;
@@ -1107,10 +1203,26 @@ a.btn:visited {
     flex-direction: column;
     gap: 7px;
   }
+  .team-member-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .team-member-meta span + span::before {
+    display: none;
+  }
   .team-member-actions {
     grid-column: 2;
     justify-content: flex-start;
     min-width: 0;
+  }
+  .member-photo-field {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+  .member-photo-field .btn,
+  .member-photo-field .icon-btn {
+    grid-column: 2;
+    justify-self: start;
   }
 }
 
@@ -3147,7 +3259,11 @@ td small {
 #apptCancelAppt:hover { background: var(--danger-soft); border-color: rgba(178, 58, 85, 0.3); color: var(--danger); }
 
 @media (max-width: 520px) {
-  .drawer-panel { width: 100%; }
+  .drawer-panel {
+    left: 0;
+    width: 100vw;
+    max-width: none;
+  }
 }
 .drawer-section { padding-top: 14px; border-top: 1px dashed var(--border-strong); }
 

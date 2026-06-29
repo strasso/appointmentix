@@ -805,6 +805,8 @@ def init_db() -> None:
           clinic_id BIGINT,
           role TEXT NOT NULL DEFAULT 'owner',
           full_name TEXT NOT NULL,
+          job_title TEXT NOT NULL DEFAULT '',
+          profile_image_url TEXT NOT NULL DEFAULT '',
           clinic_name TEXT NOT NULL,
           logo_url TEXT NOT NULL DEFAULT '',
           website TEXT NOT NULL DEFAULT '',
@@ -1166,6 +1168,8 @@ def init_db() -> None:
           clinic_id INTEGER,
           role TEXT NOT NULL DEFAULT 'owner',
           full_name TEXT NOT NULL,
+          job_title TEXT NOT NULL DEFAULT '',
+          profile_image_url TEXT NOT NULL DEFAULT '',
           clinic_name TEXT NOT NULL,
           logo_url TEXT NOT NULL DEFAULT '',
           website TEXT NOT NULL DEFAULT '',
@@ -1539,6 +1543,8 @@ def init_db() -> None:
         "clinic_id": "INTEGER",
         "role": "TEXT NOT NULL DEFAULT 'owner'",
         "active": "INTEGER NOT NULL DEFAULT 1",
+        "job_title": "TEXT NOT NULL DEFAULT ''",
+        "profile_image_url": "TEXT NOT NULL DEFAULT ''",
         "logo_url": "TEXT NOT NULL DEFAULT ''",
         "website": "TEXT NOT NULL DEFAULT ''",
         "brand_color": "TEXT NOT NULL DEFAULT '#16A34A'",
@@ -11427,6 +11433,8 @@ def clinic_members():
         id,
         email,
         full_name,
+        job_title,
+        profile_image_url,
         role,
         active,
         created_at
@@ -11444,6 +11452,8 @@ def clinic_members():
           "id": row["id"],
           "email": row["email"],
           "fullName": row["full_name"],
+          "jobTitle": safe_public_text(safe_row_value(row, "job_title"), ""),
+          "profileImageUrl": safe_public_text(safe_row_value(row, "profile_image_url"), ""),
           "role": row["role"],
           "active": int(safe_row_value(row, "active", 1) or 0) != 0,
           "createdAt": row["created_at"],
@@ -11701,6 +11711,8 @@ def create_clinic_member():
 
   payload = request.get_json(silent=True) or {}
   full_name = str(payload.get("fullName", "")).strip()
+  job_title = safe_public_text(payload.get("jobTitle"), "")[:120]
+  profile_image_url = safe_public_text(payload.get("profileImageUrl"), "")
   email = str(payload.get("email", "")).strip().lower()
   password = str(payload.get("password", ""))
   role = str(payload.get("role", "staff")).strip().lower()
@@ -11713,6 +11725,8 @@ def create_clinic_member():
     return jsonify({"error": "Bitte gültige E-Mail eingeben."}), 400
   if len(password) < 8:
     return jsonify({"error": "Passwort muss mindestens 8 Zeichen haben."}), 400
+  if profile_image_url and not profile_image_url.startswith(("/uploads/", "http://", "https://")):
+    return jsonify({"error": "Profilbild-URL ist ungültig."}), 400
 
   password_hash = generate_password_hash(password, method="pbkdf2:sha256")
 
@@ -11727,6 +11741,8 @@ def create_clinic_member():
           email,
           password_hash,
           full_name,
+          job_title,
+          profile_image_url,
           clinic_name,
           logo_url,
           website,
@@ -11737,7 +11753,7 @@ def create_clinic_member():
           calendly_url,
           subscription_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')
         """,
         (
           clinic_id,
@@ -11745,6 +11761,8 @@ def create_clinic_member():
           email,
           password_hash,
           full_name,
+          job_title,
+          profile_image_url,
           clinic_row["name"],
           clinic_row["logo_url"],
           clinic_row["website"],
@@ -11762,6 +11780,8 @@ def create_clinic_member():
           id,
           email,
           full_name,
+          job_title,
+          profile_image_url,
           role,
           created_at
         FROM users
@@ -11789,6 +11809,8 @@ def create_clinic_member():
         "id": member_row["id"],
         "email": member_row["email"],
         "fullName": member_row["full_name"],
+        "jobTitle": safe_public_text(safe_row_value(member_row, "job_title"), ""),
+        "profileImageUrl": safe_public_text(safe_row_value(member_row, "profile_image_url"), ""),
         "role": member_row["role"],
         "active": True,
         "createdAt": member_row["created_at"],
@@ -11811,13 +11833,27 @@ def update_clinic_member(member_id: int):
     return jsonify({"error": "Du kannst dein eigenes Konto nicht deaktivieren."}), 400
 
   payload = request.get_json(silent=True) or {}
-  if "active" not in payload:
-    return jsonify({"error": "Kein gültiges Feld zum Aktualisieren."}), 400
+  updates = {}
+  active_changed = "active" in payload
   new_active = 1 if parse_bool_flag(payload.get("active"), True) else 0
+  if "fullName" in payload:
+    full_name = str(payload.get("fullName", "")).strip()
+    if len(full_name) < 2:
+      return jsonify({"error": "Name ist erforderlich."}), 400
+    updates["full_name"] = full_name
+  if "jobTitle" in payload:
+    updates["job_title"] = safe_public_text(payload.get("jobTitle"), "")[:120]
+  if "profileImageUrl" in payload:
+    profile_image_url = safe_public_text(payload.get("profileImageUrl"), "")
+    if profile_image_url and not profile_image_url.startswith(("/uploads/", "http://", "https://")):
+      return jsonify({"error": "Profilbild-URL ist ungültig."}), 400
+    updates["profile_image_url"] = profile_image_url
+  if not active_changed and not updates:
+    return jsonify({"error": "Kein gültiges Feld zum Aktualisieren."}), 400
 
   with get_db() as conn:
     target = conn.execute(
-      "SELECT id, clinic_id, role, email, full_name, active, created_at FROM users WHERE id = ?",
+      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, active, created_at FROM users WHERE id = ?",
       (member_id,),
     ).fetchone()
     if not target or int(target["clinic_id"] or 0) != clinic_id:
@@ -11825,22 +11861,44 @@ def update_clinic_member(member_id: int):
     if str(target["role"]) != "staff":
       return jsonify({"error": "Nur Mitarbeiter:innen können deaktiviert werden."}), 400
 
-    conn.execute("UPDATE users SET active = ? WHERE id = ?", (new_active, member_id))
+    if updates:
+      set_clause = ", ".join(f"{column} = ?" for column in updates)
+      conn.execute(
+        f"UPDATE users SET {set_clause} WHERE id = ?",
+        (*updates.values(), member_id),
+      )
+    if active_changed:
+      conn.execute("UPDATE users SET active = ? WHERE id = ?", (new_active, member_id))
     # End any active sessions/tokens so a deactivated member is signed out immediately.
-    if new_active == 0:
+    if active_changed and new_active == 0:
       try:
         conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (member_id,))
       except Exception:
         pass
 
-  create_audit_log(
-    clinic_id=clinic_id,
-    actor_user_id=int(owner_row["id"]),
-    action="member.activated" if new_active else "member.deactivated",
-    entity_type="user",
-    entity_id=str(member_id),
-    metadata={"email": target["email"]},
-  )
+    target = conn.execute(
+      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, active, created_at FROM users WHERE id = ?",
+      (member_id,),
+    ).fetchone()
+
+  if updates:
+    create_audit_log(
+      clinic_id=clinic_id,
+      actor_user_id=int(owner_row["id"]),
+      action="member.updated",
+      entity_type="user",
+      entity_id=str(member_id),
+      metadata={"email": target["email"], "fields": list(updates.keys())},
+    )
+  if active_changed:
+    create_audit_log(
+      clinic_id=clinic_id,
+      actor_user_id=int(owner_row["id"]),
+      action="member.activated" if new_active else "member.deactivated",
+      entity_type="user",
+      entity_id=str(member_id),
+      metadata={"email": target["email"]},
+    )
 
   return jsonify(
     {
@@ -11848,8 +11906,10 @@ def update_clinic_member(member_id: int):
         "id": target["id"],
         "email": target["email"],
         "fullName": target["full_name"],
+        "jobTitle": safe_public_text(safe_row_value(target, "job_title"), ""),
+        "profileImageUrl": safe_public_text(safe_row_value(target, "profile_image_url"), ""),
         "role": target["role"],
-        "active": new_active != 0,
+        "active": int(safe_row_value(target, "active", 1) or 0) != 0,
         "createdAt": target["created_at"],
       }
     }

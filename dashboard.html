@@ -1044,15 +1044,29 @@
         <form id="memberForm" class="drawer-body member-drawer-body">
           <div class="member-drawer-intro">
             <span class="member-drawer-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3"/><path d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.7a3 3 0 0 1 0 5.6"/></svg></span>
-            <p>Neue Staff-Zugänge erhalten Zugriff auf dieses Klinik-Dashboard.</p>
+            <p id="memberDrawerIntro">Neue Staff-Zugänge erhalten Zugriff auf dieses Klinik-Dashboard.</p>
+          </div>
+          <div class="member-photo-field">
+            <span id="memberPhotoPreview" class="member-photo-preview" aria-hidden="true">+</span>
+            <span class="member-photo-copy">
+              <strong>Profilbild</strong>
+              <small id="memberPhotoName">Optional, quadratisch wirkt am ruhigsten.</small>
+            </span>
+            <input id="memberPhotoInput" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+            <input name="profileImageUrl" type="hidden">
+            <button id="memberPhotoBtn" class="btn ghost btn-sm" type="button">Bild wählen</button>
+            <button id="memberPhotoClearBtn" class="icon-btn hidden" type="button" aria-label="Profilbild entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
           </div>
           <label>Name
             <input name="fullName" type="text" minlength="2" autocomplete="name" required>
           </label>
-          <label>E-Mail
+          <label>Jobtitel
+            <input name="jobTitle" type="text" maxlength="120" placeholder="z. B. Ärztin, Kosmetikerin, Empfang">
+          </label>
+          <label id="memberEmailLabel">E-Mail
             <input name="email" type="email" autocomplete="email" required>
           </label>
-          <label>Passwort
+          <label id="memberPasswordLabel">Passwort
             <input name="password" type="password" minlength="8" autocomplete="new-password" required>
           </label>
           <p id="memberFormError" class="message"></p>

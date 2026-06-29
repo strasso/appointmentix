@@ -40,6 +40,9 @@ const state = {
   themeDirty: false,
   themeHasDraftChanges: false,
   themeLoading: false,
+  memberPhotoObjectUrl: "",
+  memberDrawerMode: "create",
+  editingMemberId: null,
   catalog: {
     categories: [],
     treatments: [],
@@ -131,8 +134,17 @@ const membersBody = document.getElementById("membersBody");
 const memberForm = document.getElementById("memberForm");
 const addMemberBtn = document.getElementById("addMemberBtn");
 const memberDrawer = document.getElementById("memberDrawer");
+const memberDrawerTitle = document.getElementById("memberDrawerTitle");
+const memberDrawerIntro = document.getElementById("memberDrawerIntro");
 const memberFormError = document.getElementById("memberFormError");
 const memberSaveBtn = document.getElementById("memberSaveBtn");
+const memberEmailLabel = document.getElementById("memberEmailLabel");
+const memberPasswordLabel = document.getElementById("memberPasswordLabel");
+const memberPhotoInput = document.getElementById("memberPhotoInput");
+const memberPhotoBtn = document.getElementById("memberPhotoBtn");
+const memberPhotoClearBtn = document.getElementById("memberPhotoClearBtn");
+const memberPhotoPreview = document.getElementById("memberPhotoPreview");
+const memberPhotoName = document.getElementById("memberPhotoName");
 const billingStatus = document.getElementById("billingStatus");
 const historyBody = document.getElementById("historyBody");
 const startCheckoutBtn = document.getElementById("startCheckoutBtn");
@@ -2157,6 +2169,14 @@ function memberInitials(member) {
   return (initials || "T").toUpperCase();
 }
 
+function memberAvatarHtml(member) {
+  const imageUrl = String(member?.profileImageUrl || "").trim();
+  if (imageUrl) {
+    return `<span class="team-member-avatar has-photo" aria-hidden="true"><img src="${escapeAttr(imageUrl)}" alt=""></span>`;
+  }
+  return `<span class="team-member-avatar" aria-hidden="true">${escapeHtml(memberInitials(member))}</span>`;
+}
+
 function renderMembers(members) {
   state.members = Array.isArray(members) ? members : [];
   if (!membersBody) {
@@ -2180,6 +2200,7 @@ function renderMembers(members) {
       const isActive = member.active !== false;
       const isStaff = roleKey === "staff";
       const isOwner = roleKey === "owner";
+      const jobTitle = String(member.jobTitle || "").trim();
       const rolePill = `<span class="status-pill ${role.cls}">${escapeHtml(role.label)}</span>`;
       const statusPill = isActive
         ? '<span class="status-pill ok">Aktiv</span>'
@@ -2189,18 +2210,21 @@ function renderMembers(members) {
         const next = isActive ? "false" : "true";
         const label = isActive ? "Deaktivieren" : "Reaktivieren";
         const btnCls = isActive ? "member-action-btn" : "member-action-btn member-action-activate";
-        action = `<button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}">${label}</button>`;
+        action = `<button type="button" class="member-edit-btn" data-member-edit data-member-id="${member.id}">Profil</button><button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}">${label}</button>`;
       } else if (isOwner) {
         action = '<span class="team-owner-lock">Geschützt</span>';
       }
       return `<div class="team-member-row${isActive ? "" : " is-inactive"}${isOwner ? " is-owner" : ""}" role="listitem">
-        <span class="team-member-avatar" aria-hidden="true">${escapeHtml(memberInitials(member))}</span>
+        ${memberAvatarHtml(member)}
         <span class="team-member-main">
           <span class="team-member-primary">
             <strong>${escapeHtml(member.fullName || "—")}</strong>
             <span class="team-member-pills">${rolePill}${statusPill}</span>
           </span>
-          <span class="team-member-email">${escapeHtml(member.email || "—")}</span>
+          <span class="team-member-meta">
+            ${jobTitle ? `<span>${escapeHtml(jobTitle)}</span>` : ""}
+            <span>${escapeHtml(member.email || "—")}</span>
+          </span>
         </span>
         <span class="team-member-actions">${action}</span>
       </div>`;
@@ -2211,6 +2235,13 @@ function renderMembers(members) {
 }
 
 async function handleMemberAction(target) {
+  const editButton = target.closest("[data-member-edit]");
+  if (editButton) {
+    const memberId = Number(editButton.getAttribute("data-member-id") || 0);
+    const member = state.members.find((item) => Number(item.id) === memberId);
+    if (member) openMemberDrawer(member);
+    return;
+  }
   const button = target.closest("[data-member-action]");
   if (!button) return;
   const memberId = button.getAttribute("data-member-id");
@@ -3458,24 +3489,116 @@ async function handleSettingsSave(event) {
   }
 }
 
-function openMemberDrawer() {
+function setMemberPhotoPreview(url = "", filename = "") {
+  const value = String(url || "").trim();
+  if (state.memberPhotoObjectUrl && state.memberPhotoObjectUrl !== value) {
+    URL.revokeObjectURL(state.memberPhotoObjectUrl);
+    state.memberPhotoObjectUrl = "";
+  }
+  if (memberForm?.elements?.profileImageUrl) {
+    memberForm.elements.profileImageUrl.value = value;
+  }
+  if (memberPhotoPreview) {
+    memberPhotoPreview.innerHTML = value
+      ? `<img src="${escapeAttr(value)}" alt="">`
+      : "+";
+    memberPhotoPreview.classList.toggle("has-photo", Boolean(value));
+  }
+  if (memberPhotoName) {
+    memberPhotoName.textContent = filename || (value ? "Bild hochgeladen." : "Optional, quadratisch wirkt am ruhigsten.");
+  }
+  if (memberPhotoClearBtn) memberPhotoClearBtn.classList.toggle("hidden", !value);
+}
+
+function clearMemberPhoto() {
+  if (state.memberPhotoObjectUrl) {
+    URL.revokeObjectURL(state.memberPhotoObjectUrl);
+    state.memberPhotoObjectUrl = "";
+  }
+  if (memberPhotoInput) memberPhotoInput.value = "";
+  setMemberPhotoPreview("", "");
+}
+
+async function uploadMemberPhoto(file) {
+  if (!file) return "";
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}/clinic/media/upload`, {
+    method: "POST",
+    credentials: "same-origin",
+    body: formData,
+  });
+  const text = await response.text();
+  let payload = {};
+  if (text) {
+    try { payload = JSON.parse(text); } catch { payload = {}; }
+  }
+  if (!response.ok) {
+    throw new Error(payload.error || "Profilbild konnte nicht hochgeladen werden.");
+  }
+  const url = payload.file?.url || "";
+  if (!url) throw new Error("Profilbild konnte nicht gespeichert werden.");
+  return url;
+}
+
+function setMemberFormMode(member = null) {
+  const isEdit = Boolean(member?.id);
+  state.memberDrawerMode = isEdit ? "edit" : "create";
+  state.editingMemberId = isEdit ? Number(member.id) : null;
+
+  const fullNameInput = memberForm?.elements?.fullName;
+  const jobTitleInput = memberForm?.elements?.jobTitle;
+  const emailInput = memberForm?.elements?.email;
+  const passwordInput = memberForm?.elements?.password;
+
+  if (memberDrawerTitle) {
+    memberDrawerTitle.textContent = isEdit ? "Mitarbeiterprofil bearbeiten" : "Mitarbeiter:in hinzufügen";
+  }
+  if (memberDrawerIntro) {
+    memberDrawerIntro.textContent = isEdit
+      ? "Profilbild und Jobtitel strukturieren die Team-Liste."
+      : "Neue Staff-Zugänge erhalten Zugriff auf dieses Klinik-Dashboard.";
+  }
+  if (fullNameInput) fullNameInput.value = isEdit ? String(member.fullName || "") : "";
+  if (jobTitleInput) jobTitleInput.value = isEdit ? String(member.jobTitle || "") : "";
+  if (emailInput) {
+    emailInput.value = isEdit ? String(member.email || "") : "";
+    emailInput.disabled = isEdit;
+    emailInput.required = !isEdit;
+  }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.required = !isEdit;
+  }
+  if (memberEmailLabel) memberEmailLabel.classList.toggle("is-disabled", isEdit);
+  if (memberPasswordLabel) memberPasswordLabel.classList.toggle("hidden", isEdit);
+  setMemberPhotoPreview(isEdit ? member.profileImageUrl || "" : "", isEdit && member.profileImageUrl ? "Bild gespeichert." : "");
+  if (memberSaveBtn) memberSaveBtn.textContent = isEdit ? "Speichern" : "Anlegen";
+}
+
+function openMemberDrawer(member = null) {
   if (!state.isOwner) {
     showToast("Nur Owner können Staff anlegen.");
     return;
   }
   if (!memberDrawer || !memberForm) return;
   memberForm.reset();
+  clearMemberPhoto();
+  setMemberFormMode(member);
   if (memberFormError) memberFormError.textContent = "";
   if (memberSaveBtn) {
     memberSaveBtn.disabled = false;
-    memberSaveBtn.textContent = "Anlegen";
+    memberSaveBtn.textContent = state.memberDrawerMode === "edit" ? "Speichern" : "Anlegen";
   }
   memberDrawer.classList.remove("hidden");
   memberDrawer.setAttribute("aria-hidden", "false");
   window.requestAnimationFrame(() => memberDrawer.classList.add("open"));
   haptics("light");
   window.setTimeout(() => {
-    try { memberForm.elements.fullName?.focus(); } catch { /* noop */ }
+    try {
+      const focusTarget = state.memberDrawerMode === "edit" ? memberForm.elements.jobTitle : memberForm.elements.fullName;
+      focusTarget?.focus();
+    } catch { /* noop */ }
   }, 60);
 }
 
@@ -3486,34 +3609,52 @@ function closeMemberDrawer() {
   window.setTimeout(() => memberDrawer.classList.add("hidden"), 220);
 }
 
-async function handleCreateMember(event) {
+async function handleMemberSubmit(event) {
   event.preventDefault();
   if (!state.isOwner) {
     showToast("Nur Owner können Staff anlegen.");
     return;
   }
 
-  const payload = parseAuthForm(memberForm);
-  payload.role = "staff";
   if (memberFormError) memberFormError.textContent = "";
+  const isEdit = state.memberDrawerMode === "edit" && state.editingMemberId;
   if (memberSaveBtn) {
     memberSaveBtn.disabled = true;
-    memberSaveBtn.textContent = "Lege an ...";
+    memberSaveBtn.textContent = isEdit ? "Speichere ..." : "Lege an ...";
   }
 
   try {
-    await apiRequest("/clinic/members", { method: "POST", body: payload });
+    const file = memberPhotoInput?.files?.[0];
+    if (file) {
+      if (memberSaveBtn) memberSaveBtn.textContent = "Lade Bild ...";
+      const imageUrl = await uploadMemberPhoto(file);
+      setMemberPhotoPreview(imageUrl, file.name);
+    }
+    if (memberSaveBtn) memberSaveBtn.textContent = isEdit ? "Speichere ..." : "Lege an ...";
+    if (isEdit) {
+      const payload = {
+        fullName: String(memberForm.elements.fullName?.value || "").trim(),
+        jobTitle: String(memberForm.elements.jobTitle?.value || "").trim(),
+        profileImageUrl: String(memberForm.elements.profileImageUrl?.value || "").trim(),
+      };
+      await apiRequest(`/clinic/members/${state.editingMemberId}`, { method: "PATCH", body: payload });
+    } else {
+      const payload = parseAuthForm(memberForm);
+      payload.role = "staff";
+      await apiRequest("/clinic/members", { method: "POST", body: payload });
+    }
     memberForm.reset();
+    clearMemberPhoto();
     closeMemberDrawer();
     await Promise.all([loadMembers(), loadAuditLogs()]);
-    showToast("Staff-User erstellt");
+    showToast(isEdit ? "Mitarbeiterprofil gespeichert" : "Staff-User erstellt");
   } catch (error) {
-    if (memberFormError) memberFormError.textContent = error.message || "Mitarbeiter:in konnte nicht angelegt werden.";
+    if (memberFormError) memberFormError.textContent = error.message || "Mitarbeiter:in konnte nicht gespeichert werden.";
     showToast(error.message);
   } finally {
     if (memberSaveBtn) {
       memberSaveBtn.disabled = false;
-      memberSaveBtn.textContent = "Anlegen";
+      memberSaveBtn.textContent = state.memberDrawerMode === "edit" ? "Speichern" : "Anlegen";
     }
   }
 }
@@ -3640,7 +3781,22 @@ function bindEvents() {
   if (resetAppearanceBtn) resetAppearanceBtn.addEventListener("click", resetThemeDraftToPublished);
   if (resetDefaultAppearanceBtn) resetDefaultAppearanceBtn.addEventListener("click", resetThemeToDefault);
   if (addMemberBtn) addMemberBtn.addEventListener("click", openMemberDrawer);
-  if (memberForm) memberForm.addEventListener("submit", handleCreateMember);
+  if (memberForm) memberForm.addEventListener("submit", handleMemberSubmit);
+  if (memberPhotoBtn) memberPhotoBtn.addEventListener("click", () => memberPhotoInput?.click());
+  if (memberPhotoClearBtn) memberPhotoClearBtn.addEventListener("click", clearMemberPhoto);
+  if (memberPhotoInput) {
+    memberPhotoInput.addEventListener("change", () => {
+      const file = memberPhotoInput.files?.[0];
+      if (!file) {
+        clearMemberPhoto();
+        return;
+      }
+      const objectUrl = URL.createObjectURL(file);
+      if (state.memberPhotoObjectUrl) URL.revokeObjectURL(state.memberPhotoObjectUrl);
+      state.memberPhotoObjectUrl = objectUrl;
+      setMemberPhotoPreview(objectUrl, file.name);
+    });
+  }
   if (membersBody) {
     membersBody.addEventListener("click", (event) => {
       if (!(event.target instanceof Element)) return;
