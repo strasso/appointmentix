@@ -129,6 +129,10 @@ const resetAppearanceBtn = document.getElementById("resetAppearanceBtn");
 const resetDefaultAppearanceBtn = document.getElementById("resetDefaultAppearanceBtn");
 const membersBody = document.getElementById("membersBody");
 const memberForm = document.getElementById("memberForm");
+const addMemberBtn = document.getElementById("addMemberBtn");
+const memberDrawer = document.getElementById("memberDrawer");
+const memberFormError = document.getElementById("memberFormError");
+const memberSaveBtn = document.getElementById("memberSaveBtn");
 const billingStatus = document.getElementById("billingStatus");
 const historyBody = document.getElementById("historyBody");
 const startCheckoutBtn = document.getElementById("startCheckoutBtn");
@@ -823,6 +827,7 @@ function setSession(user) {
     if (importCatalogBtn) importCatalogBtn.disabled = true;
     if (createCampaignBtn) createCampaignBtn.disabled = true;
     if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = true;
+    if (addMemberBtn) addMemberBtn.classList.add("hidden");
     if (onboardingCard) onboardingCard.classList.add("hidden");
     setCatalogDisabled(true);
     setAppearanceDisabled(true);
@@ -846,6 +851,7 @@ function setSession(user) {
   if (saveCatalogBtn) saveCatalogBtn.disabled = !state.isOwner;
   if (importCatalogBtn) importCatalogBtn.disabled = !state.isOwner;
   memberForm.classList.toggle("hidden", !state.isOwner);
+  if (addMemberBtn) addMemberBtn.classList.toggle("hidden", !state.isOwner);
   startCheckoutBtn.classList.toggle("hidden", !state.isOwner);
   if (createCampaignBtn) createCampaignBtn.disabled = !state.isOwner;
   if (runDueCampaignsBtn) runDueCampaignsBtn.disabled = !state.isOwner;
@@ -2137,6 +2143,20 @@ function syncCatalogStateFromDom() {
   state.catalog = { categories, treatments, memberships, rewardActions, rewardRedeems, homeArticles };
 }
 
+const MEMBER_ROLE_META = {
+  owner: { label: "Inhaber", cls: "ok" },
+  staff: { label: "Mitarbeiter", cls: "muted" },
+};
+
+function memberInitials(member) {
+  const source = String(member?.fullName || member?.email || "Team").trim();
+  const parts = source.includes("@")
+    ? [source.split("@")[0]]
+    : source.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]).join("");
+  return (initials || "T").toUpperCase();
+}
+
 function renderMembers(members) {
   state.members = Array.isArray(members) ? members : [];
   if (!membersBody) {
@@ -2145,38 +2165,45 @@ function renderMembers(members) {
   }
   membersBody.innerHTML = "";
   if (!members.length) {
-    membersBody.innerHTML = '<tr><td colspan="4">Noch keine Team-Mitglieder.</td></tr>';
+    membersBody.innerHTML = '<div class="team-empty" role="listitem">Noch keine Team-Mitglieder.</div>';
     renderMetricsDashboard();
     return;
   }
 
-  const ROLE_META = {
-    owner: { label: "Inhaber", cls: "ok" },
-    staff: { label: "Mitarbeiter", cls: "muted" },
-  };
   const rows = members
     .map((member) => {
-      const role = ROLE_META[String(member.role || "").toLowerCase()] || {
+      const roleKey = String(member.role || "").toLowerCase();
+      const role = MEMBER_ROLE_META[roleKey] || {
         label: member.role || "—",
         cls: "muted",
       };
       const isActive = member.active !== false;
-      const isStaff = String(member.role || "").toLowerCase() === "staff";
+      const isStaff = roleKey === "staff";
+      const isOwner = roleKey === "owner";
       const rolePill = `<span class="status-pill ${role.cls}">${escapeHtml(role.label)}</span>`;
-      const statusPill = isActive ? "" : '<span class="status-pill danger">Deaktiviert</span>';
+      const statusPill = isActive
+        ? '<span class="status-pill ok">Aktiv</span>'
+        : '<span class="status-pill danger">Deaktiviert</span>';
       let action = "";
       if (state.isOwner && isStaff) {
         const next = isActive ? "false" : "true";
-        const label = isActive ? "Deaktivieren" : "Aktivieren";
+        const label = isActive ? "Deaktivieren" : "Reaktivieren";
         const btnCls = isActive ? "member-action-btn" : "member-action-btn member-action-activate";
         action = `<button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}">${label}</button>`;
+      } else if (isOwner) {
+        action = '<span class="team-owner-lock">Geschützt</span>';
       }
-      return `<tr class="${isActive ? "" : "member-row-inactive"}">
-        <td>${escapeHtml(member.fullName || "—")}</td>
-        <td>${escapeHtml(member.email || "—")}</td>
-        <td><span class="member-role-cell">${rolePill}${statusPill}</span></td>
-        <td class="col-action">${action}</td>
-      </tr>`;
+      return `<div class="team-member-row${isActive ? "" : " is-inactive"}${isOwner ? " is-owner" : ""}" role="listitem">
+        <span class="team-member-avatar" aria-hidden="true">${escapeHtml(memberInitials(member))}</span>
+        <span class="team-member-main">
+          <span class="team-member-primary">
+            <strong>${escapeHtml(member.fullName || "—")}</strong>
+            <span class="team-member-pills">${rolePill}${statusPill}</span>
+          </span>
+          <span class="team-member-email">${escapeHtml(member.email || "—")}</span>
+        </span>
+        <span class="team-member-actions">${action}</span>
+      </div>`;
     })
     .join("");
   membersBody.innerHTML = rows;
@@ -3431,6 +3458,34 @@ async function handleSettingsSave(event) {
   }
 }
 
+function openMemberDrawer() {
+  if (!state.isOwner) {
+    showToast("Nur Owner können Staff anlegen.");
+    return;
+  }
+  if (!memberDrawer || !memberForm) return;
+  memberForm.reset();
+  if (memberFormError) memberFormError.textContent = "";
+  if (memberSaveBtn) {
+    memberSaveBtn.disabled = false;
+    memberSaveBtn.textContent = "Anlegen";
+  }
+  memberDrawer.classList.remove("hidden");
+  memberDrawer.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => memberDrawer.classList.add("open"));
+  haptics("light");
+  window.setTimeout(() => {
+    try { memberForm.elements.fullName?.focus(); } catch { /* noop */ }
+  }, 60);
+}
+
+function closeMemberDrawer() {
+  if (!memberDrawer) return;
+  memberDrawer.classList.remove("open");
+  memberDrawer.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => memberDrawer.classList.add("hidden"), 220);
+}
+
 async function handleCreateMember(event) {
   event.preventDefault();
   if (!state.isOwner) {
@@ -3440,14 +3495,26 @@ async function handleCreateMember(event) {
 
   const payload = parseAuthForm(memberForm);
   payload.role = "staff";
+  if (memberFormError) memberFormError.textContent = "";
+  if (memberSaveBtn) {
+    memberSaveBtn.disabled = true;
+    memberSaveBtn.textContent = "Lege an ...";
+  }
 
   try {
     await apiRequest("/clinic/members", { method: "POST", body: payload });
     memberForm.reset();
+    closeMemberDrawer();
     await Promise.all([loadMembers(), loadAuditLogs()]);
     showToast("Staff-User erstellt");
   } catch (error) {
+    if (memberFormError) memberFormError.textContent = error.message || "Mitarbeiter:in konnte nicht angelegt werden.";
     showToast(error.message);
+  } finally {
+    if (memberSaveBtn) {
+      memberSaveBtn.disabled = false;
+      memberSaveBtn.textContent = "Anlegen";
+    }
   }
 }
 
@@ -3572,7 +3639,8 @@ function bindEvents() {
   if (publishThemeBtn) publishThemeBtn.addEventListener("click", publishThemeDraft);
   if (resetAppearanceBtn) resetAppearanceBtn.addEventListener("click", resetThemeDraftToPublished);
   if (resetDefaultAppearanceBtn) resetDefaultAppearanceBtn.addEventListener("click", resetThemeToDefault);
-  memberForm.addEventListener("submit", handleCreateMember);
+  if (addMemberBtn) addMemberBtn.addEventListener("click", openMemberDrawer);
+  if (memberForm) memberForm.addEventListener("submit", handleCreateMember);
   if (membersBody) {
     membersBody.addEventListener("click", (event) => {
       if (!(event.target instanceof Element)) return;
@@ -3814,8 +3882,14 @@ function bindEvents() {
       if (event.target instanceof Element && event.target.closest("[data-drawer-close]")) closeApptDrawer();
     });
   }
+  if (memberDrawer) {
+    memberDrawer.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-member-drawer-close]")) closeMemberDrawer();
+    });
+  }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
+    if (event.key === "Escape" && memberDrawer && !memberDrawer.classList.contains("hidden")) closeMemberDrawer();
   });
   // Central interaction feedback: haptic tap + ripple on prominent controls.
   document.addEventListener("pointerdown", (event) => {

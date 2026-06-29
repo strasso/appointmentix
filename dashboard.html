@@ -802,41 +802,22 @@
 
         <!-- TEAM -->
         <section class="view-panel" data-view-panel="team">
-          <article class="card">
+          <article class="card team-card">
             <div class="section-head team-head">
               <div>
                 <h2>Team-Mitglieder</h2>
                 <p class="subline">Mitarbeiter:innen anlegen, deaktivieren und bei Bedarf wieder aktivieren.</p>
               </div>
-              <span class="status-pill muted">Owner-Bereich</span>
+              <div class="team-head-actions">
+                <span class="status-pill muted">Owner-Bereich</span>
+                <button id="addMemberBtn" class="btn primary btn-sm" type="button">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Mitarbeiter:in hinzufügen
+                </button>
+              </div>
             </div>
 
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>E-Mail</th>
-                    <th>Rolle</th>
-                    <th class="col-action"></th>
-                  </tr>
-                </thead>
-                <tbody id="membersBody"></tbody>
-              </table>
-            </div>
-
-            <form id="memberForm" class="form">
-              <label>Name
-                <input name="fullName" type="text" minlength="2" required>
-              </label>
-              <label>E-Mail
-                <input name="email" type="email" required>
-              </label>
-              <label>Passwort
-                <input name="password" type="password" minlength="8" required>
-              </label>
-              <button class="btn primary" type="submit">Mitarbeiter:in anlegen</button>
-            </form>
+            <div id="membersBody" class="team-member-list" role="list" aria-live="polite"></div>
           </article>
         </section>
 
@@ -1045,6 +1026,41 @@
           <div class="drawer-foot-main">
             <button class="btn ghost" type="button" data-drawer-close>Schließen</button>
             <button id="apptSaveBtn" class="btn primary" type="submit" form="apptForm">Speichern</button>
+          </div>
+        </footer>
+      </aside>
+    </div>
+
+    <div id="memberDrawer" class="drawer hidden" aria-hidden="true">
+      <div class="drawer-backdrop" data-member-drawer-close></div>
+      <aside class="drawer-panel member-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="memberDrawerTitle">
+        <header class="drawer-head">
+          <div>
+            <p class="eyebrow">Team</p>
+            <h3 id="memberDrawerTitle">Mitarbeiter:in hinzufügen</h3>
+          </div>
+          <button class="icon-btn" type="button" data-member-drawer-close aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </header>
+        <form id="memberForm" class="drawer-body member-drawer-body">
+          <div class="member-drawer-intro">
+            <span class="member-drawer-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3"/><path d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.7a3 3 0 0 1 0 5.6"/></svg></span>
+            <p>Neue Staff-Zugänge erhalten Zugriff auf dieses Klinik-Dashboard.</p>
+          </div>
+          <label>Name
+            <input name="fullName" type="text" minlength="2" autocomplete="name" required>
+          </label>
+          <label>E-Mail
+            <input name="email" type="email" autocomplete="email" required>
+          </label>
+          <label>Passwort
+            <input name="password" type="password" minlength="8" autocomplete="new-password" required>
+          </label>
+          <p id="memberFormError" class="message"></p>
+        </form>
+        <footer class="drawer-foot">
+          <div class="drawer-foot-main">
+            <button class="btn ghost" type="button" data-member-drawer-close>Abbrechen</button>
+            <button id="memberSaveBtn" class="btn primary" type="submit" form="memberForm">Anlegen</button>
           </div>
         </footer>
       </aside>
