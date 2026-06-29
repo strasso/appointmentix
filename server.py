@@ -5118,7 +5118,7 @@ def notify_clinic_of_checkout(
     return {"status": "skipped"}
 
   has_appts = bool(created_appointments)
-  customer = sanitize_patient_name(patient_name) or "Eine Kundin / ein Kunde"
+  customer = sanitize_patient_name(patient_name) or "Ein Kunde"
   total_eur = f"{(int(total_cents or 0) / 100):.2f}".replace(".", ",")
 
   def _when(iso_value):
@@ -5229,7 +5229,7 @@ def build_clinic_ical(clinic_id: int, clinic_name: str) -> str:
     summary = treatment + (f" — {patient}" if patient else "")
     desc = []
     if patient:
-      desc.append(f"Kundin/Kunde: {patient}")
+      desc.append(f"Kunde: {patient}")
     if practitioner:
       desc.append(f"Behandler:in: {practitioner}")
     if status:
@@ -11902,7 +11902,7 @@ def clinic_customer_profile():
   ]
   customer_name = next((safe_public_text(value) for value in name_candidates if safe_public_text(value)), "")
   if not customer_name:
-    customer_name = email.split("@")[0] if "@" in email else "Kund:in"
+    customer_name = email.split("@")[0] if "@" in email else "Kunde"
 
   timeline = []
 
@@ -11959,6 +11959,17 @@ def clinic_customer_profile():
   now_dt = utc_now()
   past_dates = [item for item in parsed_dates if item <= now_dt]
 
+  paid_total_cents = sum(
+    int(txn.get("amountCents") or 0)
+    for txn in transactions
+    if str(txn.get("status") or "").lower() == "paid"
+  )
+  open_total_cents = sum(
+    int(txn.get("amountCents") or 0)
+    for txn in transactions
+    if str(txn.get("status") or "").lower() == "open"
+  )
+
   return jsonify(
     {
       "customer": {
@@ -11980,6 +11991,9 @@ def clinic_customer_profile():
       "timeline": timeline[:60],
       "summary": {
         "transactions": len(transactions),
+        "paidCents": paid_total_cents,
+        "openCents": open_total_cents,
+        "currency": "eur",
         "appointments": len(appointments),
         "checkins": len(checkins),
         "campaignContacts": len(campaign_contacts),

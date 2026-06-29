@@ -72,7 +72,7 @@
           <button class="rail-nav-item active" type="button" data-view="overview">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg></span>Übersicht</button>
           <button class="rail-nav-item" type="button" data-view="patienten">
-            <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></span>Kund:innen</button>
+            <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg></span>Kunden</button>
           <button class="rail-nav-item" type="button" data-view="termine">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg></span>Termine</button>
           <button class="rail-nav-item" type="button" data-view="checkin">
@@ -112,6 +112,9 @@
 
       <div class="app-content">
         <header class="app-topbar">
+          <button id="railToggleBtn" class="icon-btn rail-toggle-btn" type="button" aria-label="Seitenleiste ausblenden" aria-pressed="false" title="Seitenleiste ausblenden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
           <div class="topbar-copy">
             <p class="eyebrow" id="viewEyebrow">Performance Center</p>
             <h2 id="dashboardGreeting">Guten Morgen 👋</h2>
@@ -154,7 +157,7 @@
               <p id="kpiMrr" class="kpi-value">0,00 €</p>
               <span class="kpi-delta hidden" id="kpiMrrDelta"></span>
             </article>
-            <article class="kpi-card" data-route-view="patienten" data-route-filter="active" role="button" tabindex="0" aria-label="Aktive Kund:innen öffnen">
+            <article class="kpi-card" data-route-view="patienten" data-route-filter="active" role="button" tabindex="0" aria-label="Aktive Kunden öffnen">
               <span class="kpi-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3"/><path d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.7a3 3 0 0 1 0 5.6"/></svg></span>
               <p class="kpi-label">Aktive Mitglieder</p>
               <p id="kpiMembers" class="kpi-value">0</p>
@@ -200,7 +203,7 @@
           <article class="card">
             <div class="section-head">
               <div>
-                <h2>Kund:innen</h2>
+                <h2>Kunden</h2>
                 <p class="subline">Mitglieder, Status und wiederkehrende Umsätze deiner Klinik.</p>
               </div>
               <div class="inline-actions">
@@ -214,7 +217,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Kund:in</th>
+                    <th>Kunde</th>
                     <th>Plan</th>
                     <th>Status</th>
                     <th>Monatlich</th>
@@ -331,7 +334,7 @@
               <div id="revenueSourcesBody" class="source-list"></div>
             </section>
 
-            <section id="clinicProfilesSection" class="card analytics-tile analytics-table-tile" data-route-view="patienten" role="button" tabindex="0" aria-label="Kund:innen öffnen">
+            <section id="clinicProfilesSection" class="card analytics-tile analytics-table-tile" data-route-view="patienten" role="button" tabindex="0" aria-label="Kunden öffnen">
               <div class="tile-top">
                 <p class="tile-label">Top-Kunden</p>
                 <button class="icon-btn" type="button" data-export-kind="topClients" title="CSV exportieren" aria-label="Top-Kunden als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -718,7 +721,7 @@
             <div class="section-head">
               <div>
                 <h2>Kampagnen</h2>
-                <p class="subline">Automatische Nachrichten an deine Kund:innen – lege Auslöser fest und starte sie manuell.</p>
+                <p class="subline">Automatische Nachrichten an deine Kunden – lege Auslöser fest und starte sie manuell.</p>
               </div>
               <div class="inline-actions">
                 <button id="runDueCampaignsBtn" class="btn ghost" type="button">Fällige ausführen</button>
@@ -879,7 +882,7 @@
                 <thead>
                   <tr>
                     <th>Datum</th>
-                    <th>Kund:in</th>
+                    <th>Kunde</th>
                     <th>Typ</th>
                     <th>Plan / Produkt</th>
                     <th class="num">Betrag</th>
@@ -992,7 +995,7 @@
               </label>
               <label>Benachrichtigungs-E-Mail
                 <input name="notifyEmail" type="email" placeholder="team@deine-klinik.de">
-                <span class="field-hint">Hierhin geht die E-Mail, wenn ein:e Kund:in in der App bucht oder kauft. Leer = Inhaber-E-Mail.</span>
+                <span class="field-hint">Hierhin geht die E-Mail, wenn ein Kunde in der App bucht oder kauft. Leer = Inhaber-E-Mail.</span>
               </label>
               <label>Slack Webhook URL (optional)
                 <input name="slackWebhookUrl" type="text" placeholder="https://hooks.slack.com/services/...">
@@ -1048,7 +1051,7 @@
           <button class="icon-btn" type="button" data-drawer-close aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
         </header>
         <form id="apptForm" class="drawer-body">
-          <label>Kund:in
+          <label>Kunde
             <input name="patientName" type="text" placeholder="Vor- und Nachname" required>
           </label>
           <label>E-Mail (optional)
@@ -1088,7 +1091,7 @@
           </label>
           <div class="drawer-section">
             <label>Kundennotiz · übergreifend
-              <textarea name="customerNotes" rows="3" placeholder="Allergien, Vorlieben, Hinweise – bleibt dauerhaft bei der Kund:in (E-Mail nötig)"></textarea>
+              <textarea name="customerNotes" rows="3" placeholder="Allergien, Vorlieben, Hinweise – bleibt dauerhaft beim Kunden (E-Mail nötig)"></textarea>
             </label>
           </div>
           <p id="apptFormError" class="message"></p>
@@ -1182,7 +1185,7 @@
             <span id="customerDrawerAvatar" class="customer-drawer-avatar" aria-hidden="true">K</span>
             <span>
               <p class="eyebrow">Kundenakte</p>
-              <h3 id="customerDrawerTitle">Kund:in</h3>
+              <h3 id="customerDrawerTitle">Kunde</h3>
               <small id="customerDrawerEmail">—</small>
             </span>
           </div>

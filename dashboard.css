@@ -1850,6 +1850,12 @@ td small {
   gap: 22px;
   align-items: start;
 }
+#dashboardSection.app.rail-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+#dashboardSection.app.rail-collapsed .app-rail {
+  display: none;
+}
 
 /* ---------- Rail ---------- */
 .app-rail {
@@ -2026,6 +2032,20 @@ td small {
   gap: 20px;
   padding-bottom: 8px;
 }
+.rail-toggle-btn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+}
+.rail-toggle-btn[aria-pressed="true"] {
+  background: var(--surface-strong);
+  color: var(--brand);
+  box-shadow: var(--shadow-sm);
+}
+.rail-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
 .app-topbar {
   display: flex;
   align-items: flex-end;
@@ -2033,6 +2053,10 @@ td small {
   gap: 16px;
   flex-wrap: wrap;
   padding-bottom: 4px;
+}
+.app-topbar .topbar-copy {
+  flex: 1 1 auto;
+  min-width: 220px;
 }
 .app-topbar .topbar-copy h2 {
   margin: 3px 0 0;
@@ -2646,6 +2670,9 @@ th.num {
 .customer-drawer-panel {
   width: min(520px, 100%);
 }
+#customerDrawer {
+  z-index: 86;
+}
 .customer-drawer-head {
   align-items: center;
 }
@@ -2693,7 +2720,7 @@ th.num {
 }
 .customer-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .customer-summary-card {
@@ -2749,6 +2776,12 @@ th.num {
 }
 .customer-membership-card > .status-pill {
   justify-self: start;
+}
+.customer-membership-card.is-empty {
+  background: var(--surface-muted);
+}
+.customer-membership-card.is-empty strong {
+  font-size: 1.02rem;
 }
 .customer-membership-card > div:first-child {
   display: flex;
