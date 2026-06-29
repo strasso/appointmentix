@@ -415,10 +415,10 @@ function pctStepControl(button) {
 // "Nur für Mitglieder"-Schalter: Flag läuft als membersOnly per JSON durch
 // (Backend speichert/lädt es unverändert) und landet so im Klinik-Bundle der App.
 function membersOnlyToggleHtml(checked) {
-  return `<label class="members-toggle">
+  // Same look as the body-zone chips: a pill that turns solid when selected.
+  return `<label class="body-zone-chip members-only-chip">
     <input type="checkbox" data-field="membersOnly"${checked ? " checked" : ""}>
-    <span class="members-toggle-box" aria-hidden="true"></span>
-    <span>Nur für Mitglieder</span>
+    Nur für Mitglieder
   </label>`;
 }
 
