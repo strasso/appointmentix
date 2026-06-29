@@ -477,26 +477,96 @@ function treatmentCard(item = {}) {
   `;
 }
 
+// Inkludierte Behandlungen als Auswahl-Chips (wie bei Paketen), aus den eigenen
+// Treatments der Klinik — keine ID-Eingabe mehr nötig.
+function membershipTreatmentChecksHtml(selectedIds = []) {
+  const selected = new Set((Array.isArray(selectedIds) ? selectedIds : []).map((id) => String(id).trim()).filter(Boolean));
+  const treatments = Array.from(treatmentsList.querySelectorAll('.item-card[data-kind="treatment"]'))
+    .map((card) => ({ id: card.querySelector('[data-field="id"]')?.value.trim() || "", name: card.querySelector('[data-field="name"]')?.value.trim() || "" }))
+    .filter((t) => t.id);
+  const known = new Set(treatments.map((t) => t.id));
+  const orphans = [...selected].filter((id) => !known.has(id)).map((id) => ({ id, name: id }));
+  const all = [...treatments, ...orphans];
+  if (!all.length) return '<p class="empty">Erst Behandlungen anlegen, dann hier auswählen.</p>';
+  return all
+    .map((t) => `<label class="body-zone-chip ${selected.has(t.id) ? "active" : ""}"><input type="checkbox" data-membership-treatment value="${escapeAttr(t.id)}" ${selected.has(t.id) ? "checked" : ""}><span>${escapeAttr(t.name || t.id)}</span></label>`)
+    .join("");
+}
+
+function resolveTreatmentNames(ids) {
+  const map = new Map();
+  Array.from(treatmentsList.querySelectorAll('.item-card[data-kind="treatment"]')).forEach((card) => {
+    const id = card.querySelector('[data-field="id"]')?.value.trim() || "";
+    const name = card.querySelector('[data-field="name"]')?.value.trim() || "";
+    if (id) map.set(id, name || id);
+  });
+  return (Array.isArray(ids) ? ids : []).map((id) => map.get(String(id).trim()) || String(id).trim()).filter(Boolean);
+}
+
+function membershipBenefitRowHtml(value = "") {
+  return `<div class="benefit-row"><input data-membership-benefit type="text" value="${escapeAttr(value)}" placeholder="z. B. 15% Rabatt auf alle Behandlungen"><button type="button" class="benefit-remove" data-remove-benefit aria-label="Vorteil entfernen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>`;
+}
+
+function membershipBenefitsHtml(perks = []) {
+  const list = (Array.isArray(perks) ? perks : []).map((p) => String(p).trim()).filter(Boolean);
+  const rows = (list.length ? list : [""]).map(membershipBenefitRowHtml).join("");
+  return `<div class="benefit-list" data-benefit-list>${rows}</div><button type="button" class="btn ghost btn-sm benefit-add" data-add-benefit>+ Vorteil hinzufügen</button>`;
+}
+
+function membershipPreviewInner(name, priceCents, benefits, treatmentNames) {
+  const benefitHtml = (benefits.length ? benefits : ["Deine Vorteile erscheinen hier"])
+    .map((b) => `<li>${escapeAttr(b)}</li>`)
+    .join("");
+  const treatHtml = treatmentNames.length
+    ? `<div class="mp-treatments"><span class="mp-treatments-label">Inklusive</span><div class="mp-chips">${treatmentNames.map((n) => `<span class="mp-chip">${escapeAttr(n)}</span>`).join("")}</div></div>`
+    : "";
+  return `<div class="mp-card">
+      <div class="mp-head"><span class="mp-name">${escapeAttr(name || "Mitgliedschaft")}</span><span class="mp-price">${escapeAttr(centsToEuroInput(priceCents))} €<small>/Monat</small></span></div>
+      <ul class="mp-benefits">${benefitHtml}</ul>
+      ${treatHtml}
+    </div>`;
+}
+
+function updateMembershipPreview(card) {
+  const preview = card.querySelector("[data-membership-preview]");
+  if (!preview) return;
+  const name = card.querySelector('[data-field="name"]')?.value.trim() || "";
+  const priceCents = euroToCents(card.querySelector('[data-field="priceCents"]')?.value);
+  const benefits = Array.from(card.querySelectorAll("[data-membership-benefit]")).map((i) => i.value.trim()).filter(Boolean);
+  const ids = Array.from(card.querySelectorAll("input[data-membership-treatment]:checked")).map((i) => i.value);
+  preview.innerHTML = membershipPreviewInner(name, priceCents, benefits, resolveTreatmentNames(ids));
+}
+
 function membershipCard(item = {}) {
+  const benefits = (Array.isArray(item.perks) ? item.perks : []).map((p) => String(p).trim()).filter(Boolean);
+  const treatmentNames = resolveTreatmentNames(item.includedTreatmentIds);
   return `
     <div class="item-card" data-kind="membership">
-      <div class="field-grid-3">
-        <label>ID
-          <input data-field="id" value="${escapeAttr(item.id)}" placeholder="silber">
-        </label>
-        <label>Name
-          <input data-field="name" value="${escapeAttr(item.name)}" placeholder="MOMI Silber">
-        </label>
-        <label>Preis (€ / Monat)
-          ${euroStepperHtml("priceCents", item.priceCents, "79")}
-        </label>
+      <input type="hidden" data-field="id" value="${escapeAttr(item.id || "")}">
+      <div class="membership-grid">
+        <div class="membership-editor">
+          <div class="field-grid-2">
+            <label>Name
+              <input data-field="name" value="${escapeAttr(item.name)}" placeholder="z. B. Silber">
+            </label>
+            <label>Preis (€ / Monat)
+              ${euroStepperHtml("priceCents", item.priceCents, "79")}
+            </label>
+          </div>
+          <div>
+            <label>Inkludierte Behandlungen</label>
+            <div class="body-zone-picker">${membershipTreatmentChecksHtml(item.includedTreatmentIds)}</div>
+          </div>
+          <div>
+            <label>Vorteile</label>
+            ${membershipBenefitsHtml(item.perks)}
+          </div>
+        </div>
+        <div class="membership-preview-col">
+          <span class="membership-preview-label">App-Vorschau</span>
+          <div data-membership-preview>${membershipPreviewInner(item.name || "", item.priceCents, benefits, treatmentNames)}</div>
+        </div>
       </div>
-      <label>Inkludierte Treatment IDs (Komma oder Zeile)
-        <textarea data-field="includedTreatmentIds" placeholder="t-basic-glow, t-med-peeling">${escapeAttr(joinList(item.includedTreatmentIds))}</textarea>
-      </label>
-      <label>Perks (Komma oder Zeile)
-        <textarea data-field="perks" placeholder="Perk 1, Perk 2">${escapeAttr(joinList(item.perks))}</textarea>
-      </label>
       <div class="item-footer"><button type="button" class="btn danger" data-remove>Entfernen</button></div>
     </div>
   `;
@@ -749,8 +819,12 @@ function collectCatalogFromDom() {
       id: card.querySelector('[data-field="id"]')?.value.trim() || "",
       name: card.querySelector('[data-field="name"]')?.value.trim() || "",
       priceCents: euroToCents(card.querySelector('[data-field="priceCents"]')?.value),
-      includedTreatmentIds: splitList(card.querySelector('[data-field="includedTreatmentIds"]')?.value),
-      perks: splitList(card.querySelector('[data-field="perks"]')?.value),
+      includedTreatmentIds: Array.from(card.querySelectorAll('input[data-membership-treatment]:checked'))
+        .map((input) => String(input.value || "").trim())
+        .filter(Boolean),
+      perks: Array.from(card.querySelectorAll('[data-membership-benefit]'))
+        .map((input) => input.value.trim())
+        .filter(Boolean),
     }))
     .filter((item) => item.id && item.name);
 
@@ -1079,7 +1153,34 @@ async function init() {
   };
   addCategoryBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, categoriesList, categoryCard({}), 'input[data-field="label"]'));
   addTreatmentBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, treatmentsList, treatmentCard({})));
-  addMembershipBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, membershipsList, membershipCard({})));
+  addMembershipBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, membershipsList, membershipCard({ id: genId("mem") })));
+  if (membershipsList) {
+    membershipsList.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      const card = event.target.closest('.item-card[data-kind="membership"]');
+      if (!card) return;
+      if (event.target.closest("[data-add-benefit]")) {
+        const list = card.querySelector("[data-benefit-list]");
+        if (list) {
+          list.insertAdjacentHTML("beforeend", membershipBenefitRowHtml(""));
+          list.lastElementChild?.querySelector("input")?.focus();
+        }
+        return;
+      }
+      const removeBtn = event.target.closest("[data-remove-benefit]");
+      if (removeBtn) {
+        removeBtn.closest(".benefit-row")?.remove();
+        updateMembershipPreview(card);
+      }
+    });
+    const onMembershipEdit = (event) => {
+      if (!(event.target instanceof Element)) return;
+      const card = event.target.closest('.item-card[data-kind="membership"]');
+      if (card) updateMembershipPreview(card);
+    };
+    membershipsList.addEventListener("input", onMembershipEdit);
+    membershipsList.addEventListener("change", onMembershipEdit);
+  }
   addRewardActionBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, rewardActionsList, rewardActionCard({}), 'input[data-field="label"]'));
   addRewardRedeemBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, rewardRedeemsList, rewardRedeemCard({}), 'input[data-field="label"]'));
   addHomeArticleBtn.addEventListener("click", (e) => addAtTop(e.currentTarget, homeArticlesList, homeArticleCard({}), 'input[data-field="title"]'));

@@ -441,6 +441,53 @@ input:focus, select:focus, textarea:focus {
 }
 .btn-pop { animation: btnPop 230ms var(--ease); }
 
+/* ---------- Membership-Builder (AP3) ---------- */
+.membership-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 720px) { .membership-grid { grid-template-columns: 1fr; } }
+.membership-editor { display: grid; gap: 14px; }
+.membership-preview-col { display: grid; gap: 8px; position: sticky; top: 8px; }
+.membership-preview-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+.benefit-list { display: grid; gap: 8px; margin-bottom: 8px; }
+.benefit-row { display: flex; align-items: center; gap: 8px; }
+.benefit-row input { flex: 1; }
+.benefit-remove {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-soft);
+  cursor: pointer;
+  transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+.benefit-remove:hover { background: var(--danger-soft); color: var(--danger); }
+.benefit-remove svg { width: 15px; height: 15px; }
+.benefit-add { margin-top: 2px; }
+
+/* App-Vorschau-Karte */
+.mp-card {
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  background: linear-gradient(160deg, var(--brand-tint), var(--surface-strong) 70%);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.mp-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.mp-name { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+.mp-price { font-size: 1.05rem; font-weight: 700; color: var(--brand-strong); white-space: nowrap; }
+.mp-price small { font-size: 0.72rem; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.mp-benefits { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.mp-benefits li { position: relative; padding-left: 22px; font-size: 0.88rem; color: var(--ink-soft); line-height: 1.4; }
+.mp-benefits li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--brand); font-weight: 800; }
+.mp-treatments { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.mp-treatments-label { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.mp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mp-chip { padding: 5px 10px; border-radius: 999px; background: var(--surface-muted); color: var(--ink-soft); font-size: 0.78rem; font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
