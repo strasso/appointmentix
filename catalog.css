@@ -224,7 +224,7 @@ input:focus, select:focus, textarea:focus {
   .field-grid, .field-grid-2, .field-grid-3 { grid-template-columns: 1fr 1fr; }
 }
 
-.item-footer { display: flex; justify-content: flex-end; }
+.item-footer { display: flex; justify-content: flex-end; align-items: center; gap: 18px; }
 
 /* ---------- Body-zone chips ---------- */
 .body-zone-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
