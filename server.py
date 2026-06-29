@@ -515,6 +515,17 @@ if os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}:
   app.config["SESSION_COOKIE_SECURE"] = True
 
 
+@app.after_request
+def add_no_cache_for_app_shell(response):
+  # Always revalidate the app shell + static assets so the dashboard and the embedded
+  # catalog editor never render a stale cached version (the "old UI shows up again"
+  # problem). no-cache still allows efficient 304 revalidation.
+  path = request.path or ""
+  if path.endswith((".html", ".js", ".css")) or path in ("/", "/dashboard", "/admin", "/catalog"):
+    response.headers["Cache-Control"] = "no-cache, must-revalidate"
+  return response
+
+
 def is_placeholder(value: str) -> bool:
   lowered = value.lower()
   return (not value) or ("xxxxx" in lowered) or ("ersetze" in lowered)
