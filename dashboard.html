@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="dashboard.css?v=20260629-katalog-fix">
+  <link rel="stylesheet" href="dashboard.css?v=20260629-rail-membership-fix">
 </head>
 <body>
   <div class="dashboard-ghost-session" aria-hidden="true">
@@ -65,8 +65,13 @@
     <section id="dashboardSection" class="app hidden">
       <aside class="app-rail">
         <div class="rail-brand">
-          <img class="brand-mark" src="/assets/curabo-logo.png" onerror="this.onerror=null;this.src='/assets/curabo-logo.svg'" alt="Curabo Logo">
-          <strong>CURABO</strong>
+          <span class="rail-brand-lockup">
+            <img class="brand-mark" src="/assets/curabo-logo.png" onerror="this.onerror=null;this.src='/assets/curabo-logo.svg'" alt="Curabo Logo">
+            <strong>CURABO</strong>
+          </span>
+          <button id="railToggleBtn" class="icon-btn rail-toggle-btn" type="button" aria-label="Seitenleiste ausblenden" aria-pressed="false" title="Seitenleiste ausblenden">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
         </div>
         <nav class="rail-nav" aria-label="Hauptnavigation">
           <button class="rail-nav-item active" type="button" data-view="overview">
@@ -112,9 +117,6 @@
 
       <div class="app-content">
         <header class="app-topbar">
-          <button id="railToggleBtn" class="icon-btn rail-toggle-btn" type="button" aria-label="Seitenleiste ausblenden" aria-pressed="false" title="Seitenleiste ausblenden">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-          </button>
           <div class="topbar-copy">
             <p class="eyebrow" id="viewEyebrow">Performance Center</p>
             <h2 id="dashboardGreeting">Guten Morgen 👋</h2>
@@ -1217,7 +1219,7 @@
   </main>
 
   <script src="theme-utils.js?v=20260629-katalog-fix"></script>
-  <script src="dashboard.js?v=20260629-katalog-fix"></script>
+  <script src="dashboard.js?v=20260629-rail-membership-fix"></script>
   <script>
     (() => {
       const pairs = [

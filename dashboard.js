@@ -3581,11 +3581,28 @@ function customerEmpty(text) {
   return `<p class="customer-empty">${escapeHtml(text)}</p>`;
 }
 
-function customerSummaryCard(label, value, detail = "") {
-  return `<div class="customer-summary-card">
+function customerSummaryCard(label, value, detail = "", extraClass = "") {
+  const className = extraClass ? ` ${escapeAttr(extraClass)}` : "";
+  return `<div class="customer-summary-card${className}">
     <span>${escapeHtml(label)}</span>
     <strong>${escapeHtml(value || "—")}</strong>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+  </div>`;
+}
+
+function customerMembershipSummaryCard(membership) {
+  if (!membership) {
+    return `<div class="customer-summary-card customer-summary-membership is-empty">
+      <span>Membership</span>
+      <strong><span class="status-pill muted">Kein Mitglied</span></strong>
+      <small>Keine Membership hinterlegt</small>
+    </div>`;
+  }
+  const status = patientStatusMeta(membership.status);
+  return `<div class="customer-summary-card customer-summary-membership">
+    <span>Membership</span>
+    <strong><span class="status-pill ${escapeAttr(status.cls)}">${escapeHtml(status.label)}</span></strong>
+    <small>${escapeHtml(membership.membershipName || "Membership")}</small>
   </div>`;
 }
 
@@ -3615,8 +3632,11 @@ function customerAppointmentSummaryDetail(rows = []) {
 function renderCustomerMembership(membership) {
   if (!membership) {
     return `<div class="customer-membership-card is-empty">
-      <strong>Kein Mitglied</strong>
-      <small>Für diesen Kunden ist noch keine Membership hinterlegt.</small>
+      <span class="status-pill muted">Kein Mitglied</span>
+      <div>
+        <strong>Keine Membership hinterlegt</strong>
+        <small>Für diesen Kunden ist aktuell kein Plan aktiv oder angelegt.</small>
+      </div>
     </div>`;
   }
   const status = patientStatusMeta(membership.status);
@@ -3718,7 +3738,6 @@ function renderCustomerDrawer(profile) {
   const transactions = Array.isArray(profile?.transactions) ? profile.transactions : [];
   const appointments = Array.isArray(profile?.appointments) ? profile.appointments : [];
   const summary = profile?.summary || {};
-  const membershipStatus = membership ? patientStatusMeta(membership.status).label : "Kein Mitglied";
   const latestTxnDate = latestPastDate(transactions, (txn) => txn.date);
   const currency = summary.currency || transactions[0]?.currency || membership?.currency || "eur";
   const customerValueCents = Number(summary.paidCents || 0);
@@ -3728,7 +3747,7 @@ function renderCustomerDrawer(profile) {
   customerDrawerBody.innerHTML = `
     <div class="customer-summary-grid">
       ${customerSummaryCard("Kundenwert", formatEuro(customerValueCents, currency), valueDetail)}
-      ${customerSummaryCard("Membership", membershipStatus, membership?.membershipName || "")}
+      ${customerMembershipSummaryCard(membership)}
       ${customerSummaryCard("Zahlungen", String(Number(summary.transactions || transactions.length)), latestTxnDate ? `Letzte ${formatDateOnly(latestTxnDate)}` : "")}
       ${customerSummaryCard("Termine", String(Number(summary.appointments || appointments.length)), customerAppointmentSummaryDetail(appointments))}
     </div>

@@ -1849,12 +1849,11 @@ td small {
   grid-template-columns: 252px minmax(0, 1fr);
   gap: 22px;
   align-items: start;
+  transition: grid-template-columns 300ms var(--ease-out), gap 300ms var(--ease-out);
 }
 #dashboardSection.app.rail-collapsed {
-  grid-template-columns: minmax(0, 1fr);
-}
-#dashboardSection.app.rail-collapsed .app-rail {
-  display: none;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 16px;
 }
 
 /* ---------- Rail ---------- */
@@ -1871,14 +1870,28 @@ td small {
   border-radius: 0;
   box-shadow: none;
   color: var(--rail-ink);
+  overflow: hidden;
+  transition: padding 300ms var(--ease-out), opacity 220ms var(--ease), transform 300ms var(--ease-out);
 }
 
 .rail-brand {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 11px;
   padding: 6px 8px 16px;
   border-bottom: 0;
+  min-width: 0;
+}
+.rail-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity 220ms var(--ease), transform 300ms var(--ease-out), max-width 300ms var(--ease-out);
 }
 .rail-brand .brand-mark {
   width: 30px;
@@ -1894,6 +1907,7 @@ td small {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: opacity 220ms var(--ease), transform 300ms var(--ease-out), visibility 0s linear 0s;
 }
 .rail-nav-item {
   position: relative;
@@ -1952,6 +1966,7 @@ td small {
   gap: 12px;
   padding-top: 14px;
   border-top: 0;
+  transition: opacity 220ms var(--ease), transform 300ms var(--ease-out), visibility 0s linear 0s;
 }
 .rail-user {
   display: flex;
@@ -2036,6 +2051,9 @@ td small {
   flex: none;
   width: 38px;
   height: 38px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--rail-ink);
+  box-shadow: none;
 }
 .rail-toggle-btn[aria-pressed="true"] {
   background: var(--surface-strong);
@@ -2045,6 +2063,28 @@ td small {
 .rail-toggle-btn svg {
   width: 18px;
   height: 18px;
+}
+#dashboardSection.app.rail-collapsed .app-rail {
+  padding-inline: 6px;
+}
+#dashboardSection.app.rail-collapsed .rail-brand {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0;
+}
+#dashboardSection.app.rail-collapsed .rail-brand-lockup {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+#dashboardSection.app.rail-collapsed .rail-nav,
+#dashboardSection.app.rail-collapsed .rail-foot {
+  opacity: 0;
+  transform: translateX(-10px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 220ms var(--ease-out), visibility 0s linear 170ms;
 }
 .app-topbar {
   display: flex;
@@ -2335,6 +2375,15 @@ td small {
   .rail-nav-item.active::before { display: none; }
   .rail-foot { margin: 0 0 0 auto; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; border: 0; padding: 0; }
   .app-rail .sidebar-support-link { flex: 0 0 auto; width: auto; min-height: 38px; padding-inline: 12px; }
+  #dashboardSection.app.rail-collapsed .app-rail {
+    width: 56px;
+    min-height: 52px;
+    justify-self: start;
+    padding: 8px 6px;
+  }
+  #dashboardSection.app.rail-collapsed .rail-brand {
+    padding: 0;
+  }
   .kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .overview-grid { grid-template-columns: 1fr; }
 }
@@ -2729,6 +2778,11 @@ th.num {
   border-radius: var(--radius-md);
   background: var(--surface-muted);
 }
+.customer-summary-card.is-empty {
+  background: #fff;
+  border: 1px solid rgba(18, 22, 30, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
 .customer-summary-card span,
 .customer-summary-card small {
   display: block;
@@ -2743,6 +2797,15 @@ th.num {
   font-size: 1.05rem;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+}
+.customer-summary-membership strong {
+  margin-top: 8px;
+}
+.customer-summary-membership strong .status-pill {
+  display: inline-flex;
+  min-height: 28px;
+  font-size: 0.78rem;
+  vertical-align: middle;
 }
 .customer-section {
   display: grid;
@@ -2778,7 +2841,10 @@ th.num {
   justify-self: start;
 }
 .customer-membership-card.is-empty {
-  background: var(--surface-muted);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  background: #fff;
+  border-color: rgba(18, 22, 30, 0.11);
 }
 .customer-membership-card.is-empty strong {
   font-size: 1.02rem;
