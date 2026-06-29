@@ -691,6 +691,14 @@ a.btn:visited {
   gap: 2px;
 }
 
+/* Kalender Monat/Woche/Tag: ohne umgebende Box (nur die Buttons) */
+#calViewSwitch {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  gap: 6px;
+}
+
 .metrics-range-controls {
   padding: 4px;
   border-radius: 12px;
