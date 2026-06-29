@@ -4989,6 +4989,14 @@ function bindEvents() {
     removeCatalogRow(listName, index);
   });
   campaignForm.addEventListener("submit", handleCreateCampaign);
+  if (campaignPlaybooks) {
+    campaignPlaybooks.addEventListener("click", (event) => {
+      const btn = event.target instanceof Element ? event.target.closest("[data-playbook]") : null;
+      if (btn) applyCampaignPlaybook(btn.getAttribute("data-playbook"));
+    });
+  }
+  campaignForm.addEventListener("input", updateCampaignPreview);
+  updateCampaignPreview();
   refreshCampaignsBtn.addEventListener("click", () => {
     loadCampaigns().catch((error) => showToast(error.message));
   });
