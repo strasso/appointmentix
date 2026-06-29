@@ -4331,11 +4331,27 @@ async function runCampaign(campaignId) {
 
   const campaign = (state.campaigns || []).find((entry) => Number(entry.id) === Number(campaignId)) || {};
   const name = campaign.name || "Kampagne";
-  const audience = Number(campaign.totalAudience || 0);
-  const audienceText = audience > 0
-    ? `an ~${audience} Kund:in${audience === 1 ? "" : "nen"}`
-    : "– aktuell ist niemand in der Zielgruppe";
-  if (!window.confirm(`„${name}" jetzt senden ${audienceText}?`)) return;
+
+  // Show who is actually in the target group right now (count + sample names).
+  let count = Number(campaign.totalAudience || 0);
+  let recipients = [];
+  try {
+    const audience = await apiRequest(`/clinic/campaigns/${campaignId}/audience`);
+    count = Number(audience.count || 0);
+    recipients = Array.isArray(audience.recipients) ? audience.recipients : [];
+  } catch (_) {
+    // fall back to the cached count if the audience lookup fails
+  }
+
+  let confirmText;
+  if (count > 0) {
+    const sample = recipients.slice(0, 5).map((r) => `• ${r.name || r.email || "Gast"}`).join("\n");
+    const more = count > 5 ? `\n… und ${count - 5} weitere` : "";
+    confirmText = `„${name}" jetzt senden?\n\n${count} Kund:in${count === 1 ? "" : "nen"} erhalten das:\n${sample}${more}`;
+  } else {
+    confirmText = `„${name}": Aktuell ist niemand in der Zielgruppe. Trotzdem ausführen?`;
+  }
+  if (!window.confirm(confirmText)) return;
 
   try {
     const response = await apiRequest(`/clinic/campaigns/${campaignId}/run`, {

@@ -10880,6 +10880,34 @@ def clinic_campaign_deliveries(campaign_id: int):
   return jsonify({"deliveries": deliveries})
 
 
+@app.get("/api/clinic/campaigns/<int:campaign_id>/audience")
+def clinic_campaign_audience(campaign_id):
+  # AP5: who is currently in this campaign's target group (so the dashboard can show
+  # "diese N Kund:innen erhalten das" with sample names before sending).
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"count": 0, "recipients": []})
+  with get_db() as conn:
+    row = conn.execute(
+      "SELECT trigger_type FROM clinic_campaigns WHERE id = ? AND clinic_id = ?",
+      (campaign_id, clinic_id),
+    ).fetchone()
+  if not row:
+    return jsonify({"error": "Kampagne nicht gefunden."}), 404
+  recipients = resolve_campaign_recipients(clinic_id, safe_row_value(row, "trigger_type") or "broadcast")
+  out = [
+    {
+      "name": safe_public_text(profile.get("name")) or (safe_public_text(profile.get("email")).split("@")[0] or "Gast"),
+      "email": safe_public_text(profile.get("email")),
+    }
+    for profile in recipients
+  ]
+  return jsonify({"count": len(out), "recipients": out[:100]})
+
+
 @app.get("/api/clinic/audit-logs")
 def clinic_audit_logs():
   user_row, auth_error = require_auth_row()
