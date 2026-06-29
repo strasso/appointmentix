@@ -2470,9 +2470,25 @@ button.pstat {
 .pstat.is-clickable:hover {
   transform: translateY(-1px);
 }
+.pstat.active {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  box-shadow: 0 14px 30px rgba(20, 18, 24, 0.08);
+}
 [data-route-view]:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--brand) 28%, transparent);
   outline-offset: 3px;
+}
+
+.patient-row {
+  cursor: pointer;
+  transition: background 160ms var(--ease);
+}
+.patient-row:hover {
+  background: var(--surface-muted);
+}
+.patient-row:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 28%, transparent);
+  outline-offset: -3px;
 }
 
 .txn-toolbar {
@@ -2626,6 +2642,242 @@ th.num {
   font-size: 0.82rem;
   font-weight: 700;
 }
+
+.customer-drawer-panel {
+  width: min(520px, 100%);
+}
+.customer-drawer-head {
+  align-items: center;
+}
+.customer-drawer-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.customer-drawer-identity h3,
+.customer-drawer-identity small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+.customer-drawer-identity small {
+  color: var(--muted);
+  font-weight: 650;
+}
+.customer-drawer-avatar {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(145deg, var(--brand), var(--brand-700));
+  font-weight: 850;
+  letter-spacing: 0.02em;
+}
+.customer-drawer-body {
+  gap: 16px;
+}
+.customer-drawer-foot {
+  justify-content: space-between;
+}
+.customer-drawer-foot p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.customer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.customer-summary-card {
+  min-width: 0;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+.customer-summary-card span,
+.customer-summary-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.customer-summary-card strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.customer-section {
+  display: grid;
+  gap: 10px;
+}
+.customer-section + .customer-section {
+  padding-top: 4px;
+}
+.customer-section-head h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.customer-empty,
+.customer-loading {
+  margin: 0;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--muted);
+  line-height: 1.45;
+}
+.customer-membership-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+}
+.customer-membership-card > .status-pill {
+  justify-self: start;
+}
+.customer-membership-card > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.customer-membership-card strong {
+  color: var(--ink);
+}
+.customer-membership-card small,
+.customer-membership-card dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.customer-membership-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.customer-membership-card dt,
+.customer-membership-card dd {
+  margin: 0;
+}
+.customer-membership-card dd {
+  margin-top: 3px;
+  color: var(--ink);
+  font-weight: 750;
+}
+.customer-notes-box {
+  display: grid;
+  gap: 10px;
+}
+.customer-notes-box textarea {
+  resize: vertical;
+  min-height: 132px;
+}
+.customer-notes-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.customer-notes-actions small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+.customer-mini-list {
+  display: grid;
+  gap: 8px;
+}
+.customer-mini-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+}
+.customer-mini-row.compact {
+  justify-content: flex-start;
+}
+.customer-mini-row span,
+.customer-mini-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.customer-mini-row strong {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.customer-mini-row small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.customer-mini-side {
+  align-items: flex-end;
+  flex: none;
+}
+.customer-mini-side small.ok { color: var(--positive); }
+.customer-mini-side small.warn { color: var(--warning); }
+.customer-mini-side small.danger { color: var(--danger); }
+.customer-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.customer-timeline-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.customer-timeline-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--muted);
+  box-shadow: 0 0 0 5px var(--surface-muted);
+}
+.customer-timeline-item.ok .customer-timeline-dot { background: var(--positive); }
+.customer-timeline-item.warn .customer-timeline-dot,
+.customer-timeline-item.open .customer-timeline-dot { background: var(--warning); }
+.customer-timeline-item.danger .customer-timeline-dot,
+.customer-timeline-item.failed .customer-timeline-dot { background: var(--danger); }
+.customer-timeline-item.brand .customer-timeline-dot,
+.customer-timeline-item.paid .customer-timeline-dot { background: var(--brand); }
+.customer-timeline-item strong {
+  display: block;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+.customer-timeline-item small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  line-height: 1.35;
+}
 @media (max-width: 760px) {
   .txn-toolbar {
     align-items: stretch;
@@ -2633,6 +2885,18 @@ th.num {
   }
   .txn-search {
     width: 100%;
+  }
+  .customer-summary-grid,
+  .customer-membership-card dl {
+    grid-template-columns: 1fr;
+  }
+  .customer-mini-row,
+  .customer-notes-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .customer-mini-side {
+    align-items: flex-start;
   }
 }
 

@@ -25,6 +25,7 @@ const state = {
   },
   patientMemberships: [],
   membershipSummary: {},
+  patientStatusFilter: "all",
   transactions: [],
   transactionSummary: {},
   transactionFilter: "all",
@@ -36,6 +37,8 @@ const state = {
   calendarDate: null,
   editingApptId: null,
   customerNotesEmail: "",
+  activeCustomerEmail: "",
+  activeCustomerProfile: null,
   settingsSnapshot: null,
   themeDraft: null,
   themeSavedDraft: null,
@@ -81,6 +84,12 @@ const txnDrawer = document.getElementById("txnDrawer");
 const txnDrawerTitle = document.getElementById("txnDrawerTitle");
 const txnDrawerKind = document.getElementById("txnDrawerKind");
 const txnDrawerBody = document.getElementById("txnDrawerBody");
+const customerDrawer = document.getElementById("customerDrawer");
+const customerDrawerTitle = document.getElementById("customerDrawerTitle");
+const customerDrawerEmail = document.getElementById("customerDrawerEmail");
+const customerDrawerAvatar = document.getElementById("customerDrawerAvatar");
+const customerDrawerBody = document.getElementById("customerDrawerBody");
+const customerDrawerMeta = document.getElementById("customerDrawerMeta");
 const appointmentStats = document.getElementById("appointmentStats");
 const appointmentsBody = document.getElementById("appointmentsBody");
 const appointmentSearch = document.getElementById("appointmentSearch");
@@ -111,7 +120,7 @@ const railNavItems = Array.from(document.querySelectorAll(".rail-nav-item[data-v
 const viewPanels = Array.from(document.querySelectorAll(".view-panel[data-view-panel]"));
 const VIEW_META = {
   overview: { eyebrow: "Performance Center" },
-  patienten: { eyebrow: "Patienten" },
+  patienten: { eyebrow: "Kund:innen" },
   termine: { eyebrow: "Termine" },
   checkin: { eyebrow: "Check-in" },
   analyse: { eyebrow: "Analyse" },
@@ -235,6 +244,7 @@ const refreshAuditBtn = document.getElementById("refreshAuditBtn");
 let metricsResizeTimer = null;
 let metricsResizeFrame = null;
 let pendingTxnFilter = "";
+let pendingPatientStatusFilter = "";
 const CATEGORY_ID_UI_ALIASES = {
   koerper: "korper",
 };
@@ -1141,7 +1151,7 @@ function exportDashboardCard(kind) {
   const date = new Date().toISOString().slice(0, 10);
   const filename = `${clinicSlug}-${kind}-${date}.csv`;
   downloadCsv(filename, payload.headers || [], payload.rows);
-  showToast(`CSV exportiert: ${filename}`);
+  showToast(`Export ist bereit: ${filename}`);
 }
 
 function toInt(value, fallback = 0) {
@@ -2002,13 +2012,13 @@ function renderMetricsDashboard() {
     const cancelRate = apTotal > 0 ? (Number(aps.canceled || 0) / apTotal) * 100 : null;
     const churn = mTotal > 0 ? (Number(ms.canceled || 0) / mTotal) * 100 : null;
     const chips = [
-      { label: "Ø Behandlungswert", value: purchases > 0 ? formatEuro(Math.round(revenueTotal / purchases)) : "—", cls: "brand" },
-      { label: "Conversion", value: pct(conversion), cls: "ok" },
-      { label: "Stornoquote", value: pct(cancelRate), cls: "warn" },
-      { label: "Mitglieder-Churn", value: pct(churn), cls: "danger" },
+      { label: "Ø Behandlungswert", value: purchases > 0 ? formatEuro(Math.round(revenueTotal / purchases)) : "—", cls: "brand", target: "zahlungen", filter: "produkt" },
+      { label: "Conversion", value: pct(conversion), cls: "ok", target: "zahlungen", filter: "produkt" },
+      { label: "Stornoquote", value: pct(cancelRate), cls: "warn", target: "termine", filter: "" },
+      { label: "Mitglieder-Churn", value: pct(churn), cls: "danger", target: "patienten", filter: "canceled" },
     ];
     analyseStats.innerHTML = chips
-      .map((c) => `<div class="pstat ${c.cls}"><span class="pstat-value">${escapeHtml(c.value)}</span><span class="pstat-label">${escapeHtml(c.label)}</span></div>`)
+      .map((c) => `<button class="pstat ${c.cls} is-clickable" type="button" data-route-view="${escapeAttr(c.target)}" data-route-filter="${escapeAttr(c.filter)}"><span class="pstat-value">${escapeHtml(c.value)}</span><span class="pstat-label">${escapeHtml(c.label)}</span></button>`)
       .join("");
   }
   if (metricAppUserLTVValue) metricAppUserLTVValue.textContent = formatEuro(appUserLtvCents);
@@ -2233,6 +2243,12 @@ function showView(viewName, updateHash = true) {
       })
       .catch((error) => showToast(error.message || "Zahlungen konnten nicht geladen werden."));
   }
+  if (target === "patienten") {
+    const pf = pendingPatientStatusFilter;
+    pendingPatientStatusFilter = "";
+    if (pf) state.patientStatusFilter = normalizePatientStatusFilter(pf);
+    renderPatients();
+  }
   if (updateHash && state.user) {
     const nextHash = `#${target}`;
     if (window.location.hash !== nextHash) {
@@ -2248,6 +2264,10 @@ function viewFromHash() {
   if (viewName === "zahlungen" && query) {
     const params = new URLSearchParams(query);
     pendingTxnFilter = normalizeTxnFilter(params.get("filter") || "all");
+  }
+  if (viewName === "patienten" && query) {
+    const params = new URLSearchParams(query);
+    pendingPatientStatusFilter = normalizePatientStatusFilter(params.get("filter") || "all");
   }
   return VIEW_META[viewName] ? viewName : "overview";
 }
@@ -2276,7 +2296,7 @@ function renderOnboarding() {
   const status = String(state.user.subscriptionStatus || "inactive").toLowerCase();
   const settings = state.settingsSnapshot || {};
   const hasTreatments = Boolean(treatmentsBody && treatmentsBody.querySelector("tr"));
-  const hasTeam = Boolean(membersBody && membersBody.querySelectorAll("tr").length > 1);
+  const hasTeam = (state.members || []).some((member) => String(member.role || "").toLowerCase() === "staff");
   const hasProfile = Boolean(String(settings.website || "").trim() || String(settings.logoUrl || "").trim());
 
   const steps = [
@@ -2289,19 +2309,19 @@ function renderOnboarding() {
     {
       done: hasTreatments,
       title: "Behandlungen anlegen",
-      hint: "Lege deinen Katalog an, damit Patienten buchen können.",
+      hint: "Lege deinen Katalog an, damit Kund:innen buchen können.",
       view: "katalog",
     },
     {
       done: hasProfile,
       title: "Klinik-Profil vervollständigen",
-      hint: "Website, Logo und Branding für deine Patienten-App.",
+      hint: "Website, Logo und Branding für deine Kunden-App.",
       view: "einstellungen",
     },
     {
       done: hasTeam,
       title: "Team einladen",
-      hint: "Lege Staff-Accounts für dein Team an.",
+      hint: "Lege Mitarbeiter:innen für dein Team an.",
       view: "team",
     },
   ];
@@ -2994,6 +3014,39 @@ const CAMPAIGN_STATUS_META = {
   paused: { label: "Pausiert", cls: "warn" },
 };
 
+const campaignPlaybooks = document.getElementById("campaignPlaybooks");
+const cpTitle = document.getElementById("cpTitle");
+const cpBody = document.getElementById("cpBody");
+
+// AP5: one-click campaign playbooks (prefill the form) + live in-app message preview.
+const CAMPAIGN_PLAYBOOKS = {
+  geburtstag: { name: "Geburtstags-Gruß", triggerType: "broadcast", title: "Alles Gute zum Geburtstag! 🎉", body: "Wir schenken dir 500 Bonuspunkte für deinen nächsten Besuch.", points: 500 },
+  winback: { name: "Winback 30 Tage", triggerType: "inactive_30d", title: "Wir vermissen dich!", body: "Komm zurück – 15% auf deine nächste Behandlung.", points: 0 },
+  warenkorb: { name: "Warenkorb-Erinnerung", triggerType: "abandoned_cart_24h", title: "Dein Warenkorb wartet", body: "Schließe deine Buchung ab und sichere dir deinen Termin.", points: 0 },
+  ueberfaellig: { name: "Mitgliedschaft überfällig", triggerType: "membership_past_due", title: "Deine Mitgliedschaft braucht Aufmerksamkeit", body: "Bitte aktualisiere deine Zahlung, um deine Vorteile zu behalten.", points: 0 },
+  rueckgewinnung: { name: "Gekündigt – Rückgewinnung", triggerType: "membership_canceled_winback", title: "Komm zurück zu uns", body: "Reaktiviere deine Mitgliedschaft mit einem exklusiven Angebot.", points: 0 },
+};
+
+function updateCampaignPreview() {
+  if (!cpTitle || !cpBody || !campaignForm) return;
+  const title = String(campaignForm.elements.templateTitle?.value || "").trim();
+  const body = String(campaignForm.elements.templateBody?.value || "").trim();
+  cpTitle.textContent = title || "Titel der Nachricht";
+  cpBody.textContent = body || "Deine Nachricht erscheint hier.";
+}
+
+function applyCampaignPlaybook(key) {
+  const p = CAMPAIGN_PLAYBOOKS[key];
+  if (!p || !campaignForm) return;
+  if (campaignForm.elements.name) campaignForm.elements.name.value = p.name;
+  if (campaignForm.elements.triggerType) campaignForm.elements.triggerType.value = p.triggerType;
+  if (campaignForm.elements.templateTitle) campaignForm.elements.templateTitle.value = p.title;
+  if (campaignForm.elements.templateBody) campaignForm.elements.templateBody.value = p.body;
+  if (campaignForm.elements.pointsBonus) campaignForm.elements.pointsBonus.value = String(p.points);
+  updateCampaignPreview();
+  campaignForm.elements.name?.focus();
+}
+
 function renderCampaigns(rows = []) {
   campaignsBody.innerHTML = "";
   if (!rows.length) {
@@ -3034,7 +3087,7 @@ function renderAuditLogs(rows = []) {
   }
   auditLogsBody.innerHTML = "";
   if (!rows.length) {
-    auditLogsBody.innerHTML = '<tr><td colspan="4">Noch keine Audit-Einträge vorhanden.</td></tr>';
+    auditLogsBody.innerHTML = '<tr><td colspan="4">Noch keine Läufe vorhanden.</td></tr>';
     renderMetricsDashboard();
     return;
   }
@@ -3124,21 +3177,39 @@ const PATIENT_STATUS = {
   inactive: { label: "Inaktiv", cls: "muted" },
 };
 
+const PATIENT_FILTERS = new Set(["all", "active", "trialing", "past_due", "paused", "canceled", "inactive"]);
+
+function normalizePatientStatusFilter(value) {
+  const key = String(value || "all").trim().toLowerCase();
+  return PATIENT_FILTERS.has(key) ? key : "all";
+}
+
+function patientStatusMeta(status) {
+  return PATIENT_STATUS[String(status || "").toLowerCase()] || PATIENT_STATUS.inactive;
+}
+
+function setPatientStatusFilter(filter) {
+  state.patientStatusFilter = normalizePatientStatusFilter(filter);
+  renderPatients();
+}
+
 function renderPatientStats() {
   if (!patientStats) return;
   const summary = state.membershipSummary || {};
   const chips = [
-    { label: "Gesamt", value: String(Number(summary.total || 0)) },
-    { label: "Aktiv", value: String(Number(summary.active || 0)), cls: "ok" },
-    { label: "Zahlung offen", value: String(Number(summary.pastDue || 0)), cls: "warn" },
-    { label: "Pausiert", value: String(Number(summary.paused || 0)), cls: "muted" },
-    { label: "Gekündigt", value: String(Number(summary.canceled || 0)), cls: "danger" },
-    { label: "MRR", value: formatEuro(Number(summary.mrrCents || 0)), cls: "brand" },
+    { label: "Gesamt", value: String(Number(summary.total || 0)), target: "patienten", filter: "all" },
+    { label: "Aktiv", value: String(Number(summary.active || 0)), cls: "ok", target: "patienten", filter: "active" },
+    { label: "Zahlung offen", value: String(Number(summary.pastDue || 0)), cls: "warn", target: "zahlungen", filter: "open" },
+    { label: "Pausiert", value: String(Number(summary.paused || 0)), cls: "muted", target: "patienten", filter: "paused" },
+    { label: "Gekündigt", value: String(Number(summary.canceled || 0)), cls: "danger", target: "patienten", filter: "canceled" },
+    { label: "MRR", value: formatEuro(Number(summary.mrrCents || 0)), cls: "brand", target: "patienten", filter: "active" },
   ];
   patientStats.innerHTML = chips
     .map(
-      (chip) =>
-        `<div class="pstat ${chip.cls || ""}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></div>`
+      (chip) => {
+        const active = chip.target === "patienten" && normalizePatientStatusFilter(chip.filter) === state.patientStatusFilter;
+        return `<button class="pstat ${chip.cls || ""} is-clickable${active ? " active" : ""}" type="button" data-route-view="${escapeAttr(chip.target)}" data-route-filter="${escapeAttr(chip.filter)}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></button>`;
+      }
     )
     .join("");
 }
@@ -3147,7 +3218,10 @@ function renderPatients() {
   renderPatientStats();
   if (!patientsBody) return;
   const term = String(patientSearch?.value || "").trim().toLowerCase();
+  const statusFilter = normalizePatientStatusFilter(state.patientStatusFilter);
   const rows = (state.patientMemberships || []).filter((row) => {
+    const status = String(row.status || "inactive").toLowerCase();
+    if (statusFilter !== "all" && status !== statusFilter) return false;
     if (!term) return true;
     return [row.patientName, row.patientEmail, row.membershipName].some((value) =>
       String(value || "").toLowerCase().includes(term)
@@ -3155,19 +3229,19 @@ function renderPatients() {
   });
 
   if (!rows.length) {
-    patientsBody.innerHTML = `<tr><td colspan="5">${term ? "Keine Treffer." : "Noch keine Patienten."}</td></tr>`;
+    patientsBody.innerHTML = `<tr><td colspan="5">${term ? "Keine Treffer." : "Noch keine Kund:innen."}</td></tr>`;
     return;
   }
 
   patientsBody.innerHTML = rows
     .map((row) => {
-      const status = PATIENT_STATUS[String(row.status || "inactive").toLowerCase()] || PATIENT_STATUS.inactive;
+      const status = patientStatusMeta(row.status);
       const name = row.patientName || "—";
       const email = row.patientEmail || "";
       const plan = row.membershipName || "—";
       const amount = formatEuro(Number(row.monthlyAmountCents || 0));
       const next = row.nextChargeAt ? formatDateOnly(row.nextChargeAt) : "—";
-      return `<tr>
+      return `<tr class="patient-row" data-customer-email="${escapeAttr(email)}" tabindex="0">
         <td><strong>${escapeHtml(name)}</strong>${email ? `<small>${escapeHtml(email)}</small>` : ""}</td>
         <td>${escapeHtml(plan)}</td>
         <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
@@ -3367,12 +3441,16 @@ function openTxnDrawer(txnId) {
   const itemHtml = items.length
     ? `<div class="txn-item-list">${items.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`
     : "";
+  const customerLink = txn.customerEmail
+    ? `<button class="btn ghost btn-sm" type="button" data-open-customer-email="${escapeAttr(txn.customerEmail)}">Kundenakte öffnen</button>`
+    : "";
 
   txnDrawerBody.innerHTML = `
     <div class="txn-drawer-summary">
       <span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span>
       <strong>${escapeHtml(formatEuro(Number(txn.amountCents || 0), currency))}</strong>
       <p>${escapeHtml(txn.label || txn.typeLabel || "Zahlung")}</p>
+      ${customerLink}
     </div>
     <div class="txn-detail-list">
       ${txnDetailRow("Datum", formatDate(txn.date))}
@@ -3414,13 +3492,16 @@ function exportTransactionsCsv() {
     txnPaymentMethodLabel(txn.paymentMethod),
     txn.reference || "",
   ]));
-  showToast("CSV exportiert");
+  showToast("Export ist bereit.");
 }
 
 function navigateDashboardRoute(targetView, filter = "") {
   const target = VIEW_META[targetView] ? targetView : "overview";
   if (target === "zahlungen") {
     pendingTxnFilter = normalizeTxnFilter(filter || "all");
+  }
+  if (target === "patienten") {
+    pendingPatientStatusFilter = normalizePatientStatusFilter(filter || "all");
   }
   showView(target);
 }
@@ -3433,6 +3514,252 @@ const APPOINTMENT_STATUS = {
   completed: { label: "Abgeschlossen", cls: "muted" },
   canceled: { label: "Storniert", cls: "danger" },
 };
+
+function appointmentStatusMeta(status) {
+  return APPOINTMENT_STATUS[String(status || "").toLowerCase()] || APPOINTMENT_STATUS.pending_confirmation;
+}
+
+function customerInitials(name, email = "") {
+  const source = String(name || email || "Kund:in").trim();
+  const parts = source.includes("@")
+    ? [source.split("@")[0]]
+    : source.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]).join("");
+  return (initials || "K").toUpperCase();
+}
+
+function setCustomerDrawerIdentity(profile = {}) {
+  const customer = profile.customer || {};
+  const name = customer.name || "Kund:in";
+  const email = customer.email || state.activeCustomerEmail || "";
+  if (customerDrawerTitle) customerDrawerTitle.textContent = name;
+  if (customerDrawerEmail) customerDrawerEmail.textContent = email || "—";
+  if (customerDrawerAvatar) customerDrawerAvatar.textContent = customerInitials(name, email);
+  if (customerDrawerMeta) {
+    const seen = customer.lastSeenAt ? `Zuletzt aktiv ${formatDate(customer.lastSeenAt)}` : "Live aus Memberships, Zahlungen, Terminen und Check-ins.";
+    customerDrawerMeta.textContent = seen;
+  }
+}
+
+function customerDrawerSection(title, bodyHtml, extraClass = "") {
+  return `<section class="customer-section ${extraClass}">
+    <div class="customer-section-head"><h4>${escapeHtml(title)}</h4></div>
+    ${bodyHtml}
+  </section>`;
+}
+
+function customerEmpty(text) {
+  return `<p class="customer-empty">${escapeHtml(text)}</p>`;
+}
+
+function customerSummaryCard(label, value, detail = "") {
+  return `<div class="customer-summary-card">
+    <span>${escapeHtml(label)}</span>
+    <strong>${escapeHtml(value || "—")}</strong>
+    ${detail ? `<small>${escapeHtml(detail)}</small>` : ""}
+  </div>`;
+}
+
+function dateIsFuture(value) {
+  const parsed = value ? new Date(value) : null;
+  return Boolean(parsed && !Number.isNaN(parsed.getTime()) && parsed.getTime() > Date.now());
+}
+
+function latestPastDate(rows = [], getter = (row) => row.date) {
+  const datedRows = rows
+    .map((row) => ({ row, date: getter(row) }))
+    .filter((item) => item.date);
+  const past = datedRows.find((item) => !dateIsFuture(item.date));
+  return (past || datedRows[0] || {}).date || "";
+}
+
+function customerAppointmentSummaryDetail(rows = []) {
+  const datedRows = rows.filter((row) => row.startsAt || row.createdAt);
+  if (!datedRows.length) return "";
+  const upcoming = datedRows.find((row) => dateIsFuture(row.startsAt || row.createdAt));
+  const selected = upcoming || datedRows.find((row) => !dateIsFuture(row.startsAt || row.createdAt)) || datedRows[0];
+  const dateValue = selected.startsAt || selected.createdAt;
+  const label = dateIsFuture(dateValue) ? "Nächster" : "Letzter";
+  return `${label} ${formatDateOnly(dateValue)}`;
+}
+
+function renderCustomerMembership(membership) {
+  if (!membership) return customerEmpty("Noch keine Membership für diese Kund:in.");
+  const status = patientStatusMeta(membership.status);
+  const paymentStatus = txnStatusMeta(membership.lastPaymentStatus);
+  return `<div class="customer-membership-card">
+    <div>
+      <strong>${escapeHtml(membership.membershipName || "Membership")}</strong>
+      <small>${escapeHtml(formatEuro(Number(membership.monthlyAmountCents || 0), membership.currency || "eur"))} monatlich</small>
+    </div>
+    <span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span>
+    <dl>
+      <div><dt>Start</dt><dd>${escapeHtml(membership.startedAt ? formatDateOnly(membership.startedAt) : "—")}</dd></div>
+      <div><dt>Nächste Zahlung</dt><dd>${escapeHtml(membership.nextChargeAt ? formatDateOnly(membership.nextChargeAt) : "—")}</dd></div>
+      <div><dt>Letzte Zahlung</dt><dd>${escapeHtml(paymentStatus.label)}</dd></div>
+    </dl>
+  </div>`;
+}
+
+function renderCustomerNotes(notes) {
+  return `<div class="customer-notes-box">
+    <textarea id="customerNotesText" data-customer-notes rows="5" placeholder="Allergien, Präferenzen, Hinweise oder Follow-up-Ideen.">${escapeHtml(notes?.notes || "")}</textarea>
+    <div class="customer-notes-actions">
+      <small>${notes?.updatedAt ? `Aktualisiert ${escapeHtml(formatDate(notes.updatedAt))}` : "Noch keine Notiz gespeichert."}</small>
+      <button class="btn primary btn-sm" type="button" data-customer-save-notes>Notiz speichern</button>
+    </div>
+  </div>`;
+}
+
+function renderCustomerTransactions(rows = []) {
+  if (!rows.length) return customerEmpty("Noch keine Zahlungen oder App-Käufe.");
+  return `<div class="customer-mini-list">${rows.slice(0, 8).map((txn) => {
+    const status = txnStatusMeta(txn.status);
+    return `<div class="customer-mini-row">
+      <span>
+        <strong>${escapeHtml(txn.label || txn.typeLabel || "Zahlung")}</strong>
+        <small>${escapeHtml(formatDate(txn.date))} · ${escapeHtml(txn.typeLabel || txn.type || "Zahlung")}</small>
+      </span>
+      <span class="customer-mini-side">
+        <strong>${escapeHtml(formatEuro(Number(txn.amountCents || 0), txn.currency || "eur"))}</strong>
+        <small class="${escapeAttr(status.cls)}">${escapeHtml(status.label)}</small>
+      </span>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderCustomerAppointments(rows = []) {
+  if (!rows.length) return customerEmpty("Noch keine Termine.");
+  return `<div class="customer-mini-list">${rows.slice(0, 8).map((appt) => {
+    const status = appointmentStatusMeta(appt.status);
+    return `<div class="customer-mini-row">
+      <span>
+        <strong>${escapeHtml(appt.treatmentName || "Termin")}</strong>
+        <small>${escapeHtml(appt.startsAt ? formatDate(appt.startsAt) : formatDate(appt.createdAt))}</small>
+      </span>
+      <span class="customer-mini-side">
+        <strong>${escapeHtml(appt.practitionerName || "—")}</strong>
+        <small class="${escapeAttr(status.cls)}">${escapeHtml(status.label)}</small>
+      </span>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderCustomerTimeline(rows = []) {
+  if (!rows.length) return customerEmpty("Noch keine Aktivität.");
+  return `<ol class="customer-timeline">${rows.slice(0, 14).map((item) => {
+    const tone = String(item.tone || "muted").toLowerCase();
+    return `<li class="customer-timeline-item ${escapeAttr(tone)}">
+      <span class="customer-timeline-dot" aria-hidden="true"></span>
+      <div>
+        <strong>${escapeHtml(item.title || "Aktivität")}</strong>
+        <small>${escapeHtml(formatDate(item.date))}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</small>
+      </div>
+    </li>`;
+  }).join("")}</ol>`;
+}
+
+function renderCustomerOperationalBlocks(profile) {
+  const checkins = Array.isArray(profile.checkins) ? profile.checkins : [];
+  const campaigns = Array.isArray(profile.campaignContacts) ? profile.campaignContacts : [];
+  const rows = [
+    ...checkins.slice(0, 4).map((visit) => ({
+      title: "Check-in",
+      detail: `${visit.source || "qr"} · ${formatDate(visit.checkedInAt)}`,
+    })),
+    ...campaigns.slice(0, 4).map((campaign) => ({
+      title: campaign.campaignName || "Kampagne",
+      detail: `${campaign.status || "—"} · ${formatDate(campaign.createdAt)}`,
+    })),
+  ];
+  if (!rows.length) return customerEmpty("Noch keine Check-ins oder Kampagnenkontakte.");
+  return `<div class="customer-mini-list">${rows.map((row) => `<div class="customer-mini-row compact"><span><strong>${escapeHtml(row.title)}</strong><small>${escapeHtml(row.detail)}</small></span></div>`).join("")}</div>`;
+}
+
+function renderCustomerDrawer(profile) {
+  if (!customerDrawerBody) return;
+  state.activeCustomerProfile = profile || null;
+  setCustomerDrawerIdentity(profile || {});
+  const membership = profile?.membership || null;
+  const transactions = Array.isArray(profile?.transactions) ? profile.transactions : [];
+  const appointments = Array.isArray(profile?.appointments) ? profile.appointments : [];
+  const summary = profile?.summary || {};
+  const membershipStatus = membership ? patientStatusMeta(membership.status).label : "Keine";
+  const latestTxnDate = latestPastDate(transactions, (txn) => txn.date);
+
+  customerDrawerBody.innerHTML = `
+    <div class="customer-summary-grid">
+      ${customerSummaryCard("Membership", membershipStatus, membership?.membershipName || "")}
+      ${customerSummaryCard("Zahlungen", String(Number(summary.transactions || transactions.length)), latestTxnDate ? `Letzte ${formatDateOnly(latestTxnDate)}` : "")}
+      ${customerSummaryCard("Termine", String(Number(summary.appointments || appointments.length)), customerAppointmentSummaryDetail(appointments))}
+    </div>
+    ${customerDrawerSection("Membership", renderCustomerMembership(membership))}
+    ${customerDrawerSection("Notizen", renderCustomerNotes(profile?.notes || {}))}
+    ${customerDrawerSection("Timeline", renderCustomerTimeline(profile?.timeline || []))}
+    ${customerDrawerSection("Zahlungen", renderCustomerTransactions(transactions))}
+    ${customerDrawerSection("Termine", renderCustomerAppointments(appointments))}
+    ${customerDrawerSection("Check-ins & Kampagnen", renderCustomerOperationalBlocks(profile))}
+  `;
+}
+
+function renderCustomerDrawerLoading(email) {
+  if (!customerDrawerBody) return;
+  state.activeCustomerProfile = null;
+  setCustomerDrawerIdentity({ customer: { email, name: email || "Kund:in" } });
+  customerDrawerBody.innerHTML = '<div class="customer-loading">Kundenakte wird geladen ...</div>';
+}
+
+function closeCustomerDrawer() {
+  if (!customerDrawer) return;
+  customerDrawer.classList.remove("open");
+  customerDrawer.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => customerDrawer.classList.add("hidden"), 220);
+}
+
+async function openCustomerDrawer(email) {
+  const clean = String(email || "").trim();
+  if (!clean || !customerDrawer || !customerDrawerBody) return;
+  state.activeCustomerEmail = clean;
+  renderCustomerDrawerLoading(clean);
+  customerDrawer.classList.remove("hidden");
+  customerDrawer.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => customerDrawer.classList.add("open"));
+  haptics("light");
+  try {
+    const response = await apiRequest(`/clinic/customer?email=${encodeURIComponent(clean)}`);
+    if (state.activeCustomerEmail !== clean) return;
+    renderCustomerDrawer(response);
+  } catch (error) {
+    customerDrawerBody.innerHTML = `<div class="customer-empty">Kundenakte konnte nicht geladen werden. ${escapeHtml(error.message || "")}</div>`;
+  }
+}
+
+async function saveCustomerDrawerNotes() {
+  const field = customerDrawerBody?.querySelector("[data-customer-notes]");
+  const email = state.activeCustomerEmail;
+  if (!(field instanceof HTMLTextAreaElement) || !email) return;
+  const saveButton = customerDrawerBody?.querySelector("[data-customer-save-notes]");
+  if (saveButton instanceof HTMLButtonElement) {
+    saveButton.disabled = true;
+    saveButton.textContent = "Speichere ...";
+  }
+  try {
+    await apiRequest("/clinic/patient-notes", {
+      method: "PUT",
+      body: { patientEmail: email, notes: field.value.trim() },
+    });
+    const response = await apiRequest(`/clinic/customer?email=${encodeURIComponent(email)}`);
+    if (state.activeCustomerEmail === email) renderCustomerDrawer(response);
+    showToast("Kundennotiz gespeichert");
+  } catch (error) {
+    showToast(error.message || "Notiz konnte nicht gespeichert werden.");
+  } finally {
+    if (saveButton instanceof HTMLButtonElement) {
+      saveButton.disabled = false;
+      saveButton.textContent = "Notiz speichern";
+    }
+  }
+}
 
 function renderAppointmentStats() {
   if (!appointmentStats) return;
@@ -3762,7 +4089,7 @@ async function submitApptForm(event) {
   const fields = apptForm.elements;
   const startsAt = apptStartIso();
   if (!String(fields.patientName.value || "").trim()) {
-    if (apptFormError) apptFormError.textContent = "Bitte Name der Patient:in eingeben.";
+    if (apptFormError) apptFormError.textContent = "Bitte Name der Kund:in eingeben.";
     return;
   }
   if (!startsAt) {
@@ -4002,6 +4329,14 @@ async function runCampaign(campaignId) {
     return;
   }
 
+  const campaign = (state.campaigns || []).find((entry) => Number(entry.id) === Number(campaignId)) || {};
+  const name = campaign.name || "Kampagne";
+  const audience = Number(campaign.totalAudience || 0);
+  const audienceText = audience > 0
+    ? `an ~${audience} Kund:in${audience === 1 ? "" : "nen"}`
+    : "– aktuell ist niemand in der Zielgruppe";
+  if (!window.confirm(`„${name}" jetzt senden ${audienceText}?`)) return;
+
   try {
     const response = await apiRequest(`/clinic/campaigns/${campaignId}/run`, {
       method: "POST",
@@ -4011,8 +4346,11 @@ async function runCampaign(campaignId) {
     const delivery = (response.run || {}).delivery || {};
     const sent = Number(delivery.sent || 0);
     const failed = Number(delivery.failed || 0);
-    const skipped = Number(delivery.skipped || 0);
-    showToast(`Kampagne ausgeführt: sent ${sent}, failed ${failed}, skipped ${skipped}`);
+    let message = sent > 0
+      ? `✓ ${sent} Kund:in${sent === 1 ? "" : "nen"} erreicht`
+      : "Niemand erreicht – die Zielgruppe war leer";
+    if (failed > 0) message += ` · ${failed} fehlgeschlagen`;
+    showToast(message);
   } catch (error) {
     showToast(error.message);
   }
@@ -4148,7 +4486,7 @@ async function handleLogin(event) {
     const response = await apiRequest("/auth/login", { method: "POST", body: payload });
     setSession(response.user);
     await loadDashboardData();
-    showToast("Login erfolgreich");
+    showToast("Willkommen zurück.");
   } catch (error) {
     setAuthMessage(error.message);
   }
@@ -4163,7 +4501,7 @@ async function handleRegister(event) {
     const response = await apiRequest("/auth/register", { method: "POST", body: payload });
     setSession(response.user);
     await loadDashboardData();
-    showToast("Owner-Konto erstellt");
+    showToast("Konto ist bereit.");
   } catch (error) {
     setAuthMessage(error.message);
   }
@@ -4298,7 +4636,7 @@ function setMemberFormMode(member = null) {
   if (memberDrawerIntro) {
     memberDrawerIntro.textContent = isEdit
       ? "Profilbild und Jobtitel strukturieren die Team-Liste."
-      : "Neue Staff-Zugänge erhalten Zugriff auf dieses Klinik-Dashboard.";
+      : "Neue Mitarbeiter:innen erhalten Zugriff auf dieses Klinik-Dashboard.";
   }
   if (fullNameInput) fullNameInput.value = isEdit ? String(member.fullName || "") : "";
   if (jobTitleInput) jobTitleInput.value = isEdit ? String(member.jobTitle || "") : "";
@@ -4320,7 +4658,7 @@ function setMemberFormMode(member = null) {
 
 function openMemberDrawer(member = null) {
   if (!state.isOwner) {
-    showToast("Nur Owner können Staff anlegen.");
+    showToast("Nur Owner können Mitarbeiter:innen anlegen.");
     return;
   }
   if (!memberDrawer || !memberForm) return;
@@ -4355,7 +4693,7 @@ function closeMemberDrawer() {
 async function handleMemberSubmit(event) {
   event.preventDefault();
   if (!state.isOwner) {
-    showToast("Nur Owner können Staff anlegen.");
+    showToast("Nur Owner können Mitarbeiter:innen anlegen.");
     return;
   }
 
@@ -4391,7 +4729,7 @@ async function handleMemberSubmit(event) {
     clearMemberPhoto();
     closeMemberDrawer();
     await Promise.all([loadMembers(), loadAuditLogs()]);
-    showToast(isEdit ? "Mitarbeiterprofil gespeichert" : "Staff-User erstellt");
+    showToast(isEdit ? "Mitarbeiterprofil gespeichert" : "Mitarbeiter:in angelegt");
   } catch (error) {
     if (memberFormError) memberFormError.textContent = error.message || "Mitarbeiter:in konnte nicht gespeichert werden.";
     showToast(error.message);
@@ -4739,7 +5077,7 @@ function bindEvents() {
       refreshDashboardBtn.disabled = true;
       try {
         await loadDashboardData();
-        showToast("Daten aktualisiert");
+        showToast("Dashboard ist aktuell.");
       } catch (error) {
         showToast(error.message);
       } finally {
@@ -4750,6 +5088,21 @@ function bindEvents() {
   }
   if (patientSearch) {
     patientSearch.addEventListener("input", () => renderPatients());
+  }
+  if (patientsBody) {
+    patientsBody.addEventListener("click", (event) => {
+      const row = event.target instanceof Element ? event.target.closest("[data-customer-email]") : null;
+      const email = row ? String(row.getAttribute("data-customer-email") || "") : "";
+      if (email) openCustomerDrawer(email);
+    });
+    patientsBody.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const row = event.target instanceof Element ? event.target.closest("[data-customer-email]") : null;
+      const email = row ? String(row.getAttribute("data-customer-email") || "") : "";
+      if (!email) return;
+      event.preventDefault();
+      openCustomerDrawer(email);
+    });
   }
   if (appointmentSearch) {
     appointmentSearch.addEventListener("input", () => renderAppointments());
@@ -4823,7 +5176,24 @@ function bindEvents() {
   }
   if (txnDrawer) {
     txnDrawer.addEventListener("click", (event) => {
-      if (event.target instanceof Element && event.target.closest("[data-txn-drawer-close]")) closeTxnDrawer();
+      if (!(event.target instanceof Element)) return;
+      const customerButton = event.target.closest("[data-open-customer-email]");
+      if (customerButton) {
+        const email = String(customerButton.getAttribute("data-open-customer-email") || "");
+        if (email) openCustomerDrawer(email);
+        return;
+      }
+      if (event.target.closest("[data-txn-drawer-close]")) closeTxnDrawer();
+    });
+  }
+  if (customerDrawer) {
+    customerDrawer.addEventListener("click", (event) => {
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest("[data-customer-save-notes]")) {
+        saveCustomerDrawerNotes();
+        return;
+      }
+      if (event.target.closest("[data-customer-drawer-close]")) closeCustomerDrawer();
     });
   }
   if (memberDrawer) {
@@ -4835,6 +5205,7 @@ function bindEvents() {
     if (event.key === "Escape" && memberConfirm && !memberConfirm.classList.contains("hidden")) closeMemberConfirm();
     if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
     if (event.key === "Escape" && txnDrawer && !txnDrawer.classList.contains("hidden")) closeTxnDrawer();
+    if (event.key === "Escape" && customerDrawer && !customerDrawer.classList.contains("hidden")) closeCustomerDrawer();
     if (event.key === "Escape" && memberDrawer && !memberDrawer.classList.contains("hidden")) closeMemberDrawer();
   });
   // Central interaction feedback: haptic tap + ripple on prominent controls.

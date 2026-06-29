@@ -11704,6 +11704,262 @@ def clinic_put_patient_notes():
   return jsonify({"patientEmail": email, "notes": notes, "updatedAt": now_iso})
 
 
+@app.get("/api/clinic/customer")
+def clinic_customer_profile():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  email = sanitize_patient_email(request.args.get("email"))
+  if not clinic_id:
+    return jsonify({"error": "Keine Klinik gefunden."}), 400
+  if not email:
+    return jsonify({"error": "E-Mail ist erforderlich."}), 400
+
+  with get_db() as conn:
+    membership_row = conn.execute(
+      """
+      SELECT
+        id,
+        clinic_id,
+        patient_email,
+        patient_name,
+        membership_id,
+        membership_name,
+        monthly_amount_cents,
+        currency,
+        status,
+        started_at,
+        current_period_end,
+        next_charge_at,
+        canceled_at,
+        last_payment_status,
+        created_at,
+        updated_at
+      FROM patient_memberships
+      WHERE clinic_id = ? AND LOWER(patient_email) = ?
+      LIMIT 1
+      """,
+      (clinic_id, email),
+    ).fetchone()
+    checkout_rows = conn.execute(
+      """
+      SELECT id, order_id, patient_email, patient_name, payment_method, payment_status,
+             checkout_status, currency, total_cents, line_items_json, created_at, finalized_at
+      FROM patient_checkout_sessions
+      WHERE clinic_id = ? AND LOWER(patient_email) = ?
+      ORDER BY created_at DESC
+      LIMIT 50
+      """,
+      (clinic_id, email),
+    ).fetchall()
+    note_row = conn.execute(
+      "SELECT notes, updated_at FROM patient_notes WHERE clinic_id = ? AND patient_email = ? LIMIT 1",
+      (clinic_id, email),
+    ).fetchone()
+    visit_rows = conn.execute(
+      """
+      SELECT id, patient_phone, patient_name, patient_email, source, created_at
+      FROM clinic_visits
+      WHERE clinic_id = ? AND LOWER(patient_email) = ?
+      ORDER BY created_at DESC
+      LIMIT 50
+      """,
+      (clinic_id, email),
+    ).fetchall()
+    campaign_rows = conn.execute(
+      """
+      SELECT
+        d.id,
+        d.recipient_key,
+        d.channel,
+        d.status,
+        d.error_message,
+        d.metadata_json,
+        d.created_at,
+        c.name AS campaign_name,
+        c.trigger_type
+      FROM campaign_deliveries d
+      LEFT JOIN clinic_campaigns c ON c.id = d.campaign_id
+      WHERE d.clinic_id = ?
+        AND (LOWER(d.recipient_key) = ? OR LOWER(d.metadata_json) LIKE ?)
+      ORDER BY d.created_at DESC
+      LIMIT 50
+      """,
+      (clinic_id, email, f"%{email}%"),
+    ).fetchall()
+
+  appointment_rows = list_patient_appointments(clinic_id, email, 50)
+  appointments = [serialize_patient_appointment_row(row) for row in appointment_rows]
+
+  transactions = []
+  for row in checkout_rows:
+    items = parse_json_list(safe_row_value(row, "line_items_json"))
+    item_names = [
+      safe_public_text(item.get("name") or item.get("title"))
+      for item in items
+      if isinstance(item, dict)
+    ]
+    item_names = [name for name in item_names if name]
+    transactions.append(
+      {
+        "id": f"co-{safe_row_value(row, 'id')}",
+        "date": safe_public_text(safe_row_value(row, "finalized_at")) or safe_public_text(safe_row_value(row, "created_at")),
+        "customerName": safe_public_text(safe_row_value(row, "patient_name"), "Gast") or "Gast",
+        "customerEmail": safe_public_text(safe_row_value(row, "patient_email")),
+        "type": "produkt",
+        "typeLabel": "App-Kauf",
+        "label": ", ".join(item_names[:3]) if item_names else "App-Kauf",
+        "amountCents": txn_amount_cents(safe_row_value(row, "total_cents", 0)),
+        "currency": safe_public_text(safe_row_value(row, "currency"), "eur") or "eur",
+        "status": normalize_txn_status(safe_row_value(row, "payment_status") or safe_row_value(row, "checkout_status")),
+        "source": "App",
+        "paymentMethod": safe_public_text(safe_row_value(row, "payment_method")),
+        "reference": safe_public_text(safe_row_value(row, "order_id")),
+        "items": item_names,
+      }
+    )
+
+  if membership_row:
+    transactions.append(
+      {
+        "id": f"mb-{safe_row_value(membership_row, 'id')}",
+        "date": safe_public_text(safe_row_value(membership_row, "next_charge_at")) or safe_public_text(safe_row_value(membership_row, "started_at")),
+        "customerName": safe_public_text(safe_row_value(membership_row, "patient_name"), "Gast") or "Gast",
+        "customerEmail": safe_public_text(safe_row_value(membership_row, "patient_email")),
+        "type": "mitgliedschaft",
+        "typeLabel": "Mitgliedschaft",
+        "label": safe_public_text(safe_row_value(membership_row, "membership_name"), "Mitgliedschaft") or "Mitgliedschaft",
+        "amountCents": txn_amount_cents(safe_row_value(membership_row, "monthly_amount_cents", 0)),
+        "currency": safe_public_text(safe_row_value(membership_row, "currency"), "eur") or "eur",
+        "status": normalize_txn_status(safe_row_value(membership_row, "last_payment_status") or safe_row_value(membership_row, "status")),
+        "membershipStatus": safe_public_text(safe_row_value(membership_row, "status")),
+        "source": "Abo",
+        "paymentMethod": "—",
+        "reference": "",
+        "items": [],
+      }
+    )
+
+  transactions.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+
+  checkins = [
+    {
+      "id": row["id"],
+      "patientName": safe_public_text(row["patient_name"], "Gast") or "Gast",
+      "patientPhone": safe_public_text(row["patient_phone"]),
+      "source": safe_public_text(row["source"], "qr") or "qr",
+      "checkedInAt": row["created_at"],
+    }
+    for row in visit_rows
+  ]
+  campaign_contacts = [
+    {
+      "id": row["id"],
+      "campaignName": safe_public_text(row["campaign_name"], "Kampagne") or "Kampagne",
+      "triggerType": safe_public_text(row["trigger_type"]),
+      "channel": safe_public_text(row["channel"]),
+      "status": safe_public_text(row["status"]),
+      "errorMessage": safe_public_text(row["error_message"]),
+      "createdAt": row["created_at"],
+    }
+    for row in campaign_rows
+  ]
+
+  name_candidates = [
+    safe_row_value(membership_row, "patient_name") if membership_row else "",
+    *(safe_row_value(row, "patient_name") for row in appointment_rows[:2]),
+    *(safe_row_value(row, "patient_name") for row in checkout_rows[:2]),
+    *(safe_row_value(row, "patient_name") for row in visit_rows[:2]),
+  ]
+  customer_name = next((safe_public_text(value) for value in name_candidates if safe_public_text(value)), "")
+  if not customer_name:
+    customer_name = email.split("@")[0] if "@" in email else "Kund:in"
+
+  timeline = []
+
+  def customer_amount_label(amount_cents: object, currency: object = "eur") -> str:
+    try:
+      cents = int(amount_cents or 0)
+    except (TypeError, ValueError):
+      cents = 0
+    currency_label = safe_public_text(currency, "eur").upper()
+    amount = f"{cents / 100:.2f}".replace(".", ",")
+    return f"{amount} {currency_label}"
+
+  def add_timeline(kind: str, title: str, date_value: object, detail: str = "", tone: str = "muted"):
+    clean_date = safe_public_text(date_value)
+    if not clean_date:
+      return
+    timeline.append(
+      {
+        "kind": kind,
+        "title": safe_public_text(title, kind.title()) or kind.title(),
+        "detail": safe_public_text(detail),
+        "date": clean_date,
+        "tone": safe_public_text(tone, "muted") or "muted",
+      }
+    )
+
+  if membership_row:
+    membership_status = safe_public_text(safe_row_value(membership_row, "status"), "inactive")
+    add_timeline(
+      "membership",
+      f"Membership: {safe_public_text(safe_row_value(membership_row, 'membership_name'), 'Mitgliedschaft')}",
+      safe_row_value(membership_row, "updated_at") or safe_row_value(membership_row, "started_at"),
+      membership_status,
+      "ok" if membership_status == "active" else "warn" if membership_status == "past_due" else "muted",
+    )
+  for txn in transactions[:20]:
+    add_timeline("transaction", txn.get("label") or txn.get("typeLabel") or "Zahlung", txn.get("date"), customer_amount_label(txn.get("amountCents", 0), txn.get("currency", "eur")), txn.get("status") or "muted")
+  for appt in appointments[:20]:
+    appt_status = str(appt.get("status") or "")
+    add_timeline("appointment", f"Termin: {appt.get('treatmentName') or 'Behandlung'}", appt.get("startsAt") or appt.get("createdAt"), appt_status, "danger" if appt_status == "canceled" else "ok")
+  for visit in checkins[:12]:
+    add_timeline("checkin", "Check-in", visit.get("checkedInAt"), visit.get("source", "qr"), "brand")
+  for campaign in campaign_contacts[:12]:
+    add_timeline("campaign", f"Kampagne: {campaign.get('campaignName') or 'Kampagne'}", campaign.get("createdAt"), campaign.get("status") or "", "muted")
+  if note_row and safe_public_text(safe_row_value(note_row, "notes")):
+    add_timeline("note", "Notiz aktualisiert", safe_row_value(note_row, "updated_at"), "", "brand")
+
+  timeline.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
+  parsed_dates = []
+  for item in timeline:
+    parsed_date = parse_datetime_utc(item.get("date"))
+    if parsed_date:
+      parsed_dates.append(parsed_date)
+  now_dt = utc_now()
+  past_dates = [item for item in parsed_dates if item <= now_dt]
+
+  return jsonify(
+    {
+      "customer": {
+        "email": email,
+        "name": customer_name,
+        "firstSeenAt": min(parsed_dates).isoformat() if parsed_dates else None,
+        "lastSeenAt": max(past_dates).isoformat() if past_dates else None,
+      },
+      "membership": serialize_patient_membership_row(membership_row) if membership_row else None,
+      "transactions": transactions,
+      "appointments": appointments,
+      "notes": {
+        "patientEmail": email,
+        "notes": safe_public_text(safe_row_value(note_row, "notes")) if note_row else "",
+        "updatedAt": safe_public_text(safe_row_value(note_row, "updated_at")) if note_row else None,
+      },
+      "checkins": checkins,
+      "campaignContacts": campaign_contacts,
+      "timeline": timeline[:60],
+      "summary": {
+        "transactions": len(transactions),
+        "appointments": len(appointments),
+        "checkins": len(checkins),
+        "campaignContacts": len(campaign_contacts),
+      },
+    }
+  )
+
+
 @app.post("/api/clinic/members")
 def create_clinic_member():
   owner_row, auth_error = require_owner_row()
