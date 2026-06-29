@@ -43,6 +43,7 @@ const state = {
   memberPhotoObjectUrl: "",
   memberDrawerMode: "create",
   editingMemberId: null,
+  pendingMemberAction: null,
   catalog: {
     categories: [],
     treatments: [],
@@ -145,6 +146,10 @@ const memberPhotoBtn = document.getElementById("memberPhotoBtn");
 const memberPhotoClearBtn = document.getElementById("memberPhotoClearBtn");
 const memberPhotoPreview = document.getElementById("memberPhotoPreview");
 const memberPhotoName = document.getElementById("memberPhotoName");
+const memberConfirm = document.getElementById("memberConfirm");
+const memberConfirmTitle = document.getElementById("memberConfirmTitle");
+const memberConfirmText = document.getElementById("memberConfirmText");
+const memberConfirmAction = document.getElementById("memberConfirmAction");
 const billingStatus = document.getElementById("billingStatus");
 const historyBody = document.getElementById("historyBody");
 const startCheckoutBtn = document.getElementById("startCheckoutBtn");
@@ -2177,6 +2182,18 @@ function memberAvatarHtml(member) {
   return `<span class="team-member-avatar" aria-hidden="true">${escapeHtml(memberInitials(member))}</span>`;
 }
 
+function memberEditIcon() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+}
+
+function memberTrashIcon() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>';
+}
+
+function memberRestoreIcon() {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg>';
+}
+
 function renderMembers(members) {
   state.members = Array.isArray(members) ? members : [];
   if (!membersBody) {
@@ -2209,8 +2226,10 @@ function renderMembers(members) {
       if (state.isOwner && isStaff) {
         const next = isActive ? "false" : "true";
         const label = isActive ? "Deaktivieren" : "Reaktivieren";
-        const btnCls = isActive ? "member-action-btn" : "member-action-btn member-action-activate";
-        action = `<button type="button" class="member-edit-btn" data-member-edit data-member-id="${member.id}">Profil</button><button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}">${label}</button>`;
+        const memberLabel = escapeAttr(member.fullName || member.email || "Mitglied");
+        const btnCls = isActive ? "member-action-btn member-action-delete" : "member-action-btn member-action-activate";
+        const actionIcon = isActive ? memberTrashIcon() : memberRestoreIcon();
+        action = `<button type="button" class="member-edit-btn" data-member-edit data-member-id="${member.id}" aria-label="Profil von ${memberLabel} bearbeiten" title="Profil bearbeiten">${memberEditIcon()}</button><button type="button" class="${btnCls}" data-member-action data-member-id="${member.id}" data-next-active="${next}" aria-label="${label}: ${memberLabel}" title="${label}">${actionIcon}</button>`;
       } else if (isOwner) {
         action = '<span class="team-owner-lock">Geschützt</span>';
       }
@@ -2234,6 +2253,71 @@ function renderMembers(members) {
   renderMetricsDashboard();
 }
 
+function closeMemberConfirm() {
+  if (!memberConfirm) return;
+  memberConfirm.classList.remove("open");
+  memberConfirm.setAttribute("aria-hidden", "true");
+  state.pendingMemberAction = null;
+  window.setTimeout(() => memberConfirm.classList.add("hidden"), 180);
+}
+
+function openMemberDeactivateConfirm(member) {
+  if (!memberConfirm || !member?.id) return;
+  const displayName = String(member.fullName || member.email || "dieses Teammitglied").trim();
+  state.pendingMemberAction = { memberId: member.id, nextActive: false };
+  if (memberConfirmTitle) memberConfirmTitle.textContent = "Mitglied deaktivieren?";
+  if (memberConfirmText) {
+    memberConfirmText.textContent = `Möchtest du ${displayName} wirklich deaktivieren? Der Dashboard-Zugriff wird gesperrt, das Profil bleibt für eine spätere Reaktivierung erhalten.`;
+  }
+  if (memberConfirmAction) {
+    memberConfirmAction.disabled = false;
+    memberConfirmAction.textContent = "Ja, bitte deaktivieren";
+  }
+  memberConfirm.classList.remove("hidden");
+  memberConfirm.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => memberConfirm.classList.add("open"));
+  window.setTimeout(() => memberConfirmAction?.focus(), 80);
+}
+
+async function performMemberActiveUpdate(memberId, nextActive, control = null) {
+  if (!memberId) return;
+  if (control) {
+    control.disabled = true;
+    control.setAttribute("aria-busy", "true");
+  }
+  try {
+    await apiRequest(`/clinic/members/${memberId}`, { method: "PATCH", body: { active: nextActive } });
+    await Promise.all([loadMembers(), loadAuditLogs()]);
+    showToast(nextActive ? "Mitglied aktiviert" : "Mitglied deaktiviert");
+  } catch (error) {
+    showToast(error.message || "Aktion fehlgeschlagen.");
+    throw error;
+  } finally {
+    if (control) {
+      control.disabled = false;
+      control.removeAttribute("aria-busy");
+    }
+  }
+}
+
+async function confirmPendingMemberAction() {
+  const pending = state.pendingMemberAction;
+  if (!pending) return;
+  if (memberConfirmAction) {
+    memberConfirmAction.disabled = true;
+    memberConfirmAction.textContent = pending.nextActive ? "Aktiviere ..." : "Deaktiviere ...";
+  }
+  try {
+    await performMemberActiveUpdate(pending.memberId, pending.nextActive);
+    closeMemberConfirm();
+  } catch {
+    if (memberConfirmAction) {
+      memberConfirmAction.disabled = false;
+      memberConfirmAction.textContent = pending.nextActive ? "Ja, bitte aktivieren" : "Ja, bitte deaktivieren";
+    }
+  }
+}
+
 async function handleMemberAction(target) {
   const editButton = target.closest("[data-member-edit]");
   if (editButton) {
@@ -2247,21 +2331,12 @@ async function handleMemberAction(target) {
   const memberId = button.getAttribute("data-member-id");
   const nextActive = button.getAttribute("data-next-active") === "true";
   if (!memberId) return;
-  if (!nextActive && !window.confirm("Mitglied deaktivieren? Es kann sich danach nicht mehr anmelden.")) {
+  if (!nextActive) {
+    const member = state.members.find((item) => Number(item.id) === Number(memberId));
+    openMemberDeactivateConfirm(member || { id: memberId, fullName: "dieses Teammitglied" });
     return;
   }
-  const originalLabel = button.textContent;
-  button.disabled = true;
-  button.textContent = nextActive ? "Aktiviere ..." : "Deaktiviere ...";
-  try {
-    await apiRequest(`/clinic/members/${memberId}`, { method: "PATCH", body: { active: nextActive } });
-    await Promise.all([loadMembers(), loadAuditLogs()]);
-    showToast(nextActive ? "Mitglied aktiviert" : "Mitglied deaktiviert");
-  } catch (error) {
-    button.disabled = false;
-    button.textContent = originalLabel;
-    showToast(error.message || "Aktion fehlgeschlagen.");
-  }
+  await performMemberActiveUpdate(memberId, nextActive, button);
 }
 
 // ---------- Check-in (QR-Scan + Code) ----------
@@ -3548,6 +3623,7 @@ function setMemberFormMode(member = null) {
 
   const fullNameInput = memberForm?.elements?.fullName;
   const jobTitleInput = memberForm?.elements?.jobTitle;
+  const staffNotesInput = memberForm?.elements?.staffNotes;
   const emailInput = memberForm?.elements?.email;
   const passwordInput = memberForm?.elements?.password;
 
@@ -3561,6 +3637,7 @@ function setMemberFormMode(member = null) {
   }
   if (fullNameInput) fullNameInput.value = isEdit ? String(member.fullName || "") : "";
   if (jobTitleInput) jobTitleInput.value = isEdit ? String(member.jobTitle || "") : "";
+  if (staffNotesInput) staffNotesInput.value = isEdit ? String(member.staffNotes || "") : "";
   if (emailInput) {
     emailInput.value = isEdit ? String(member.email || "") : "";
     emailInput.disabled = isEdit;
@@ -3635,6 +3712,7 @@ async function handleMemberSubmit(event) {
       const payload = {
         fullName: String(memberForm.elements.fullName?.value || "").trim(),
         jobTitle: String(memberForm.elements.jobTitle?.value || "").trim(),
+        staffNotes: String(memberForm.elements.staffNotes?.value || "").trim(),
         profileImageUrl: String(memberForm.elements.profileImageUrl?.value || "").trim(),
       };
       await apiRequest(`/clinic/members/${state.editingMemberId}`, { method: "PATCH", body: payload });
@@ -3801,6 +3879,16 @@ function bindEvents() {
     membersBody.addEventListener("click", (event) => {
       if (!(event.target instanceof Element)) return;
       handleMemberAction(event.target).catch((error) => showToast(error.message));
+    });
+  }
+  if (memberConfirmAction) {
+    memberConfirmAction.addEventListener("click", () => {
+      confirmPendingMemberAction().catch((error) => showToast(error.message));
+    });
+  }
+  if (memberConfirm) {
+    memberConfirm.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-member-confirm-cancel]")) closeMemberConfirm();
     });
   }
   if (checkinCamBtn) checkinCamBtn.addEventListener("click", () => { startCheckinCamera(); });
@@ -4044,6 +4132,7 @@ function bindEvents() {
     });
   }
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && memberConfirm && !memberConfirm.classList.contains("hidden")) closeMemberConfirm();
     if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
     if (event.key === "Escape" && memberDrawer && !memberDrawer.classList.contains("hidden")) closeMemberDrawer();
   });

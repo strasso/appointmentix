@@ -807,6 +807,7 @@ def init_db() -> None:
           full_name TEXT NOT NULL,
           job_title TEXT NOT NULL DEFAULT '',
           profile_image_url TEXT NOT NULL DEFAULT '',
+          staff_notes TEXT NOT NULL DEFAULT '',
           clinic_name TEXT NOT NULL,
           logo_url TEXT NOT NULL DEFAULT '',
           website TEXT NOT NULL DEFAULT '',
@@ -1170,6 +1171,7 @@ def init_db() -> None:
           full_name TEXT NOT NULL,
           job_title TEXT NOT NULL DEFAULT '',
           profile_image_url TEXT NOT NULL DEFAULT '',
+          staff_notes TEXT NOT NULL DEFAULT '',
           clinic_name TEXT NOT NULL,
           logo_url TEXT NOT NULL DEFAULT '',
           website TEXT NOT NULL DEFAULT '',
@@ -1545,6 +1547,7 @@ def init_db() -> None:
         "active": "INTEGER NOT NULL DEFAULT 1",
         "job_title": "TEXT NOT NULL DEFAULT ''",
         "profile_image_url": "TEXT NOT NULL DEFAULT ''",
+        "staff_notes": "TEXT NOT NULL DEFAULT ''",
         "logo_url": "TEXT NOT NULL DEFAULT ''",
         "website": "TEXT NOT NULL DEFAULT ''",
         "brand_color": "TEXT NOT NULL DEFAULT '#16A34A'",
@@ -11435,6 +11438,7 @@ def clinic_members():
         full_name,
         job_title,
         profile_image_url,
+        staff_notes,
         role,
         active,
         created_at
@@ -11454,6 +11458,7 @@ def clinic_members():
           "fullName": row["full_name"],
           "jobTitle": safe_public_text(safe_row_value(row, "job_title"), ""),
           "profileImageUrl": safe_public_text(safe_row_value(row, "profile_image_url"), ""),
+          "staffNotes": safe_public_text(safe_row_value(row, "staff_notes"), ""),
           "role": row["role"],
           "active": int(safe_row_value(row, "active", 1) or 0) != 0,
           "createdAt": row["created_at"],
@@ -11713,6 +11718,7 @@ def create_clinic_member():
   full_name = str(payload.get("fullName", "")).strip()
   job_title = safe_public_text(payload.get("jobTitle"), "")[:120]
   profile_image_url = safe_public_text(payload.get("profileImageUrl"), "")
+  staff_notes = safe_public_text(payload.get("staffNotes"), "")[:2000]
   email = str(payload.get("email", "")).strip().lower()
   password = str(payload.get("password", ""))
   role = str(payload.get("role", "staff")).strip().lower()
@@ -11743,6 +11749,7 @@ def create_clinic_member():
           full_name,
           job_title,
           profile_image_url,
+          staff_notes,
           clinic_name,
           logo_url,
           website,
@@ -11753,7 +11760,7 @@ def create_clinic_member():
           calendly_url,
           subscription_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'inactive')
         """,
         (
           clinic_id,
@@ -11763,6 +11770,7 @@ def create_clinic_member():
           full_name,
           job_title,
           profile_image_url,
+          staff_notes,
           clinic_row["name"],
           clinic_row["logo_url"],
           clinic_row["website"],
@@ -11782,6 +11790,7 @@ def create_clinic_member():
           full_name,
           job_title,
           profile_image_url,
+          staff_notes,
           role,
           created_at
         FROM users
@@ -11811,6 +11820,7 @@ def create_clinic_member():
         "fullName": member_row["full_name"],
         "jobTitle": safe_public_text(safe_row_value(member_row, "job_title"), ""),
         "profileImageUrl": safe_public_text(safe_row_value(member_row, "profile_image_url"), ""),
+        "staffNotes": safe_public_text(safe_row_value(member_row, "staff_notes"), ""),
         "role": member_row["role"],
         "active": True,
         "createdAt": member_row["created_at"],
@@ -11843,6 +11853,8 @@ def update_clinic_member(member_id: int):
     updates["full_name"] = full_name
   if "jobTitle" in payload:
     updates["job_title"] = safe_public_text(payload.get("jobTitle"), "")[:120]
+  if "staffNotes" in payload:
+    updates["staff_notes"] = safe_public_text(payload.get("staffNotes"), "")[:2000]
   if "profileImageUrl" in payload:
     profile_image_url = safe_public_text(payload.get("profileImageUrl"), "")
     if profile_image_url and not profile_image_url.startswith(("/uploads/", "http://", "https://")):
@@ -11853,7 +11865,7 @@ def update_clinic_member(member_id: int):
 
   with get_db() as conn:
     target = conn.execute(
-      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, active, created_at FROM users WHERE id = ?",
+      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, staff_notes, active, created_at FROM users WHERE id = ?",
       (member_id,),
     ).fetchone()
     if not target or int(target["clinic_id"] or 0) != clinic_id:
@@ -11877,7 +11889,7 @@ def update_clinic_member(member_id: int):
         pass
 
     target = conn.execute(
-      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, active, created_at FROM users WHERE id = ?",
+      "SELECT id, clinic_id, role, email, full_name, job_title, profile_image_url, staff_notes, active, created_at FROM users WHERE id = ?",
       (member_id,),
     ).fetchone()
 
@@ -11908,6 +11920,7 @@ def update_clinic_member(member_id: int):
         "fullName": target["full_name"],
         "jobTitle": safe_public_text(safe_row_value(target, "job_title"), ""),
         "profileImageUrl": safe_public_text(safe_row_value(target, "profile_image_url"), ""),
+        "staffNotes": safe_public_text(safe_row_value(target, "staff_notes"), ""),
         "role": target["role"],
         "active": int(safe_row_value(target, "active", 1) or 0) != 0,
         "createdAt": target["created_at"],

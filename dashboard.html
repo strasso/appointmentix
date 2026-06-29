@@ -1063,6 +1063,9 @@
           <label>Jobtitel
             <input name="jobTitle" type="text" maxlength="120" placeholder="z. B. Ärztin, Kosmetikerin, Empfang">
           </label>
+          <label class="member-notes-field">Notizen
+            <textarea name="staffNotes" rows="4" maxlength="2000" placeholder="Interne Notiz, z. B. Schwerpunkte, Verfügbarkeit oder Hinweise."></textarea>
+          </label>
           <label id="memberEmailLabel">E-Mail
             <input name="email" type="email" autocomplete="email" required>
           </label>
@@ -1078,6 +1081,22 @@
           </div>
         </footer>
       </aside>
+    </div>
+
+    <div id="memberConfirm" class="member-confirm hidden" aria-hidden="true">
+      <div class="member-confirm-backdrop" data-member-confirm-cancel></div>
+      <section class="member-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="memberConfirmTitle" aria-describedby="memberConfirmText">
+        <span class="member-confirm-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v5"/><path d="M14 11v5"/></svg></span>
+        <div>
+          <p class="eyebrow">Team</p>
+          <h3 id="memberConfirmTitle">Mitglied deaktivieren?</h3>
+          <p id="memberConfirmText">Möchtest du dieses Teammitglied wirklich deaktivieren?</p>
+        </div>
+        <div class="member-confirm-actions">
+          <button class="member-confirm-cancel" type="button" data-member-confirm-cancel>Abbrechen</button>
+          <button id="memberConfirmAction" class="member-confirm-primary" type="button">Ja, bitte deaktivieren</button>
+        </div>
+      </section>
     </div>
 
     <div id="toast" class="toast"></div>
