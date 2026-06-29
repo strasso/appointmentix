@@ -517,11 +517,15 @@ if os.getenv("SESSION_COOKIE_SECURE", "false").lower() in {"1", "true", "yes"}:
 
 @app.after_request
 def add_no_cache_for_app_shell(response):
-  # Always revalidate the app shell + static assets so the dashboard and the embedded
-  # catalog editor never render a stale cached version (the "old UI shows up again"
-  # problem). no-cache still allows efficient 304 revalidation.
+  # The HTML shell is served no-store so the browser can NEVER keep a stale copy
+  # (this is what caused the "old UI / nested dashboard shows up again" problem).
+  # JS/CSS use no-cache (revalidate via ETag — efficient, still always up to date).
   path = request.path or ""
-  if path.endswith((".html", ".js", ".css")) or path in ("/", "/dashboard", "/admin", "/catalog"):
+  if path.endswith(".html") or path in ("/", "/dashboard", "/admin", "/catalog"):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+  elif path.endswith((".js", ".css")):
     response.headers["Cache-Control"] = "no-cache, must-revalidate"
   return response
 

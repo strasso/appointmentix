@@ -193,6 +193,7 @@ const chartAppUsers = document.getElementById("chartAppUsers");
 const chartReferrals = document.getElementById("chartReferrals");
 const chartVisits = document.getElementById("chartVisits");
 const chartReviews = document.getElementById("chartReviews");
+const chartHoverState = new WeakMap();
 const saveCatalogBtn = document.getElementById("saveCatalogBtn");
 const categoriesBody = document.getElementById("categoriesBody");
 const treatmentsBody = document.getElementById("treatmentsBody");
@@ -1242,24 +1243,302 @@ function chartNiceMax(value) {
   const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
   return step * pow;
 }
-const chartDayFmt = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
-function chartDateLabel(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : chartDayFmt.format(d);
+
+function clamp(value, min, max) {
+  if (max < min) return min;
+  return Math.min(Math.max(value, min), max);
 }
+
+const chartDayFmt = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "short" });
+const CHART_DAY_MS = 86400000;
+
+function parseChartDate(iso) {
+  if (!iso) return null;
+  const dateOnly = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parsed = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function chartDateLabel(iso) {
+  const d = parseChartDate(iso);
+  return d ? chartDayFmt.format(d) : "";
+}
+
+function chartIsoDateKey(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function chartDateAtDayStart(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function chartRangeDateKeys(windowInfo = {}, periodInfo = {}, sourceTimeseries = []) {
+  const fromRaw = periodInfo.isCustomRange && periodInfo.from ? periodInfo.from : windowInfo.from;
+  const toRaw = periodInfo.isCustomRange && periodInfo.to ? periodInfo.to : windowInfo.to;
+  let start = chartDateAtDayStart(parseChartDate(fromRaw));
+  let end = chartDateAtDayStart(parseChartDate(toRaw));
+
+  if ((!start || !end) && Array.isArray(sourceTimeseries) && sourceTimeseries.length) {
+    const sourceDates = sourceTimeseries
+      .map((point) => chartDateAtDayStart(parseChartDate(point?.date)))
+      .filter(Boolean)
+      .sort((first, second) => first.getTime() - second.getTime());
+    start = start || sourceDates[0] || null;
+    end = end || sourceDates[sourceDates.length - 1] || null;
+  }
+
+  if (!start || !end || start > end) return [];
+  const totalDays = Math.min(Math.floor((end.getTime() - start.getTime()) / CHART_DAY_MS) + 1, 3651);
+  return Array.from({ length: totalDays }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return chartIsoDateKey(date);
+  });
+}
+
+function normalizeMetricPoint(date, point = {}) {
+  return {
+    date,
+    appOpen: Number(point.appOpen || 0),
+    offerView: Number(point.offerView || 0),
+    addToCart: Number(point.addToCart || 0),
+    purchaseSuccess: Number(point.purchaseSuccess || 0),
+    revenueCents: Number(point.revenueCents || 0),
+    rewardClaim: Number(point.rewardClaim || 0),
+    rewardRedeem: Number(point.rewardRedeem || 0),
+  };
+}
+
+function buildMetricsTimeline(timeseries = [], windowInfo = {}, periodInfo = {}) {
+  const source = Array.isArray(timeseries) ? timeseries : [];
+  const byDate = new Map(
+    source
+      .filter((point) => point && point.date)
+      .map((point) => [String(point.date), point])
+  );
+  const dates = chartRangeDateKeys(windowInfo, periodInfo, source);
+  if (!dates.length) {
+    return source.map((point) => normalizeMetricPoint(String(point.date || ""), point));
+  }
+  return dates.map((date) => normalizeMetricPoint(date, byDate.get(date) || {}));
+}
+
 function compactEuroAxis(cents) {
   const e = (Number(cents) || 0) / 100;
   if (e >= 1000) return `${(e / 1000).toFixed(e >= 10000 ? 0 : 1).replace(".", ",")}k €`;
   return `${Math.round(e)} €`;
 }
+
+function roundedEuroTooltip(cents) {
+  try {
+    return new Intl.NumberFormat("de-DE", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 0,
+      minimumFractionDigits: 0,
+    }).format((Number(cents) || 0) / 100);
+  } catch {
+    return `${Math.round((Number(cents) || 0) / 100)} EUR`;
+  }
+}
+
 function compactNumAxis(n) {
   const v = Number(n) || 0;
   if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(".", ",")}k`;
   return String(Math.round(v));
 }
 
+function chartSectionCount(dates, seriesLength) {
+  const parsedDates = (Array.isArray(dates) ? dates : []).map(parseChartDate).filter(Boolean);
+  if (parsedDates.length >= 2) {
+    const start = parsedDates[0].getTime();
+    const end = parsedDates[parsedDates.length - 1].getTime();
+    const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+    if (days <= 10) return days;
+    if (days <= 35) return Math.ceil(days / 3);
+    if (days <= 110) return Math.ceil(days / 7);
+    return Math.min(Math.ceil(days / 30), 12);
+  }
+  const count = Number(seriesLength || 0);
+  if (count <= 2) return 0;
+  if (count <= 10) return count;
+  if (count <= 35) return Math.ceil(count / 3);
+  if (count <= 110) return Math.ceil(count / 7);
+  return 12;
+}
+
+function drawChartSections(context, geometry, dates, seriesLength) {
+  const sectionCount = chartSectionCount(dates, seriesLength);
+  if (sectionCount <= 1) return;
+  const sectionWidth = geometry.chartWidth / sectionCount;
+  context.save();
+  for (let index = 0; index < sectionCount; index += 1) {
+    if (index % 2 !== 0) continue;
+    context.fillStyle = "rgba(23, 21, 26, 0.026)";
+    context.fillRect(
+      geometry.paddingLeft + index * sectionWidth,
+      geometry.paddingTop,
+      Math.ceil(sectionWidth),
+      geometry.chartHeight
+    );
+  }
+  context.strokeStyle = "rgba(23, 21, 26, 0.035)";
+  context.lineWidth = 1;
+  for (let index = 1; index < sectionCount; index += 1) {
+    const x = geometry.paddingLeft + index * sectionWidth;
+    context.beginPath();
+    context.moveTo(x + 0.5, geometry.paddingTop);
+    context.lineTo(x + 0.5, geometry.paddingTop + geometry.chartHeight);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawChartXAxisLabels(context, geometry, dates) {
+  if (!Array.isArray(dates) || !dates.length) return;
+  context.save();
+  context.fillStyle = "rgba(108,104,115,0.75)";
+  context.font = "500 10px Inter, sans-serif";
+  context.textBaseline = "alphabetic";
+  const yX = geometry.baselineY + 14;
+  const lastIdx = dates.length - 1;
+  const midIdx = Math.floor(lastIdx / 2);
+  const start = chartDateLabel(dates[0]);
+  const mid = chartDateLabel(dates[midIdx]);
+  const end = chartDateLabel(dates[lastIdx]);
+  if (start) {
+    context.textAlign = "left";
+    context.fillText(start, geometry.paddingLeft, yX);
+  }
+  if (mid && lastIdx > 1) {
+    context.textAlign = "center";
+    context.fillText(mid, geometry.paddingLeft + geometry.chartWidth / 2, yX);
+  }
+  if (end) {
+    context.textAlign = "right";
+    context.fillText(end, geometry.paddingLeft + geometry.chartWidth, yX);
+  }
+  context.restore();
+}
+
+function drawRoundRect(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+}
+
+function handleChartPointerMove(event) {
+  const canvas = event.currentTarget;
+  const entry = chartHoverState.get(canvas);
+  if (!entry || !entry.hitbox || !entry.values?.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const pointerX = event.clientX - rect.left;
+  const ratio = clamp((pointerX - entry.hitbox.paddingLeft) / entry.hitbox.chartWidth, 0, 1);
+  const nextIndex = Math.round(ratio * Math.max(entry.values.length - 1, 0));
+  if (entry.activeIndex === nextIndex) return;
+  entry.activeIndex = nextIndex;
+  drawLineChart(canvas, entry.values, entry.options);
+}
+
+function handleChartPointerLeave(event) {
+  const canvas = event.currentTarget;
+  const entry = chartHoverState.get(canvas);
+  if (!entry || entry.activeIndex === null) return;
+  entry.activeIndex = null;
+  drawLineChart(canvas, entry.values, entry.options);
+}
+
+function ensureChartHover(canvas) {
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  const entry = chartHoverState.get(canvas) || {};
+  if (entry.bound) return;
+  canvas.addEventListener("pointermove", handleChartPointerMove);
+  canvas.addEventListener("pointerdown", handleChartPointerMove);
+  canvas.addEventListener("pointerleave", handleChartPointerLeave);
+  chartHoverState.set(canvas, { ...entry, bound: true, activeIndex: null, values: [], options: {}, hitbox: null });
+}
+
+function drawChartHover(context, points, series, dates, options, geometry, activeIndex) {
+  if (!Number.isInteger(activeIndex) || activeIndex < 0 || activeIndex >= points.length) return;
+  const point = points[activeIndex];
+  const value = series[activeIndex] || 0;
+  const lineColor = options.lineColor || CHART_BRAND;
+  const tooltipFormat = typeof options.tooltipFormat === "function"
+    ? options.tooltipFormat
+    : typeof options.valueFormat === "function"
+      ? options.valueFormat
+      : (v) => String(Math.round(v));
+  const title = chartDateLabel(dates[activeIndex]) || `Tag ${activeIndex + 1}`;
+  const metricLabel = options.tooltipLabel ? `${options.tooltipLabel}: ` : "";
+  const valueText = `${metricLabel}${tooltipFormat(value)}`;
+
+  context.save();
+  context.strokeStyle = hexToRgba(lineColor, 0.26);
+  context.lineWidth = 1;
+  context.beginPath();
+  context.moveTo(point[0], geometry.paddingTop);
+  context.lineTo(point[0], geometry.baselineY);
+  context.stroke();
+
+  context.fillStyle = "#fff";
+  context.strokeStyle = lineColor;
+  context.lineWidth = 2.2;
+  context.beginPath();
+  context.arc(point[0], point[1], 5, 0, Math.PI * 2);
+  context.fill();
+  context.stroke();
+
+  context.font = "600 12px Inter, sans-serif";
+  const titleWidth = context.measureText(title).width;
+  context.font = "800 13px Inter, sans-serif";
+  const valueWidth = context.measureText(valueText).width;
+  const tooltipWidth = Math.min(Math.ceil(Math.max(titleWidth, valueWidth) + 24), Math.max(geometry.width - 8, 92));
+  const tooltipHeight = 46;
+  const tooltipX = clamp(point[0] - tooltipWidth / 2, 4, geometry.width - tooltipWidth - 4);
+  let tooltipY = point[1] - tooltipHeight - 12;
+  if (tooltipY < 4) tooltipY = point[1] + 12;
+  tooltipY = clamp(tooltipY, 4, geometry.height - tooltipHeight - 4);
+
+  context.shadowColor = "rgba(20, 18, 28, 0.16)";
+  context.shadowBlur = 18;
+  context.shadowOffsetY = 8;
+  context.fillStyle = "rgba(255, 255, 255, 0.97)";
+  drawRoundRect(context, tooltipX, tooltipY, tooltipWidth, tooltipHeight, 11);
+  context.fill();
+  context.shadowColor = "transparent";
+  context.strokeStyle = "rgba(228, 225, 232, 0.95)";
+  context.lineWidth = 1;
+  context.stroke();
+
+  context.textAlign = "left";
+  context.textBaseline = "alphabetic";
+  context.fillStyle = "rgba(108,104,115,0.88)";
+  context.font = "600 12px Inter, sans-serif";
+  context.fillText(title, tooltipX + 12, tooltipY + 18);
+  context.fillStyle = "rgba(23,21,26,0.96)";
+  context.font = "800 13px Inter, sans-serif";
+  context.fillText(valueText, tooltipX + 12, tooltipY + 36);
+  context.restore();
+}
+
 function drawLineChart(canvas, values, options = {}) {
+  ensureChartHover(canvas);
   const context = getCanvasContext(canvas);
   if (!context) return;
   const width = canvas.getBoundingClientRect().width;
@@ -1285,6 +1564,20 @@ function drawLineChart(canvas, values, options = {}) {
   const chartWidth = Math.max(width - paddingLeft - paddingRight, 1);
   const chartHeight = Math.max(height - paddingTop - paddingBottom, 1);
   const baselineY = paddingTop + chartHeight;
+  const previous = chartHoverState.get(canvas) || {};
+  const activeIndex = Number.isInteger(previous.activeIndex)
+    ? clamp(previous.activeIndex, 0, Math.max(series.length - 1, 0))
+    : null;
+  chartHoverState.set(canvas, {
+    ...previous,
+    bound: true,
+    activeIndex,
+    values,
+    options,
+    hitbox: { paddingLeft, chartWidth },
+  });
+  const geometry = { width, height, paddingTop, paddingLeft, chartWidth, chartHeight, baselineY };
+  drawChartSections(context, geometry, dates, series.length);
 
   // gridlines + Y value labels
   context.textBaseline = "middle";
@@ -1300,6 +1593,7 @@ function drawLineChart(canvas, values, options = {}) {
     context.textAlign = "right";
     context.fillText(valueFormat((niceMax * i) / yTicks), paddingLeft - 7, y);
   }
+  drawChartXAxisLabels(context, geometry, dates);
 
   if (!hasData) {
     context.fillStyle = "rgba(108,104,115,0.5)";
@@ -1338,22 +1632,6 @@ function drawLineChart(canvas, values, options = {}) {
   traceSmoothPath(context, points);
   context.stroke();
 
-  // X date labels (start · middle · end)
-  if (dates.length) {
-    context.fillStyle = "rgba(108,104,115,0.75)";
-    context.font = "500 10px Inter, sans-serif";
-    context.textBaseline = "alphabetic";
-    const yX = baselineY + 14;
-    const lastIdx = dates.length - 1;
-    const midIdx = Math.floor(lastIdx / 2);
-    const start = chartDateLabel(dates[0]);
-    const mid = chartDateLabel(dates[midIdx]);
-    const end = chartDateLabel(dates[lastIdx]);
-    if (start) { context.textAlign = "left"; context.fillText(start, paddingLeft, yX); }
-    if (mid && lastIdx > 1) { context.textAlign = "center"; context.fillText(mid, paddingLeft + chartWidth / 2, yX); }
-    if (end) { context.textAlign = "right"; context.fillText(end, paddingLeft + chartWidth, yX); }
-  }
-
   // end-point marker
   const last = points[points.length - 1];
   context.beginPath();
@@ -1364,6 +1642,16 @@ function drawLineChart(canvas, values, options = {}) {
   context.fillStyle = lineColor;
   context.arc(last[0], last[1], 2.4, 0, Math.PI * 2);
   context.fill();
+
+  drawChartHover(
+    context,
+    points,
+    series,
+    dates,
+    options,
+    geometry,
+    activeIndex
+  );
 }
 
 const ACTION_LABELS = {
@@ -1612,13 +1900,14 @@ function renderTopTeam(rows = [], summary = {}, auditRows = [], backendTopTeam =
 
 function renderMetricsDashboard() {
   const summary = state.analytics.summary || {};
-  const timeseries = Array.isArray(state.analytics.timeseries) ? state.analytics.timeseries : [];
+  const rawTimeseries = Array.isArray(state.analytics.timeseries) ? state.analytics.timeseries : [];
   const windowInfo = state.analytics.window || {};
   const memberships = state.membershipSummary || {};
   const members = state.members || [];
   const auditRows = state.auditLogs || [];
   const comparison = state.analytics.comparison || {};
   const periodInfo = state.analytics.period || {};
+  const timeseries = buildMetricsTimeline(rawTimeseries, windowInfo, periodInfo);
   const compareMode = comparison.enabled ? String(comparison.mode || "none") : "none";
   const deltas = comparison.deltas || {};
 
@@ -1632,11 +1921,11 @@ function renderMetricsDashboard() {
     metricsDateRangeLabel.textContent = `Zeitraum: ${fromText} – ${toText}`;
   }
 
-  const revenueByDay = safeSeries(timeseries.map((point) => Number(point.revenueCents || 0)));
-  const purchasesByDay = safeSeries(timeseries.map((point) => Number(point.purchaseSuccess || 0)));
-  const viewsByDay = safeSeries(timeseries.map((point) => Number(point.offerView || 0)));
-  const appOpenByDay = safeSeries(timeseries.map((point) => Number(point.appOpen || 0)));
-  const referralByDay = safeSeries(timeseries.map((point) => Number(point.rewardClaim || 0)));
+  const revenueByDay = timeseries.map((point) => Number(point.revenueCents || 0));
+  const purchasesByDay = timeseries.map((point) => Number(point.purchaseSuccess || 0));
+  const viewsByDay = timeseries.map((point) => Number(point.offerView || 0));
+  const appOpenByDay = timeseries.map((point) => Number(point.appOpen || 0));
+  const referralByDay = timeseries.map((point) => Number(point.rewardClaim || 0));
   const reviewByDay = referralByDay.map((value, index) => Math.round(value * 0.4 + (purchasesByDay[index] || 0) * 0.1));
   const mrrBase = Number(summary.membershipsMrrCents || 0);
   const mrrSeries = purchasesByDay.map((value, index) => Math.max(0, mrrBase - (purchasesByDay.length - index) * 150 + value * 120));
@@ -1723,15 +2012,65 @@ function renderMetricsDashboard() {
   setDeltaBadge(metricVisitsDelta, deltas.appOpen, compareMode);
 
   const chartDates = timeseries.map((point) => point.date || "");
-  drawLineChart(chartDailyProcessing, revenueByDay, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartNetRevenue, revenueByDay, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartMRR, mrrSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartAppUserLTV, appUserLtvSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartClientLTV, clientLtvSeries, { lineColor: chartColor, valueFormat: compactEuroAxis, dates: chartDates });
-  drawLineChart(chartAppUsers, cumulativeSeries(appOpenByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartReferrals, cumulativeSeries(referralByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartVisits, appOpenByDay, { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
-  drawLineChart(chartReviews, cumulativeSeries(reviewByDay), { lineColor: chartColor, valueFormat: compactNumAxis, dates: chartDates });
+  drawLineChart(chartDailyProcessing, revenueByDay, {
+    lineColor: chartColor,
+    valueFormat: compactEuroAxis,
+    tooltipFormat: roundedEuroTooltip,
+    tooltipLabel: "Tagesumsatz",
+    dates: chartDates,
+  });
+  drawLineChart(chartNetRevenue, revenueByDay, {
+    lineColor: chartColor,
+    valueFormat: compactEuroAxis,
+    tooltipFormat: roundedEuroTooltip,
+    tooltipLabel: "Nettoumsatz",
+    dates: chartDates,
+  });
+  drawLineChart(chartMRR, mrrSeries, {
+    lineColor: chartColor,
+    valueFormat: compactEuroAxis,
+    tooltipFormat: roundedEuroTooltip,
+    tooltipLabel: "MRR",
+    dates: chartDates,
+  });
+  drawLineChart(chartAppUserLTV, appUserLtvSeries, {
+    lineColor: chartColor,
+    valueFormat: compactEuroAxis,
+    tooltipFormat: roundedEuroTooltip,
+    tooltipLabel: "LTV",
+    dates: chartDates,
+  });
+  drawLineChart(chartClientLTV, clientLtvSeries, {
+    lineColor: chartColor,
+    valueFormat: compactEuroAxis,
+    tooltipFormat: roundedEuroTooltip,
+    tooltipLabel: "Kunden-LTV",
+    dates: chartDates,
+  });
+  drawLineChart(chartAppUsers, cumulativeSeries(appOpenByDay), {
+    lineColor: chartColor,
+    valueFormat: compactNumAxis,
+    tooltipLabel: "App-Nutzer",
+    dates: chartDates,
+  });
+  drawLineChart(chartReferrals, cumulativeSeries(referralByDay), {
+    lineColor: chartColor,
+    valueFormat: compactNumAxis,
+    tooltipLabel: "Empfehlungen",
+    dates: chartDates,
+  });
+  drawLineChart(chartVisits, appOpenByDay, {
+    lineColor: chartColor,
+    valueFormat: compactNumAxis,
+    tooltipLabel: "Besuche",
+    dates: chartDates,
+  });
+  drawLineChart(chartReviews, cumulativeSeries(reviewByDay), {
+    lineColor: chartColor,
+    valueFormat: compactNumAxis,
+    tooltipLabel: "Bewertungen",
+    dates: chartDates,
+  });
 
   renderLiveFeed(auditRows);
   const sourceRows = renderRevenueSources(summary, memberships, state.analytics.revenueSources || []);
@@ -1826,6 +2165,28 @@ function scheduleMetricsRender() {
   }, 120);
 }
 
+// Hard guard for the embedded catalog editor: it must always show /catalog and may
+// never drift to another page (e.g. a nested dashboard from a stale cache). If it
+// ever points elsewhere, reset it to the editor with a cache-busting timestamp.
+const catalogFrame = document.querySelector(".catalog-embed");
+function ensureCatalogFrame(force = false) {
+  if (!catalogFrame) return;
+  let path = "";
+  try { path = catalogFrame.contentWindow.location.pathname; } catch (_) { path = ""; }
+  if (force || (path && path !== "/catalog")) {
+    catalogFrame.src = `/catalog?embed=1&t=${Date.now()}`;
+  }
+}
+if (catalogFrame) {
+  catalogFrame.addEventListener("load", () => {
+    let path = "";
+    try { path = catalogFrame.contentWindow.location.pathname; } catch (_) { return; }
+    if (path && path !== "/catalog") {
+      catalogFrame.src = `/catalog?embed=1&t=${Date.now()}`;
+    }
+  });
+}
+
 function showView(viewName, updateHash = true) {
   const target = VIEW_META[viewName] ? viewName : "overview";
   railNavItems.forEach((button) => {
@@ -1844,6 +2205,9 @@ function showView(viewName, updateHash = true) {
     onEnterCheckin();
   } else {
     leaveCheckin();
+  }
+  if (target === "katalog") {
+    ensureCatalogFrame();
   }
   if (updateHash && state.user) {
     const nextHash = `#${target}`;
