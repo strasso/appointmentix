@@ -12117,6 +12117,183 @@ def clinic_checkin_today():
   return jsonify({"visits": visits, "count": len(visits)})
 
 
+def normalize_txn_status(raw: object) -> str:
+  """Unify payment/checkout/membership status into: paid | open | failed | refunded | canceled."""
+  s = str(raw or "").strip().lower()
+  if s in {"paid", "succeeded", "success", "complete", "completed", "active"}:
+    return "paid"
+  if s in {"failed", "payment_failed"}:
+    return "failed"
+  if s in {"refunded", "refund", "partially_refunded"}:
+    return "refunded"
+  if s in {"canceled", "cancelled", "void"}:
+    return "canceled"
+  return "open"  # pending / past_due / open / unpaid / inactive
+
+
+def txn_amount_cents(raw: object) -> int:
+  try:
+    return int(raw or 0)
+  except (TypeError, ValueError):
+    return 0
+
+
+@app.get("/api/clinic/transactions")
+def clinic_transactions():
+  user_row, auth_error = require_auth_row()
+  if not user_row:
+    return auth_error
+  clinic_id = int(user_row["clinic_id"]) if user_row["clinic_id"] else None
+  if clinic_id is None:
+    return jsonify({"transactions": [], "summary": {}})
+
+  with get_db() as conn:
+    checkout_rows = conn.execute(
+      """
+      SELECT id, order_id, patient_email, patient_name, payment_method, payment_status,
+             checkout_status, currency, total_cents, line_items_json, created_at, finalized_at
+      FROM patient_checkout_sessions
+      WHERE clinic_id = ?
+      ORDER BY created_at DESC
+      LIMIT 500
+      """,
+      (clinic_id,),
+    ).fetchall()
+    membership_rows = conn.execute(
+      """
+      SELECT id, patient_email, patient_name, membership_name, monthly_amount_cents,
+             currency, status, last_payment_status, next_charge_at, started_at
+      FROM patient_memberships
+      WHERE clinic_id = ?
+      ORDER BY COALESCE(next_charge_at, started_at) DESC
+      LIMIT 500
+      """,
+      (clinic_id,),
+    ).fetchall()
+    payment_rows = conn.execute(
+      """
+      SELECT
+        p.id,
+        p.item_name,
+        p.item_type,
+        p.amount_cents,
+        p.currency,
+        p.status,
+        p.stripe_session_id,
+        p.stripe_payment_intent_id,
+        p.created_at,
+        u.email AS user_email,
+        u.full_name AS user_name
+      FROM payments p
+      INNER JOIN users u ON u.id = p.user_id
+      WHERE u.clinic_id = ? AND LOWER(COALESCE(p.item_type, '')) != 'subscription'
+      ORDER BY p.created_at DESC
+      LIMIT 500
+      """,
+      (clinic_id,),
+    ).fetchall()
+
+  transactions = []
+  for row in checkout_rows:
+    items = parse_json_list(safe_row_value(row, "line_items_json"))
+    item_names = [
+      safe_public_text(it.get("name") or it.get("title"))
+      for it in items
+      if isinstance(it, dict)
+    ]
+    item_names = [n for n in item_names if n]
+    transactions.append(
+      {
+        "id": f"co-{safe_row_value(row, 'id')}",
+        "date": safe_public_text(safe_row_value(row, "finalized_at")) or safe_public_text(safe_row_value(row, "created_at")),
+        "customerName": safe_public_text(safe_row_value(row, "patient_name"), "Gast") or "Gast",
+        "customerEmail": safe_public_text(safe_row_value(row, "patient_email")),
+        "type": "produkt",
+        "typeLabel": "App-Kauf",
+        "label": ", ".join(item_names[:3]) if item_names else "App-Kauf",
+        "amountCents": txn_amount_cents(safe_row_value(row, "total_cents", 0)),
+        "currency": safe_public_text(safe_row_value(row, "currency"), "eur") or "eur",
+        "status": normalize_txn_status(safe_row_value(row, "payment_status") or safe_row_value(row, "checkout_status")),
+        "source": "App",
+        "paymentMethod": safe_public_text(safe_row_value(row, "payment_method")),
+        "reference": safe_public_text(safe_row_value(row, "order_id")),
+        "items": item_names,
+      }
+    )
+
+  for row in membership_rows:
+    transactions.append(
+      {
+        "id": f"mb-{safe_row_value(row, 'id')}",
+        "date": safe_public_text(safe_row_value(row, "next_charge_at")) or safe_public_text(safe_row_value(row, "started_at")),
+        "customerName": safe_public_text(safe_row_value(row, "patient_name"), "Gast") or "Gast",
+        "customerEmail": safe_public_text(safe_row_value(row, "patient_email")),
+        "type": "mitgliedschaft",
+        "typeLabel": "Mitgliedschaft",
+        "label": safe_public_text(safe_row_value(row, "membership_name"), "Mitgliedschaft") or "Mitgliedschaft",
+        "amountCents": txn_amount_cents(safe_row_value(row, "monthly_amount_cents", 0)),
+        "currency": safe_public_text(safe_row_value(row, "currency"), "eur") or "eur",
+        "status": normalize_txn_status(safe_row_value(row, "last_payment_status") or safe_row_value(row, "status")),
+        "membershipStatus": safe_public_text(safe_row_value(row, "status")),
+        "source": "Abo",
+        "paymentMethod": "—",
+        "reference": "",
+        "items": [],
+      }
+    )
+
+  for row in payment_rows:
+    item_type = safe_public_text(safe_row_value(row, "item_type"), "payment").lower()
+    type_label = "Dashboard-Abo" if item_type == "subscription" else "Zahlung"
+    reference = (
+      safe_public_text(safe_row_value(row, "stripe_payment_intent_id"))
+      or safe_public_text(safe_row_value(row, "stripe_session_id"))
+    )
+    transactions.append(
+      {
+        "id": f"py-{safe_row_value(row, 'id')}",
+        "date": safe_public_text(safe_row_value(row, "created_at")),
+        "customerName": safe_public_text(safe_row_value(row, "user_name"), "Klinik") or "Klinik",
+        "customerEmail": safe_public_text(safe_row_value(row, "user_email")),
+        "type": "billing" if item_type == "subscription" else "zahlung",
+        "typeLabel": type_label,
+        "label": safe_public_text(safe_row_value(row, "item_name"), type_label) or type_label,
+        "amountCents": txn_amount_cents(safe_row_value(row, "amount_cents", 0)),
+        "currency": safe_public_text(safe_row_value(row, "currency"), "eur") or "eur",
+        "status": normalize_txn_status(safe_row_value(row, "status")),
+        "source": "Dashboard",
+        "paymentMethod": "Stripe",
+        "reference": reference,
+        "items": [],
+      }
+    )
+
+  transactions.sort(key=lambda t: str(t.get("date") or ""), reverse=True)
+
+  def status_count(status: str) -> int:
+    return sum(1 for t in transactions if t["status"] == status)
+
+  def status_cents(status: str) -> int:
+    return sum(t["amountCents"] for t in transactions if t["status"] == status)
+
+  summary = {
+    "total": len(transactions),
+    "paidCount": status_count("paid"),
+    "paidCents": status_cents("paid"),
+    "openCount": status_count("open"),
+    "openCents": status_cents("open"),
+    "failedCount": status_count("failed"),
+    "failedCents": status_cents("failed"),
+    "refundedCount": status_count("refunded"),
+    "refundedCents": status_cents("refunded"),
+    "canceledCount": status_count("canceled"),
+    "appCount": sum(1 for t in transactions if t["type"] == "produkt"),
+    "membershipCount": sum(1 for t in transactions if t["type"] == "mitgliedschaft"),
+    "billingCount": sum(1 for t in transactions if t["type"] == "billing"),
+  }
+  return jsonify({"transactions": transactions, "summary": summary})
+
+
 @app.post("/api/analytics/events")
 def create_analytics_event_authenticated():
   user_row, auth_error = require_auth_row()

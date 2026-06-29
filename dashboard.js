@@ -25,6 +25,10 @@ const state = {
   },
   patientMemberships: [],
   membershipSummary: {},
+  transactions: [],
+  transactionSummary: {},
+  transactionFilter: "all",
+  transactionSearch: "",
   appointments: [],
   appointmentSummary: {},
   appointmentFilter: "upcoming",
@@ -68,6 +72,15 @@ const onboardRingValue = document.getElementById("onboardRingValue");
 const patientStats = document.getElementById("patientStats");
 const patientsBody = document.getElementById("patientsBody");
 const patientSearch = document.getElementById("patientSearch");
+const txnStats = document.getElementById("txnStats");
+const txnBody = document.getElementById("txnBody");
+const txnSearch = document.getElementById("txnSearch");
+const txnFilters = document.getElementById("txnFilters");
+const txnExportBtn = document.getElementById("txnExportBtn");
+const txnDrawer = document.getElementById("txnDrawer");
+const txnDrawerTitle = document.getElementById("txnDrawerTitle");
+const txnDrawerKind = document.getElementById("txnDrawerKind");
+const txnDrawerBody = document.getElementById("txnDrawerBody");
 const appointmentStats = document.getElementById("appointmentStats");
 const appointmentsBody = document.getElementById("appointmentsBody");
 const appointmentSearch = document.getElementById("appointmentSearch");
@@ -102,6 +115,7 @@ const VIEW_META = {
   termine: { eyebrow: "Termine" },
   checkin: { eyebrow: "Check-in" },
   analyse: { eyebrow: "Analyse" },
+  zahlungen: { eyebrow: "Zahlungen" },
   katalog: { eyebrow: "Katalog & App" },
   branding: { eyebrow: "App-Design" },
   kampagnen: { eyebrow: "Kampagnen" },
@@ -220,6 +234,7 @@ const auditLogsBody = document.getElementById("auditLogsBody");
 const refreshAuditBtn = document.getElementById("refreshAuditBtn");
 let metricsResizeTimer = null;
 let metricsResizeFrame = null;
+let pendingTxnFilter = "";
 const CATEGORY_ID_UI_ALIASES = {
   koerper: "korper",
 };
@@ -2209,6 +2224,15 @@ function showView(viewName, updateHash = true) {
   if (target === "katalog") {
     ensureCatalogFrame();
   }
+  if (target === "zahlungen") {
+    const pf = pendingTxnFilter;
+    pendingTxnFilter = "";
+    loadTransactions()
+      .then(() => {
+        if (pf) setTxnFilter(pf);
+      })
+      .catch((error) => showToast(error.message || "Zahlungen konnten nicht geladen werden."));
+  }
   if (updateHash && state.user) {
     const nextHash = `#${target}`;
     if (window.location.hash !== nextHash) {
@@ -2220,7 +2244,12 @@ function showView(viewName, updateHash = true) {
 
 function viewFromHash() {
   const raw = String(window.location.hash || "").replace(/^#/, "").trim();
-  return VIEW_META[raw] ? raw : "overview";
+  const [viewName, query = ""] = raw.split("?");
+  if (viewName === "zahlungen" && query) {
+    const params = new URLSearchParams(query);
+    pendingTxnFilter = normalizeTxnFilter(params.get("filter") || "all");
+  }
+  return VIEW_META[viewName] ? viewName : "overview";
 }
 
 function setSubscriptionChip(status) {
@@ -3157,6 +3186,243 @@ async function loadPatientMemberships() {
   }
   renderMetricsDashboard();
   renderPatients();
+}
+
+const TXN_STATUS = {
+  paid: { label: "Bezahlt", cls: "ok" },
+  open: { label: "Offen", cls: "warn" },
+  failed: { label: "Fehlgeschlagen", cls: "danger" },
+  refunded: { label: "Erstattet", cls: "muted" },
+  canceled: { label: "Storniert", cls: "muted" },
+};
+
+const TXN_FILTERS = new Set(["all", "paid", "open", "failed", "refunded", "canceled", "mitgliedschaft", "produkt", "billing", "zahlung"]);
+
+function normalizeTxnFilter(value) {
+  const key = String(value || "all").trim().toLowerCase();
+  return TXN_FILTERS.has(key) ? key : "all";
+}
+
+function txnStatusMeta(status) {
+  return TXN_STATUS[String(status || "").toLowerCase()] || TXN_STATUS.open;
+}
+
+function txnPaymentMethodLabel(value) {
+  const key = String(value || "").trim().toLowerCase();
+  const labels = {
+    card: "Karte",
+    cash: "Bar",
+    stripe: "Stripe",
+    apple_pay: "Apple Pay",
+    google_pay: "Google Pay",
+    klarna: "Klarna",
+    sepa_debit: "SEPA",
+  };
+  return labels[key] || String(value || "—");
+}
+
+function txnInitials(txn) {
+  const source = String(txn?.customerName || txn?.customerEmail || "Kunde").trim();
+  const parts = source.includes("@")
+    ? [source.split("@")[0]]
+    : source.split(/\s+/).filter(Boolean);
+  const initials = parts.slice(0, 2).map((part) => part[0]).join("");
+  return (initials || "K").toUpperCase();
+}
+
+function txnMatchesFilter(txn, filter) {
+  const key = normalizeTxnFilter(filter);
+  if (key === "all") return true;
+  if (["paid", "open", "failed", "refunded", "canceled"].includes(key)) {
+    return String(txn.status || "").toLowerCase() === key;
+  }
+  return String(txn.type || "").toLowerCase() === key;
+}
+
+function txnSearchText(txn) {
+  const items = Array.isArray(txn.items) ? txn.items.join(" ") : "";
+  return [
+    txn.customerName,
+    txn.customerEmail,
+    txn.typeLabel,
+    txn.label,
+    txn.source,
+    txn.paymentMethod,
+    txn.reference,
+    items,
+  ].join(" ").toLowerCase();
+}
+
+function visibleTransactions() {
+  const term = String(state.transactionSearch || "").trim().toLowerCase();
+  return (state.transactions || []).filter((txn) => {
+    if (!txnMatchesFilter(txn, state.transactionFilter)) return false;
+    if (!term) return true;
+    return txnSearchText(txn).includes(term);
+  });
+}
+
+function renderTxnStats() {
+  if (!txnStats) return;
+  const rows = state.transactions || [];
+  const summary = state.transactionSummary || {};
+  const countByType = (type) => rows.filter((txn) => String(txn.type || "") === type).length;
+  const stats = [
+    { label: "Transaktionen", value: String(Number(summary.total || rows.length)), filter: "all" },
+    { label: "Bezahlt", value: formatEuro(Number(summary.paidCents || 0)), cls: "ok", filter: "paid" },
+    { label: `Offen · ${Number(summary.openCount || 0)}`, value: formatEuro(Number(summary.openCents || 0)), cls: "warn", filter: "open" },
+    { label: `Fehlgeschlagen · ${Number(summary.failedCount || 0)}`, value: formatEuro(Number(summary.failedCents || 0)), cls: "danger", filter: "failed" },
+    { label: "App-Käufe", value: String(Number(summary.appCount || countByType("produkt"))), cls: "brand", filter: "produkt" },
+    { label: "Memberships", value: String(Number(summary.membershipCount || countByType("mitgliedschaft"))), filter: "mitgliedschaft" },
+  ];
+  txnStats.innerHTML = stats
+    .map(
+      (chip) =>
+        `<button class="pstat ${chip.cls || ""} is-clickable" type="button" data-route-view="zahlungen" data-route-filter="${escapeAttr(chip.filter)}"><span class="pstat-value">${escapeHtml(chip.value)}</span><span class="pstat-label">${escapeHtml(chip.label)}</span></button>`
+    )
+    .join("");
+}
+
+function renderTxnFilterState() {
+  if (!txnFilters) return;
+  txnFilters.querySelectorAll("button[data-txn-filter]").forEach((button) => {
+    button.classList.toggle("active", normalizeTxnFilter(button.getAttribute("data-txn-filter")) === state.transactionFilter);
+  });
+}
+
+function renderTransactions() {
+  renderTxnStats();
+  renderTxnFilterState();
+  if (!txnBody) return;
+
+  const rows = visibleTransactions();
+  if (!rows.length) {
+    const empty = state.transactions.length ? "Keine Treffer für diesen Filter." : "Noch keine Transaktionen.";
+    txnBody.innerHTML = `<tr><td colspan="7" class="txn-empty">${escapeHtml(empty)}</td></tr>`;
+    return;
+  }
+
+  txnBody.innerHTML = rows
+    .map((txn) => {
+      const status = txnStatusMeta(txn.status);
+      const currency = txn.currency || "eur";
+      const customerName = txn.customerName || "Gast";
+      const email = txn.customerEmail || "";
+      const reference = txn.reference ? `Ref. ${txn.reference}` : "";
+      const source = txn.source || "—";
+      const method = txnPaymentMethodLabel(txn.paymentMethod);
+      return `<tr class="txn-row" data-txn-id="${escapeAttr(txn.id)}" tabindex="0">
+        <td><strong>${escapeHtml(formatDateOnly(txn.date))}</strong>${reference ? `<small>${escapeHtml(reference)}</small>` : ""}</td>
+        <td>
+          <div class="txn-person">
+            <span class="txn-avatar" aria-hidden="true">${escapeHtml(txnInitials(txn))}</span>
+            <span class="txn-person-copy"><strong>${escapeHtml(customerName)}</strong>${email ? `<small>${escapeHtml(email)}</small>` : ""}</span>
+          </div>
+        </td>
+        <td><span class="txn-type-pill">${escapeHtml(txn.typeLabel || txn.type || "Zahlung")}</span></td>
+        <td><strong>${escapeHtml(txn.label || "—")}</strong></td>
+        <td class="num"><strong>${escapeHtml(formatEuro(Number(txn.amountCents || 0), currency))}</strong></td>
+        <td><span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span></td>
+        <td><span class="txn-source">${escapeHtml(source)}</span><small>${escapeHtml(method)}</small></td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function setTxnFilter(filter) {
+  state.transactionFilter = normalizeTxnFilter(filter);
+  renderTransactions();
+}
+
+async function loadTransactions() {
+  if (txnBody && !state.transactions.length) {
+    txnBody.innerHTML = `<tr><td colspan="7" class="txn-empty">Transaktionen werden geladen ...</td></tr>`;
+  }
+  const response = await apiRequest("/clinic/transactions");
+  state.transactions = Array.isArray(response.transactions) ? response.transactions : [];
+  state.transactionSummary = response.summary && typeof response.summary === "object" ? response.summary : {};
+  renderTransactions();
+}
+
+function closeTxnDrawer() {
+  if (!txnDrawer) return;
+  txnDrawer.classList.remove("open");
+  txnDrawer.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => txnDrawer.classList.add("hidden"), 220);
+}
+
+function txnDetailRow(label, value) {
+  return `<div class="txn-detail-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "—")}</strong></div>`;
+}
+
+function openTxnDrawer(txnId) {
+  const txn = (state.transactions || []).find((item) => String(item.id) === String(txnId));
+  if (!txn || !txnDrawer || !txnDrawerBody) return;
+  const status = txnStatusMeta(txn.status);
+  const currency = txn.currency || "eur";
+  if (txnDrawerTitle) txnDrawerTitle.textContent = txn.customerName || "Transaktion";
+  if (txnDrawerKind) txnDrawerKind.textContent = `${txn.typeLabel || "Zahlung"} · ${status.label}`;
+
+  const items = Array.isArray(txn.items) ? txn.items.filter(Boolean) : [];
+  const itemHtml = items.length
+    ? `<div class="txn-item-list">${items.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`
+    : "";
+
+  txnDrawerBody.innerHTML = `
+    <div class="txn-drawer-summary">
+      <span class="status-pill ${status.cls}">${escapeHtml(status.label)}</span>
+      <strong>${escapeHtml(formatEuro(Number(txn.amountCents || 0), currency))}</strong>
+      <p>${escapeHtml(txn.label || txn.typeLabel || "Zahlung")}</p>
+    </div>
+    <div class="txn-detail-list">
+      ${txnDetailRow("Datum", formatDate(txn.date))}
+      ${txnDetailRow("Kund:in", txn.customerName || "Gast")}
+      ${txnDetailRow("E-Mail", txn.customerEmail || "—")}
+      ${txnDetailRow("Typ", txn.typeLabel || txn.type || "Zahlung")}
+      ${txnDetailRow("Quelle", txn.source || "—")}
+      ${txnDetailRow("Zahlart", txnPaymentMethodLabel(txn.paymentMethod))}
+      ${txnDetailRow("Referenz", txn.reference || "—")}
+      ${txn.membershipStatus ? txnDetailRow("Membership-Status", txn.membershipStatus) : ""}
+    </div>
+    ${itemHtml}
+  `;
+
+  txnDrawer.classList.remove("hidden");
+  txnDrawer.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => txnDrawer.classList.add("open"));
+  haptics("light");
+}
+
+function exportTransactionsCsv() {
+  const rows = visibleTransactions();
+  if (!rows.length) {
+    showToast("Keine Transaktionen für den Export.");
+    return;
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  const clinicSlug = String(state.user?.clinicName || "curabo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "curabo";
+  downloadCsv(`${clinicSlug}-zahlungen-${date}.csv`, ["Datum", "Kund:in", "E-Mail", "Typ", "Beschreibung", "Betrag (Cent)", "Währung", "Status", "Quelle", "Zahlart", "Referenz"], rows.map((txn) => [
+    txn.date || "",
+    txn.customerName || "",
+    txn.customerEmail || "",
+    txn.typeLabel || txn.type || "",
+    txn.label || "",
+    Number(txn.amountCents || 0),
+    txn.currency || "eur",
+    txnStatusMeta(txn.status).label,
+    txn.source || "",
+    txnPaymentMethodLabel(txn.paymentMethod),
+    txn.reference || "",
+  ]));
+  showToast("CSV exportiert");
+}
+
+function navigateDashboardRoute(targetView, filter = "") {
+  const target = VIEW_META[targetView] ? targetView : "overview";
+  if (target === "zahlungen") {
+    pendingTxnFilter = normalizeTxnFilter(filter || "all");
+  }
+  showView(target);
 }
 
 const APPOINTMENT_STATUS = {
@@ -4334,6 +4600,34 @@ function bindEvents() {
       loadAnalyticsSummary().catch((error) => showToast(error.message));
     });
   }
+  if (txnFilters) {
+    txnFilters.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("button[data-txn-filter]") : null;
+      if (!button) return;
+      setTxnFilter(button.getAttribute("data-txn-filter") || "all");
+    });
+  }
+  if (txnSearch) {
+    txnSearch.addEventListener("input", () => {
+      state.transactionSearch = String(txnSearch.value || "");
+      renderTransactions();
+    });
+  }
+  if (txnExportBtn) txnExportBtn.addEventListener("click", exportTransactionsCsv);
+  if (txnBody) {
+    txnBody.addEventListener("click", (event) => {
+      const row = event.target instanceof Element ? event.target.closest("tr[data-txn-id]") : null;
+      if (!row) return;
+      openTxnDrawer(row.getAttribute("data-txn-id"));
+    });
+    txnBody.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const row = event.target instanceof Element ? event.target.closest("tr[data-txn-id]") : null;
+      if (!row) return;
+      event.preventDefault();
+      openTxnDrawer(row.getAttribute("data-txn-id"));
+    });
+  }
   // The legacy "Schnell-Editor" was removed in favour of the visual editor
   // (the /catalog iframe). Its controls may be absent — guard every binding.
   if (saveCatalogBtn) saveCatalogBtn.addEventListener("click", saveCatalog);
@@ -4527,6 +4821,11 @@ function bindEvents() {
       if (event.target instanceof Element && event.target.closest("[data-drawer-close]")) closeApptDrawer();
     });
   }
+  if (txnDrawer) {
+    txnDrawer.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-txn-drawer-close]")) closeTxnDrawer();
+    });
+  }
   if (memberDrawer) {
     memberDrawer.addEventListener("click", (event) => {
       if (event.target instanceof Element && event.target.closest("[data-member-drawer-close]")) closeMemberDrawer();
@@ -4535,6 +4834,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && memberConfirm && !memberConfirm.classList.contains("hidden")) closeMemberConfirm();
     if (event.key === "Escape" && apptDrawer && !apptDrawer.classList.contains("hidden")) closeApptDrawer();
+    if (event.key === "Escape" && txnDrawer && !txnDrawer.classList.contains("hidden")) closeTxnDrawer();
     if (event.key === "Escape" && memberDrawer && !memberDrawer.classList.contains("hidden")) closeMemberDrawer();
   });
   // Central interaction feedback: haptic tap + ripple on prominent controls.
@@ -4571,6 +4871,16 @@ function bindEvents() {
     }
   });
   dashboardSection.addEventListener("click", (event) => {
+    const route = event.target instanceof Element ? event.target.closest("[data-route-view]") : null;
+    const routeIsButton = route instanceof HTMLButtonElement;
+    const nestedControl = event.target instanceof Element ? event.target.closest("button, a, input, textarea, select, [data-export-kind]") : null;
+    if (route && (routeIsButton || !nestedControl)) {
+      navigateDashboardRoute(
+        String(route.getAttribute("data-route-view") || "overview"),
+        String(route.getAttribute("data-route-filter") || "")
+      );
+      return;
+    }
     const button = event.target instanceof Element ? event.target.closest("button[data-export-kind]") : null;
     if (!button) return;
     const kind = String(button.getAttribute("data-export-kind") || "").trim();
@@ -4580,6 +4890,18 @@ function bindEvents() {
       return;
     }
     openCardMenu(button, kind);
+  });
+  dashboardSection.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const route = event.target instanceof Element ? event.target.closest("[data-route-view]") : null;
+    const routeIsButton = route instanceof HTMLButtonElement;
+    const nestedControl = event.target instanceof Element ? event.target.closest("button, a, input, textarea, select, [data-export-kind]") : null;
+    if (!route || (!routeIsButton && nestedControl)) return;
+    event.preventDefault();
+    navigateDashboardRoute(
+      String(route.getAttribute("data-route-view") || "overview"),
+      String(route.getAttribute("data-route-filter") || "")
+    );
   });
   document.addEventListener("click", (event) => {
     if (event.target instanceof Element && (event.target.closest("button[data-export-kind]") || event.target.closest(".card-menu"))) return;

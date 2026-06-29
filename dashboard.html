@@ -79,6 +79,8 @@
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 14h3v3M21 17v4h-4M17.5 21H14"/></svg></span>Check-in</button>
           <button class="rail-nav-item" type="button" data-view="analyse">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 14l3.5-3.5 3 3L21 7"/></svg></span>Analyse</button>
+          <button class="rail-nav-item" type="button" data-view="zahlungen">
+            <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h12v19l-3-1.7-3 1.7-3-1.7-3 1.7v-19Z"/><path d="M9 7.5h6M9 11.5h6M9 15.5h3.5"/></svg></span>Zahlungen</button>
           <button class="rail-nav-item" type="button" data-view="katalog">
             <span class="rail-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4a1.2 1.2 0 0 1 1.2-1.2h8a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8Z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg></span>Katalog &amp; App</button>
           <button class="rail-nav-item" type="button" data-view="branding">
@@ -140,24 +142,24 @@
           </article>
 
           <div class="kpi-row">
-            <article class="kpi-card">
+            <article class="kpi-card" data-route-view="zahlungen" data-route-filter="all" role="button" tabindex="0" aria-label="Zahlungen öffnen">
               <span class="kpi-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8.5A4 4 0 0 0 12.5 7H11a3.5 3.5 0 0 0 0 7h2a3.5 3.5 0 0 1 0 7h-1.5A4 4 0 0 1 8 19.5"/><path d="M12 4v3M12 21v-2.5"/></svg></span>
               <p class="kpi-label">Umsatz (Zeitraum)</p>
               <p id="kpiRevenue" class="kpi-value">0,00 €</p>
               <span class="kpi-delta hidden" id="kpiRevenueDelta"></span>
             </article>
-            <article class="kpi-card">
+            <article class="kpi-card" data-route-view="zahlungen" data-route-filter="mitgliedschaft" role="button" tabindex="0" aria-label="Mitgliedschaftszahlungen öffnen">
               <span class="kpi-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg></span>
               <p class="kpi-label">MRR</p>
               <p id="kpiMrr" class="kpi-value">0,00 €</p>
               <span class="kpi-delta hidden" id="kpiMrrDelta"></span>
             </article>
-            <article class="kpi-card">
+            <article class="kpi-card" data-route-view="patienten" role="button" tabindex="0" aria-label="Patienten öffnen">
               <span class="kpi-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19"/><circle cx="10" cy="7.5" r="3"/><path d="M20 19v-1.5a3.5 3.5 0 0 0-2.6-3.4M15.5 4.7a3 3 0 0 1 0 5.6"/></svg></span>
               <p class="kpi-label">Aktive Mitglieder</p>
               <p id="kpiMembers" class="kpi-value">0</p>
             </article>
-            <article class="kpi-card">
+            <article class="kpi-card" data-route-view="analyse" role="button" tabindex="0" aria-label="App-Nutzer Analyse öffnen">
               <span class="kpi-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M11 18.5h2"/></svg></span>
               <p class="kpi-label">App-Nutzer</p>
               <p id="kpiAppUsers" class="kpi-value">0</p>
@@ -300,7 +302,7 @@
           <div class="patient-stats" id="analyseStats"></div>
 
           <div class="stats-grid">
-            <section id="shopSummarySection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg">
+            <section id="shopSummarySection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg" data-route-view="zahlungen" data-route-filter="all" role="button" tabindex="0" aria-label="Zahlungen öffnen">
               <div class="tile-top">
                 <p class="tile-label">Nettoumsatz</p>
                 <button class="icon-btn" type="button" data-export-kind="netRevenue" title="CSV exportieren" aria-label="Nettoumsatz als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -310,7 +312,7 @@
               <canvas id="chartNetRevenue" height="110"></canvas>
             </section>
 
-            <section id="membershipsSection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg">
+            <section id="membershipsSection" class="card analytics-tile analytics-chart-tile analytics-chart-tile-lg" data-route-view="zahlungen" data-route-filter="mitgliedschaft" role="button" tabindex="0" aria-label="Mitgliedschaftszahlungen öffnen">
               <div class="tile-top">
                 <p class="tile-label">MRR</p>
                 <button class="icon-btn" type="button" data-export-kind="mrr" title="CSV exportieren" aria-label="MRR als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -329,7 +331,7 @@
               <div id="revenueSourcesBody" class="source-list"></div>
             </section>
 
-            <section id="clinicProfilesSection" class="card analytics-tile analytics-table-tile">
+            <section id="clinicProfilesSection" class="card analytics-tile analytics-table-tile" data-route-view="patienten" role="button" tabindex="0" aria-label="Patienten öffnen">
               <div class="tile-top">
                 <p class="tile-label">Top-Kunden</p>
                 <button class="icon-btn" type="button" data-export-kind="topClients" title="CSV exportieren" aria-label="Top-Kunden als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -347,7 +349,7 @@
               </div>
             </section>
 
-            <section id="appBuilderSection" class="card analytics-tile analytics-table-tile">
+            <section id="appBuilderSection" class="card analytics-tile analytics-table-tile" data-route-view="team" role="button" tabindex="0" aria-label="Team öffnen">
               <div class="tile-top">
                 <p class="tile-label">Top-Teammitglieder</p>
                 <button class="icon-btn" type="button" data-export-kind="topTeam" title="CSV exportieren" aria-label="Top-Teammitglieder als CSV exportieren"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
@@ -830,6 +832,48 @@
           </article>
         </section>
 
+        <!-- ZAHLUNGEN -->
+        <section class="view-panel" data-view-panel="zahlungen">
+          <div class="patient-stats" id="txnStats"></div>
+          <article class="card">
+            <div class="section-head">
+              <div>
+                <h2>Zahlungen</h2>
+                <p class="subline">Käufe und Mitgliedsbeiträge deiner Klinik – bezahlt, offen, fehlgeschlagen.</p>
+              </div>
+              <button id="txnExportBtn" class="btn ghost btn-sm" type="button">CSV exportieren</button>
+            </div>
+            <div class="txn-toolbar">
+              <div class="txn-filters" id="txnFilters">
+                <button class="chip-filter-btn active" type="button" data-txn-filter="all">Alle</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="paid">Bezahlt</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="open">Offen</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="failed">Fehlgeschlagen</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="refunded">Erstattet</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="mitgliedschaft">Mitgliedschaft</button>
+                <button class="chip-filter-btn" type="button" data-txn-filter="produkt">App-Kauf</button>
+              </div>
+              <input id="txnSearch" type="search" class="txn-search" placeholder="Name, E-Mail oder Produkt">
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Kund:in</th>
+                    <th>Typ</th>
+                    <th>Plan / Produkt</th>
+                    <th class="num">Betrag</th>
+                    <th>Status</th>
+                    <th>Quelle</th>
+                  </tr>
+                </thead>
+                <tbody id="txnBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <!-- CHECK-IN -->
         <section class="view-panel" data-view-panel="checkin">
           <div class="checkin-layout">
@@ -1109,6 +1153,20 @@
           <button id="memberConfirmAction" class="member-confirm-primary" type="button">Ja, bitte deaktivieren</button>
         </div>
       </section>
+    </div>
+
+    <div id="txnDrawer" class="drawer hidden" aria-hidden="true">
+      <div class="drawer-backdrop" data-txn-drawer-close></div>
+      <aside class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="txnDrawerTitle">
+        <header class="drawer-head">
+          <div>
+            <p class="eyebrow" id="txnDrawerKind">Transaktion</p>
+            <h3 id="txnDrawerTitle">—</h3>
+          </div>
+          <button class="icon-btn" type="button" data-txn-drawer-close aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </header>
+        <div class="drawer-body" id="txnDrawerBody"></div>
+      </aside>
     </div>
 
     <div id="toast" class="toast"></div>
