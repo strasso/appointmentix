@@ -2051,18 +2051,27 @@ td small {
   flex: none;
   width: 38px;
   height: 38px;
-  background: rgba(255, 255, 255, 0.52);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--rail-ink);
   box-shadow: none;
 }
-.rail-toggle-btn[aria-pressed="true"] {
-  background: var(--surface-strong);
+.rail-toggle-btn:hover,
+.rail-toggle-btn:active,
+.rail-toggle-btn[aria-pressed="true"],
+.rail-toggle-btn[aria-pressed="true"]:hover {
+  background: transparent;
+  border-color: transparent;
   color: var(--brand);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 .rail-toggle-btn svg {
   width: 18px;
   height: 18px;
+}
+.rail-toggle-btn .ripple {
+  display: none;
 }
 #dashboardSection.app.rail-collapsed .app-rail {
   padding-inline: 6px;
